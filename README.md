@@ -399,6 +399,20 @@ See [LICENSE](LICENSE) for the full license text.
 
 ---
 
+## 🤝 Sponsors
+
+<p align="center">
+  <a href="https://www.cloudflare.com/lp/project-alexandria/">
+    <img src="https://www.cloudflare.com/img/logo-web-badges/cf-logo-on-white-bg.svg" alt="Cloudflare" width="200">
+  </a>
+</p>
+
+<p align="center">
+  <strong>Sponsored by Cloudflare through <a href="https://www.cloudflare.com/lp/project-alexandria/">Project Alexandria</a></strong>
+</p>
+
+---
+
 <p align="center">
   <strong>Built with ❤️ for a quantum-safe future</strong>
 </p>
