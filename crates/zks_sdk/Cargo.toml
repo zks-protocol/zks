@@ -1,0 +1,55 @@
+[package]
+name = "zks_sdk"
+version = "0.1.0"
+edition = "2021"
+authors = ["ZKS Protocol Team"]
+description = "High-level SDK for ZKS Protocol - post-quantum secure networking"
+license = "AGPL-3.0-only"
+repository = "https://github.com/zks-protocol/zks"
+homepage = "https://zks-protocol.org"
+keywords = ["zero-knowledge", "post-quantum", "cryptography", "privacy", "networking"]
+categories = ["cryptography", "network-programming"]
+
+[dependencies]
+# Core ZKS crates
+zks_types = { path = "../zks_types" }
+zks_pqcrypto = { path = "../zks_pqcrypto" }
+zks_wire = { path = "../zks_wire" }
+zks_proto = { path = "../zks_proto" }
+zks_crypt = { path = "../zks_crypt" }
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+
+# URL parsing
+url = "2.5"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+
+# Utilities
+bytes = "1.5"
+pin-project-lite = "0.2"
+getrandom = "0.2"
+
+# Cryptography
+sha2 = "0.10"
+hkdf = "0.12"
+zeroize = "1.8"
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[lib]
+name = "zks_sdk"
+path = "src/lib.rs"

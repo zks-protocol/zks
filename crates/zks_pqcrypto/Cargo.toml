@@ -1,0 +1,62 @@
+[package]
+name = "zks_pqcrypto"
+version = "0.1.0"
+edition = "2021"
+authors = ["ZKS Protocol Team"]
+description = "Post-quantum cryptographic implementations for ZKS Protocol"
+license = "AGPL-3.0-only"
+repository = "https://github.com/zks-protocol/zks"
+homepage = "https://zks-protocol.org"
+keywords = ["post-quantum", "cryptography", "kyber", "dilithium", "ml-kem"]
+categories = ["cryptography", "no-std"]
+
+[dependencies]
+# Core types and errors
+zks_types = { path = "../zks_types" }
+
+# Post-quantum cryptography - Pure Rust (WASM-compatible)
+ml-kem = "0.2"      # ML-KEM (Kyber) key encapsulation - uses rand_core 0.6
+
+# Cryptographic utilities
+sha2 = "0.10"       # SHA-256 for key derivation
+hkdf = "0.12"       # HKDF key derivation
+zeroize = { version = "1.8", features = ["zeroize_derive"] }  # Memory security
+rand_core = "0.6"   # Use rand_core 0.6 for compatibility with ml-kem
+rand = "0.8"        # RNG implementations (compatible with rand_core 0.6)
+rand_chacha = "0.3" # ChaCha RNG for deterministic generation (compatible with rand_core 0.6)
+getrandom = { version = "0.2", features = ["js"] }   # OS random number generator with WASM support
+
+# Error handling
+thiserror = "1.0"   # Ergonomic error handling
+
+# Async support (optional)
+tokio = { version = "1.0", features = ["rt", "macros"], optional = true }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"     # Binary serialization
+
+# Logging
+tracing = "0.1"
+
+# Native-only dependencies (C-based implementations)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+pqcrypto-kyber = "0.8"  # Alternative Kyber implementation - uses rand_core 0.6
+pqcrypto-dilithium = "0.5"  # Dilithium implementation - uses rand_core 0.6 (COMPATIBLE)
+pqcrypto-traits = "0.3"  # Traits for pqcrypto implementations
+
+# WASM fallback - ed25519 for signatures (pure Rust)
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ed25519-dalek = { version = "2.0", features = ["rand_core"] }  # Ed25519 signatures for WASM
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+criterion = "0.5"   # Benchmarking
+
+[features]
+default = []
+async = ["tokio"]   # Enable async support
+
+[lib]
+name = "zks_pqcrypto"
+path = "src/lib.rs"

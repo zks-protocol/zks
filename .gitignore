@@ -1,0 +1,136 @@
+# =================================
+# Rust Build Artifacts
+# =================================
+
+# Cargo build directory
+/target/
+target/
+
+# Cargo.lock should be committed for binaries/libraries
+# Uncomment if this is a pure library crate:
+# Cargo.lock
+
+# Release/debug build artifacts in subdirectories
+**/target/
+
+# =================================
+# IDE and Editor Files
+# =================================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# JetBrains IDEs (IntelliJ, CLion, RustRover)
+.idea/
+*.iml
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+\#*\#
+.\#*
+
+# =================================
+# OS Generated Files
+# =================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+
+# =================================
+# Temporary and Test Files
+# =================================
+
+# Test output
+test_output.txt
+*.test
+test_*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Log files
+*.log
+logs/
+
+# =================================
+# Documentation Build
+# =================================
+
+# Rustdoc output
+/doc/
+**/doc/
+
+# =================================
+# WASM Build Artifacts
+# =================================
+
+# wasm-pack output
+pkg/
+**/pkg/
+
+# Node modules (if using wasm-pack with npm)
+node_modules/
+
+# =================================
+# Coverage and Profiling
+# =================================
+
+# Code coverage
+*.profraw
+*.profdata
+coverage/
+lcov.info
+tarpaulin-report.html
+
+# Benchmark artifacts
+criterion/
+
+# =================================
+# Security-Sensitive Files
+# =================================
+
+# Private keys and secrets
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.env
+.env.*
+!.env.example
+
+# =================================
+# Miscellaneous
+# =================================
+
+# Core dumps
+core
+
+# Rust analyzer
+rust-project.json
+
+# Backup files from editors
+*.orig
+
+# Package lock files from JS tooling
+package-lock.json
+yarn.lock

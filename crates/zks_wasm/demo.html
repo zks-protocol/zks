@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKS Protocol WASM Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        h2 {
+            color: #555;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 5px;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .output {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .input-group {
+            margin: 10px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 ZKS Protocol WASM Demo</h1>
+        <p>This demo showcases the ZKS Protocol's WASM implementation with post-quantum cryptography (ML-DSA).</p>
+        
+        <div id="status" class="status info">Initializing WASM module...</div>
+    </div>
+
+    <div class="container">
+        <h2>🔑 Key Generation</h2>
+        <button id="generateKey" disabled>Generate Random Key</button>
+        <button id="generateKeypair" disabled>Generate ML-DSA Keypair</button>
+        
+        <div id="keyOutput" class="output" style="display: none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>📝 Message Signing</h2>
+        <div class="input-group">
+            <label for="message">Message to Sign:</label>
+            <textarea id="message" placeholder="Enter a message to sign...">Hello, ZKS Protocol!</textarea>
+        </div>
+        <div class="input-group">
+            <label for="signingKey">Signing Key (hex):</label>
+            <input type="text" id="signingKey" placeholder="Generate a keypair first or enter signing key">
+        </div>
+        <button id="signMessage" disabled>Sign Message</button>
+        
+        <div id="signatureOutput" class="output" style="display: none;"></div>
+    </div>
+
+    <div class="container">
+        <h2>✅ Signature Verification</h2>
+        <div class="input-group">
+            <label for="verifyMessage">Message:</label>
+            <input type="text" id="verifyMessage" placeholder="Enter message to verify">
+        </div>
+        <div class="input-group">
+            <label for="signature">Signature (hex):</label>
+            <input type="text" id="signature" placeholder="Enter signature in hex format">
+        </div>
+        <div class="input-group">
+            <label for="verifyingKey">Verifying Key (hex):</label>
+            <input type="text" id="verifyingKey" placeholder="Enter verifying key">
+        </div>
+        <button id="verifySignature" disabled>Verify Signature</button>
+        
+        <div id="verificationOutput" class="output" style="display: none;"></div>
+    </div>
+
+    <script type="module">
+        import init, { ZksWasmUtils, quick_ml_dsa_keypair } from './pkg/zks_wasm.js';
+
+        let wasmLoaded = false;
+        let currentKeypair = null;
+
+        // Utility functions
+        function bytesToHex(bytes) {
+            return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function hexToBytes(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < bytes.length; i++) {
+                bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+            }
+            return bytes;
+        }
+
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        function showOutput(elementId, content) {
+            const output = document.getElementById(elementId);
+            output.textContent = content;
+            output.style.display = 'block';
+        }
+
+        // Initialize WASM
+        async function initializeWASM() {
+            try {
+                await init();
+                wasmLoaded = true;
+                updateStatus('WASM module loaded successfully!', 'success');
+                enableButtons();
+            } catch (error) {
+                updateStatus(`Failed to load WASM: ${error.message}`, 'error');
+                console.error('WASM initialization error:', error);
+            }
+        }
+
+        function enableButtons() {
+            document.getElementById('generateKey').disabled = false;
+            document.getElementById('generateKeypair').disabled = false;
+            document.getElementById('signMessage').disabled = false;
+            document.getElementById('verifySignature').disabled = false;
+        }
+
+        // Event handlers
+        document.getElementById('generateKey').addEventListener('click', () => {
+            try {
+                const key = ZksWasmUtils.generate_key();
+                const keyHex = bytesToHex(key);
+                showOutput('keyOutput', `Random Key (32 bytes):\n${keyHex}`);
+                updateStatus('Random key generated successfully!', 'success');
+            } catch (error) {
+                updateStatus(`Error generating key: ${error.message}`, 'error');
+            }
+        });
+
+        document.getElementById('generateKeypair').addEventListener('click', async () => {
+            try {
+                const keypair = await quick_ml_dsa_keypair();
+                currentKeypair = keypair;
+                
+                const keypairStr = JSON.stringify(keypair, null, 2);
+                showOutput('keyOutput', `ML-DSA Keypair:\n${keypairStr}`);
+                
+                // Auto-fill the signing key field
+                document.getElementById('signingKey').value = keypair.signing_key;
+                document.getElementById('verifyingKey').value = keypair.verifying_key;
+                
+                updateStatus('ML-DSA keypair generated successfully!', 'success');
+            } catch (error) {
+                updateStatus(`Error generating keypair: ${error.message}`, 'error');
+            }
+        });
+
+        document.getElementById('signMessage').addEventListener('click', () => {
+            try {
+                const message = document.getElementById('message').value;
+                const signingKeyHex = document.getElementById('signingKey').value;
+                
+                if (!message) {
+                    updateStatus('Please enter a message to sign', 'error');
+                    return;
+                }
+                
+                if (!signingKeyHex) {
+                    updateStatus('Please enter a signing key', 'error');
+                    return;
+                }
+                
+                const messageBytes = new TextEncoder().encode(message);
+                const signingKeyBytes = hexToBytes(signingKeyHex);
+                
+                const signature = ZksWasmUtils.ml_dsa_sign(messageBytes, signingKeyBytes);
+                const signatureHex = bytesToHex(signature);
+                
+                showOutput('signatureOutput', `Signature (hex):\n${signatureHex}`);
+                
+                // Auto-fill verification fields
+                document.getElementById('verifyMessage').value = message;
+                document.getElementById('signature').value = signatureHex;
+                
+                updateStatus('Message signed successfully!', 'success');
+            } catch (error) {
+                updateStatus(`Error signing message: ${error.message}`, 'error');
+            }
+        });
+
+        document.getElementById('verifySignature').addEventListener('click', () => {
+            try {
+                const message = document.getElementById('verifyMessage').value;
+                const signatureHex = document.getElementById('signature').value;
+                const verifyingKeyHex = document.getElementById('verifyingKey').value;
+                
+                if (!message || !signatureHex || !verifyingKeyHex) {
+                    updateStatus('Please fill in all verification fields', 'error');
+                    return;
+                }
+                
+                const messageBytes = new TextEncoder().encode(message);
+                const signatureBytes = hexToBytes(signatureHex);
+                const verifyingKeyBytes = hexToBytes(verifyingKeyHex);
+                
+                ZksWasmUtils.ml_dsa_verify(messageBytes, signatureBytes, verifyingKeyBytes);
+                
+                showOutput('verificationOutput', '✅ Signature is VALID!');
+                updateStatus('Signature verified successfully!', 'success');
+            } catch (error) {
+                showOutput('verificationOutput', `❌ Signature is INVALID: ${error.message}`);
+                updateStatus('Signature verification failed!', 'error');
+            }
+        });
+
+        // Initialize on page load
+        initializeWASM();
+    </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+[package]
+name = "zks_types"
+version = "0.1.0"
+edition = "2021"
+authors = ["ZKS Protocol Team"]
+description = "Core types and data structures for ZKS Protocol"
+license = "AGPL-3.0-only"
+repository = "https://github.com/zks-protocol/zks"
+homepage = "https://zks-protocol.org"
+keywords = ["types", "data-structures", "zero-knowledge", "protocol"]
+categories = ["data-structures", "cryptography"]
+
+[dependencies]
+zeroize = { version = "1.8", features = ["derive"] }

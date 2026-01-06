@@ -1,0 +1,13 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+authors = ["ZKS Protocol Team"]
+edition = "2021"
+license = "AGPL-3.0-only"
+repository = "https://github.com/zks-protocol/zks"
+homepage = "https://zks-protocol.org"
+keywords = ["zero-knowledge", "post-quantum", "cryptography", "privacy"]
+categories = ["cryptography", "network-programming"]

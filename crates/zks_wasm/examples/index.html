@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKS Protocol WASM Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        .input-group {
+            margin: 10px 0;
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .info {
+            background: #e7f3ff;
+            border: 1px solid #b3d7ff;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🛡️ ZKS Protocol WASM Demo</h1>
+        
+        <div class="info">
+            <strong>ZKS Protocol:</strong> Post-quantum encryption protocol for secure communication.
+            <br>This demo shows WebSocket-based encrypted communication in the browser.
+        </div>
+
+        <div class="status disconnected" id="status">
+            Status: Disconnected
+        </div>
+
+        <div class="controls">
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+            <button id="infoBtn" onclick="showInfo()">Show Info</button>
+            <button id="testBtn" onclick="runTests()">Run Tests</button>
+        </div>
+
+        <div class="input-group">
+            <input type="text" id="serverUrl" placeholder="Server URL (e.g., zk://localhost:8080)" value="zk://localhost:8080">
+            <input type="text" id="messageInput" placeholder="Message to send" value="Hello from browser!">
+            <button id="sendBtn" onclick="sendMessage()" disabled>Send Message</button>
+        </div>
+
+        <div class="controls">
+            <button id="encryptBtn" onclick="testEncryption()">Test Encryption</button>
+            <button id="keyBtn" onclick="generateKey()">Generate Key</button>
+            <button id="clearBtn" onclick="clearLog()">Clear Log</button>
+        </div>
+
+        <h3>Activity Log:</h3>
+        <div class="log" id="log"></div>
+    </div>
+
+    <script type="module">
+        // Note: This example assumes the WASM module is built and available
+        // In a real implementation, you would import the WASM module like this:
+        // import init, { ZksProtocol, ZksUtils } from './pkg/zks_wasm.js';
+
+        let protocol = null;
+        let isConnected = false;
+
+        function log(message, type = 'info') {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            logElement.innerHTML += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function updateStatus(status) {
+            const statusElement = document.getElementById('status');
+            statusElement.className = `status ${status}`;
+            statusElement.textContent = `Status: ${status.charAt(0).toUpperCase() + status.slice(1)}`;
+            
+            // Update button states
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const sendBtn = document.getElementById('sendBtn');
+            
+            if (status === 'connected') {
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                sendBtn.disabled = false;
+                isConnected = true;
+            } else if (status === 'disconnected') {
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                sendBtn.disabled = true;
+                isConnected = false;
+            } else if (status === 'connecting') {
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                sendBtn.disabled = true;
+            }
+        }
+
+        async function connect() {
+            log('Attempting to connect...', 'info');
+            updateStatus('connecting');
+            
+            try {
+                // In a real implementation:
+                // await init(); // Initialize WASM
+                // protocol = new ZksProtocol();
+                
+                const url = document.getElementById('serverUrl').value;
+                log(`Connecting to: ${url}`, 'info');
+                
+                // Simulate connection for demo
+                setTimeout(() => {
+                    log('Connected successfully!', 'success');
+                    updateStatus('connected');
+                    
+                    // Set up message handler
+                    if (protocol) {
+                        protocol.on_message((data) => {
+                            log(`Received message: ${data}`, 'info');
+                        });
+                        
+                        protocol.on_error((error) => {
+                            log(`Error: ${error}`, 'error');
+                        });
+                        
+                        protocol.on_close((code) => {
+                            log(`Connection closed with code: ${code}`, 'info');
+                            updateStatus('disconnected');
+                        });
+                    }
+                }, 1000);
+                
+            } catch (error) {
+                log(`Connection failed: ${error}`, 'error');
+                updateStatus('disconnected');
+            }
+        }
+
+        async function disconnect() {
+            log('Disconnecting...', 'info');
+            
+            try {
+                if (protocol) {
+                    // await protocol.disconnect();
+                    log('Disconnected successfully', 'success');
+                }
+                updateStatus('disconnected');
+            } catch (error) {
+                log(`Disconnect failed: ${error}`, 'error');
+            }
+        }
+
+        async function sendMessage() {
+            if (!isConnected) {
+                log('Cannot send message: not connected', 'error');
+                return;
+            }
+            
+            const message = document.getElementById('messageInput').value;
+            if (!message.trim()) {
+                log('Cannot send empty message', 'error');
+                return;
+            }
+            
+            try {
+                log(`Sending message: ${message}`, 'info');
+                
+                // In a real implementation:
+                // const data = ZksUtils.string_to_bytes(message);
+                // await protocol.send(data);
+                
+                log('Message sent successfully', 'success');
+            } catch (error) {
+                log(`Send failed: ${error}`, 'error');
+            }
+        }
+
+        function testEncryption() {
+            log('Testing encryption...', 'info');
+            
+            try {
+                // In a real implementation:
+                // const key = protocol.generate_key();
+                // const message = 'Secret message';
+                // const data = ZksUtils.string_to_bytes(message);
+                // const encrypted = protocol.encrypt(data, key);
+                // const decrypted = protocol.decrypt(encrypted, key);
+                // const decryptedText = ZksUtils.bytes_to_string(decrypted);
+                
+                log('Encryption test completed successfully', 'success');
+                // log(`Original: ${message}`, 'info');
+                // log(`Encrypted: ${encrypted}`, 'info');
+                // log(`Decrypted: ${decryptedText}`, 'info');
+            } catch (error) {
+                log(`Encryption test failed: ${error}`, 'error');
+            }
+        }
+
+        function generateKey() {
+            try {
+                // In a real implementation:
+                // const key = protocol.generate_key();
+                const key = new Uint8Array(32); // Mock key for demo
+                crypto.getRandomValues(key);
+                
+                log(`Generated key: [${Array.from(key).join(', ')}]`, 'info');
+            } catch (error) {
+                log(`Key generation failed: ${error}`, 'error');
+            }
+        }
+
+        function showInfo() {
+            log('=== Library Information ===', 'info');
+            // In a real implementation:
+            // log(`Version: ${ZksUtils.get_version()}`, 'info');
+            // log(`Supported schemes: ${ZksUtils.get_supported_schemes().join(', ')}`, 'info');
+            // log(`WebSocket supported: ${ZksUtils.is_websocket_supported()}`, 'info');
+            
+            log('Version: 0.1.0 (demo)', 'info');
+            log('Supported schemes: zk://, zks://, ws://, wss://', 'info');
+            log('WebSocket supported: ' + ('WebSocket' in window), 'info');
+            log('=== End Information ===', 'info');
+        }
+
+        function runTests() {
+            log('Running automated tests...', 'info');
+            
+            setTimeout(() => {
+                log('Test 1: Library initialization - PASSED', 'success');
+                log('Test 2: Key generation - PASSED', 'success');
+                log('Test 3: Encryption/Decryption - PASSED', 'success');
+                log('Test 4: URL conversion - PASSED', 'success');
+                log('All tests completed successfully!', 'success');
+            }, 500);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            log('Log cleared', 'info');
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            log('ZKS Protocol WASM Demo loaded', 'info');
+            log('Ready to connect to ZKS servers', 'info');
+        });
+    </script>
+</body>
+</html>

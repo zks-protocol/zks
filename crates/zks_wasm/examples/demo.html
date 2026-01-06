@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZKS Protocol WASM Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status.connecting {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ZKS Protocol WASM Demo</h1>
+        <p>This demo showcases the ZKS Protocol WASM implementation for browser usage.</p>
+        
+        <div class="section">
+            <h3>Connection</h3>
+            <input type="text" id="serverUrl" placeholder="zk://localhost:8080" value="zk://localhost:8080">
+            <div>
+                <button id="connectBtn">Connect</button>
+                <button id="disconnectBtn" disabled>Disconnect</button>
+                <span id="connectionStatus" class="status disconnected">Disconnected</span>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>Message Exchange</h3>
+            <textarea id="messageInput" placeholder="Enter your message here..." rows="3"></textarea>
+            <div>
+                <button id="sendBtn" disabled>Send Message</button>
+                <button id="encryptSendBtn" disabled>Send Encrypted</button>
+            </div>
+            <h4>Received Messages:</h4>
+            <div id="messages" class="log"></div>
+        </div>
+        
+        <div class="section">
+            <h3>Encryption</h3>
+            <div>
+                <button id="generateKeyBtn">Generate Key</button>
+                <button id="encryptBtn">Encrypt Text</button>
+                <button id="decryptBtn">Decrypt Text</button>
+            </div>
+            <input type="text" id="keyInput" placeholder="32-byte key (hex)" readonly>
+            <textarea id="plainText" placeholder="Plain text to encrypt..." rows="3"></textarea>
+            <textarea id="cipherText" placeholder="Encrypted text (hex)..." rows="3"></textarea>
+        </div>
+        
+        <div class="section">
+            <h3>Console Log</h3>
+            <div id="consoleLog" class="log"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import init, { ZksProtocol, ZksUtils, quick_connect, quick_encrypt, quick_decrypt } from './pkg/zks_wasm.js';
+        
+        let protocol = null;
+        let currentKey = null;
+        
+        // Initialize WASM
+        await init();
+        log('ZKS Protocol WASM initialized');
+        
+        // UI Elements
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const sendBtn = document.getElementById('sendBtn');
+        const encryptSendBtn = document.getElementById('encryptSendBtn');
+        const generateKeyBtn = document.getElementById('generateKeyBtn');
+        const encryptBtn = document.getElementById('encryptBtn');
+        const decryptBtn = document.getElementById('decryptBtn');
+        const serverUrl = document.getElementById('serverUrl');
+        const messageInput = document.getElementById('messageInput');
+        const messages = document.getElementById('messages');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const keyInput = document.getElementById('keyInput');
+        const plainText = document.getElementById('plainText');
+        const cipherText = document.getElementById('cipherText');
+        const consoleLog = document.getElementById('consoleLog');
+        const signBtn = document.getElementById('signBtn');
+        const verifyBtn = document.getElementById('verifyBtn');
+        const messageForSign = document.getElementById('messageForSign');
+        const signatureOutput = document.getElementById('signatureOutput');
+        const verifyingKeyOutput = document.getElementById('verifyingKeyOutput');
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            consoleLog.innerHTML += `[${timestamp}] ${message}\n`;
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+        }
+        
+        function updateConnectionStatus(status) {
+            connectionStatus.className = `status ${status.toLowerCase()}`;
+            connectionStatus.textContent = status;
+            
+            const isConnected = status === 'Connected';
+            connectBtn.disabled = isConnected;
+            disconnectBtn.disabled = !isConnected;
+            sendBtn.disabled = !isConnected;
+            encryptSendBtn.disabled = !isConnected;
+        }
+        
+        // Connection handlers
+        connectBtn.addEventListener('click', async () => {
+            try {
+                updateConnectionStatus('Connecting');
+                
+                const config = new ZksUtils.create_config(serverUrl.value)
+                    .with_security('postquantum')
+                    .with_auto_reconnect(true)
+                    .with_max_reconnect_attempts(3);
+                
+                protocol = new ZksProtocol(config);
+                await protocol.connect();
+                
+                updateConnectionStatus('Connected');
+                log('Connected to server');
+                
+                // Start message receiver
+                startMessageReceiver();
+                
+            } catch (error) {
+                updateConnectionStatus('Disconnected');
+                log(`Connection failed: ${error}`);
+            }
+        });
+        
+        disconnectBtn.addEventListener('click', () => {
+            if (protocol) {
+                protocol.disconnect();
+                protocol = null;
+                updateConnectionStatus('Disconnected');
+                log('Disconnected from server');
+            }
+        });
+        
+        // Message handlers
+        sendBtn.addEventListener('click', () => {
+            if (protocol && messageInput.value.trim()) {
+                const message = new TextEncoder().encode(messageInput.value);
+                protocol.send(message);
+                log(`Sent: ${messageInput.value}`);
+                messageInput.value = '';
+            }
+        });
+        
+        encryptSendBtn.addEventListener('click', async () => {
+            if (protocol && messageInput.value.trim() && currentKey) {
+                try {
+                    const message = new TextEncoder().encode(messageInput.value);
+                    const encrypted = quick_encrypt(message, currentKey);
+                    protocol.send(encrypted);
+                    log(`Sent encrypted: ${messageInput.value}`);
+                    messageInput.value = '';
+                } catch (error) {
+                    log(`Encryption error: ${error}`);
+                }
+            }
+        });
+        
+        // Encryption handlers
+        generateKeyBtn.addEventListener('click', () => {
+            currentKey = crypto.getRandomValues(new Uint8Array(32));
+            keyInput.value = Array.from(currentKey).map(b => b.toString(16).padStart(2, '0')).join('');
+            log('Generated new encryption key');
+        });
+        
+        encryptBtn.addEventListener('click', () => {
+            if (plainText.value.trim() && currentKey) {
+                try {
+                    const message = new TextEncoder().encode(plainText.value);
+                    const encrypted = quick_encrypt(message, currentKey);
+                    cipherText.value = Array.from(encrypted).map(b => b.toString(16).padStart(2, '0')).join('');
+                    log('Text encrypted');
+                } catch (error) {
+                    log(`Encryption error: ${error}`);
+                }
+            }
+        });
+        
+        decryptBtn.addEventListener('click', () => {
+            if (cipherText.value.trim() && currentKey) {
+                try {
+                    const encrypted = new Uint8Array(cipherText.value.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                    const decrypted = quick_decrypt(encrypted, currentKey);
+                    plainText.value = new TextDecoder().decode(decrypted);
+                    log('Text decrypted');
+                } catch (error) {
+                    log(`Decryption error: ${error}`);
+                }
+            }
+        });
+        
+        // Message receiver
+        function startMessageReceiver() {
+            if (!protocol) return;
+            
+            setTimeout(async () => {
+                try {
+                    const message = protocol.receive();
+                    if (message) {
+                        const text = new TextDecoder().decode(message);
+                        messages.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${text}</div>`;
+                        messages.scrollTop = messages.scrollHeight;
+                        log(`Received: ${text}`);
+                    }
+                } catch (error) {
+                    log(`Receive error: ${error}`);
+                }
+                
+                if (protocol) {
+                    startMessageReceiver();
+                }
+            }, 100);
+        }
+        
+        // Initialize with a generated key
+        generateKeyBtn.click();
+    </script>
+</body>
+</html>

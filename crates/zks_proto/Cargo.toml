@@ -1,0 +1,40 @@
+[package]
+name = "zks_proto"
+version = "0.1.0"
+edition = "2021"
+authors = ["ZK Protocol Team"]
+description = "Protocol layer for ZK Protocol - handshake and URL parsing"
+license = "AGPL-3.0-only"
+repository = "https://github.com/zks-protocol/zks"
+homepage = "https://zks-protocol.org"
+keywords = ["zero-knowledge", "protocol", "handshake", "url-parser", "cryptography"]
+categories = ["cryptography", "network-programming"]
+
+[dependencies]
+# Core dependencies
+bytes = "1.5"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+url = "2.5"
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
+
+# Cryptography
+sha2 = "0.10"
+hex = "0.4"
+rand = "0.8"
+subtle = "2.5"
+getrandom = "0.2"
+hkdf = "0.12"
+hmac = "0.12"
+
+# ZK Protocol crates
+zks_pqcrypto = { path = "../zks_pqcrypto" }
+zks_wire = { path = "../zks_wire" }
+
+[dev-dependencies]
+tokio-test = "0.4"
