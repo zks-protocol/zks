@@ -1,48 +1,64 @@
-//! ZKS SDK - High-level API for ZKS Protocol
+//! # ZKS - Zero Knowledge Swarm Protocol
 //!
-//! This crate provides a user-friendly interface to the ZKS Protocol stack,
-//! including post-quantum secure networking, NAT traversal, and cryptographic operations.
+//! Post-quantum secure networking SDK with built-in anonymity.
 //!
-//! # Features
+//! ## Overview
 //!
-//! - **Post-quantum security**: ML-KEM (Kyber) + ML-DSA (Dilithium)
-//! - **NAT traversal**: STUN/TURN/ICE support
-//! - **Simple API**: Builder pattern for easy configuration
-//! - **Async/await**: Full async support with Tokio
+//! ZKS provides two protocol types:
+//! - `zk://` - Direct encrypted connection (fast, post-quantum secure)
+//! - `zks://` - Swarm-routed anonymous connection (onion routing)
 //!
-//! # Quick Start
+//! ## Quick Start
 //!
 //! ```rust,no_run
-//! use zks_sdk::builder::ZkConnectionBuilder;
-//! use zks_sdk::config::SecurityLevel;
+//! use zks::prelude::*;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Create a connection
 //!     let conn = ZkConnectionBuilder::new()
-//!         .url("zk://peer.example.com:8080")
+//!         .url("zk://example.com:8443")
 //!         .security(SecurityLevel::PostQuantum)
 //!         .build()
 //!         .await?;
-//!
-//!     // Note: In a real application, you would connect and use the connection
-//!     // This is just a documentation example
 //!     Ok(())
 //! }
 //! ```
+//!
+//! ## Crate Structure
+//!
+//! This crate re-exports all ZKS sub-crates for convenience:
+//!
+//! - [`crypto`] - Wasif-Vernam cipher, encryption primitives
+//! - [`pqcrypto`] - Post-quantum cryptography (ML-KEM, ML-DSA)
+//! - [`wire`] - Network layer, NAT traversal, swarm
+//! - [`proto`] - Protocol layer, handshake, messages
+//! - [`types`] - Common types and errors
 
+// Re-export sub-crates for unified access
+pub use zks_crypt as crypto;
+pub use zks_pqcrypto as pqcrypto;
+pub use zks_wire as wire;
+pub use zks_proto as proto;
+pub use zks_types as types;
+
+// SDK-specific modules
 pub mod builder;
 pub mod config;
 pub mod connection;
-pub mod crypto;
 pub mod error;
 pub mod prefabs;
 pub mod stream;
+pub mod sdk_crypto;
 
+/// Prelude module for convenient imports
 pub mod prelude {
     pub use crate::builder::ZkConnectionBuilder;
     pub use crate::config::SecurityLevel;
     pub use crate::error::Result;
+    
+    // Re-export commonly used items from sub-crates
+    pub use zks_crypt::wasif_vernam::WasifVernam;
+    pub use zks_pqcrypto::prelude::*;
 }
 
 #[cfg(test)]

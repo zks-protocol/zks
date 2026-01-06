@@ -2849,6 +2849,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "zks"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "bytes",
+ "futures 0.3.31",
+ "getrandom 0.2.16",
+ "hkdf",
+ "pin-project-lite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "url",
+ "zeroize",
+ "zks_crypt",
+ "zks_pqcrypto",
+ "zks_proto",
+ "zks_types",
+ "zks_wire",
+]
+
+[[package]]
 name = "zks_crypt"
 version = "0.1.0"
 dependencies = [
@@ -2917,33 +2944,6 @@ dependencies = [
  "tracing",
  "url",
  "zks_pqcrypto",
- "zks_wire",
-]
-
-[[package]]
-name = "zks_sdk"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bincode",
- "bytes",
- "futures 0.3.31",
- "getrandom 0.2.16",
- "hkdf",
- "pin-project-lite",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
- "tokio",
- "tokio-test",
- "tracing",
- "url",
- "zeroize",
- "zks_crypt",
- "zks_pqcrypto",
- "zks_proto",
- "zks_types",
  "zks_wire",
 ]
 

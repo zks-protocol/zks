@@ -7,6 +7,8 @@ description = "Network primitives for ZK Protocol - NAT traversal, STUN, and swa
 license = "AGPL-3.0-only"
 repository = "https://github.com/zks-protocol/zks"
 homepage = "https://zks-protocol.org"
+documentation = "https://docs.rs/zks_wire"
+readme = "README.md"
 keywords = ["network", "nat", "stun", "p2p", "wire", "swarm"]
 categories = ["network-programming", "cryptography"]
 

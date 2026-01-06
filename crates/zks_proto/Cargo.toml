@@ -7,6 +7,8 @@ description = "Protocol layer for ZK Protocol - handshake and URL parsing"
 license = "AGPL-3.0-only"
 repository = "https://github.com/zks-protocol/zks"
 homepage = "https://zks-protocol.org"
+documentation = "https://docs.rs/zks_proto"
+readme = "README.md"
 keywords = ["zero-knowledge", "protocol", "handshake", "url-parser", "cryptography"]
 categories = ["cryptography", "network-programming"]
 

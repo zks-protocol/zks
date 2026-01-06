@@ -7,6 +7,8 @@ description = "WebAssembly bindings for ZKS Protocol SDK"
 license = "AGPL-3.0-only"
 repository = "https://github.com/zks-protocol/zks"
 homepage = "https://zks-protocol.org"
+documentation = "https://docs.rs/zks_wasm"
+readme = "README.md"
 keywords = ["wasm", "webassembly", "javascript", "bindings", "zero-knowledge"]
 categories = ["wasm", "cryptography", "api-bindings"]
 

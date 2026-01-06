@@ -7,6 +7,8 @@ description = "Core types and data structures for ZKS Protocol"
 license = "AGPL-3.0-only"
 repository = "https://github.com/zks-protocol/zks"
 homepage = "https://zks-protocol.org"
+documentation = "https://docs.rs/zks_types"
+readme = "README.md"
 keywords = ["types", "data-structures", "zero-knowledge", "protocol"]
 categories = ["data-structures", "cryptography"]
 

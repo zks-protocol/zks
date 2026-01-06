@@ -7,6 +7,8 @@ description = "Post-quantum cryptographic implementations for ZKS Protocol"
 license = "AGPL-3.0-only"
 repository = "https://github.com/zks-protocol/zks"
 homepage = "https://zks-protocol.org"
+documentation = "https://docs.rs/zks_pqcrypto"
+readme = "README.md"
 keywords = ["post-quantum", "cryptography", "kyber", "dilithium", "ml-kem"]
 categories = ["cryptography", "no-std"]
 

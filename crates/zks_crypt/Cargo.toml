@@ -7,6 +7,8 @@ description = "Cryptographic primitives for ZKS Protocol - post-quantum secure e
 license = "AGPL-3.0-only"
 repository = "https://github.com/zks-protocol/zks"
 homepage = "https://zks-protocol.org"
+documentation = "https://docs.rs/zks_crypt"
+readme = "README.md"
 keywords = ["zero-knowledge", "post-quantum", "cryptography", "encryption", "chacha20"]
 categories = ["cryptography", "no-std"]
 

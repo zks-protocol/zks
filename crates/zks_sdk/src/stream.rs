@@ -96,7 +96,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
                 handshake.process_init(&init)?;
                 
                 // Set signing keypair for responder
-                let signing_keypair = crate::crypto::ml_dsa_keypair().await?;
+                let signing_keypair = crate::sdk_crypto::ml_dsa_keypair().await?;
                 let ml_dsa_keypair = MlDsaKeypair::from_bytes(signing_keypair.0, signing_keypair.1)
                     .map_err(|e| SdkError::CryptoError(format!("Failed to create ML-DSA keypair: {}", e).into()))?;
                 handshake.set_signing_keypair(ml_dsa_keypair)?;
