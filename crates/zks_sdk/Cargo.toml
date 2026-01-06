@@ -1,6 +1,6 @@
 [package]
 name = "zks"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["ZKS Protocol Team"]
 description = "Zero Knowledge Swarm - Post-quantum secure networking SDK with built-in anonymity"
