@@ -77,7 +77,7 @@ All secret keys use `Zeroizing<T>` from the `zeroize` crate:
 
 **DO NOT** open a public issue for security vulnerabilities.
 
-**Email:** security@zks-protocol.org
+**Email:** md.wasif.faisal@g.bracu.ac.bd
 
 ### What to Include
 
