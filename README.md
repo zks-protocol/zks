@@ -456,7 +456,8 @@ See [LICENSE](LICENSE) for the full license text.
 ## 📞 Contact
 
 - **GitHub Issues**: [Report bugs and request features](https://github.com/zks-protocol/zks/issues)
-- **Security**: security@zks-protocol.org
+- **Security**: md.wasif.faisal@g.bracu.ac.bd
+
 
 ---
 
