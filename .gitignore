@@ -134,3 +134,19 @@ rust-project.json
 # Package lock files from JS tooling
 package-lock.json
 yarn.lock
+
+# =================================
+# Verification Tools & Artifacts
+# =================================
+cryptoverif*/
+proverif*/
+build_error.txt
+*.zip
+
+# =================================
+# Android Build Artifacts
+# =================================
+*.so
+jniLibs/
+/android/**/build/
+/android/**/.gradle/
