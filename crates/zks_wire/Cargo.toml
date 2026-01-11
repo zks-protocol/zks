@@ -42,6 +42,9 @@ base64 = "0.21"
 url = "2.4"
 hex = "0.4"
 
+# NAT traversal - UPnP IGD port mapping
+igd-next = { version = "0.15", features = ["aio_tokio"] }
+
 # Cryptography
 zks_crypt = { version = "0.1.0", path = "../zks_crypt" }
 zeroize = "1.6"

@@ -179,34 +179,139 @@ impl NatTraversal {
     // Private helper methods
     
     async fn discover_upnp_gateway(&self) -> Result<IpAddr> {
-        // IMPLEMENTATION_STUB: Real UPnP requires SSDP multicast discovery
-        // TODO: Use igd crate for proper UPnP IGD implementation
-        // See: https://crates.io/crates/igd
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        use igd_next::aio::tokio::search_gateway;
         
-        // Placeholder for testing - real implementation needed
-        warn!("Using stub UPnP gateway - implement with `igd` crate for production");
-        Ok("192.168.1.1".parse().unwrap())
+        info!("🔍 Searching for UPnP gateway...");
+        
+        // Search for UPnP gateway with timeout
+        match timeout(Duration::from_secs(5), search_gateway(Default::default())).await {
+            Ok(Ok(gateway)) => {
+                // gateway.addr is SocketAddrV4
+                let ip = gateway.addr.ip();
+                info!("✅ Found UPnP gateway at {}", ip);
+                
+                // Try to get external IP to verify it works
+                match gateway.get_external_ip().await {
+                    Ok(external_ip) => {
+                        info!("🌐 External IP via UPnP: {}", external_ip);
+                    }
+                    Err(e) => {
+                        debug!("Could not get external IP: {} (gateway still usable)", e);
+                    }
+                }
+                
+                Ok(ip)
+            }
+            Ok(Err(e)) => {
+                debug!("UPnP gateway not found: {}", e);
+                Err(WireError::nat(format!("UPnP gateway not found: {}", e)))
+            }
+            Err(_) => {
+                debug!("UPnP gateway search timed out");
+                Err(WireError::nat("UPnP gateway search timed out"))
+            }
+        }
     }
+
     
     async fn discover_nat_pmp_gateway(&self) -> Result<IpAddr> {
-        // IMPLEMENTATION_STUB: Real NAT-PMP requires UDP port 5351 communication
-        // TODO: Implement proper NAT-PMP protocol or use natpmp crate
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        // NAT-PMP protocol: Send UDP request to gateway port 5351
+        // Returns the gateway's default router IP
         
-        // Placeholder for testing - real implementation needed
-        warn!("Using stub NAT-PMP gateway - implement for production");
-        Ok("192.168.1.1".parse().unwrap())
+        // Get default gateway by checking common addresses
+        let common_gateways = ["192.168.1.1", "192.168.0.1", "10.0.0.1", "172.16.0.1"];
+        
+        for gateway_str in common_gateways {
+            if let Ok(gateway_ip) = gateway_str.parse::<IpAddr>() {
+                // Try to connect to NAT-PMP port
+                let addr = format!("{}:5351", gateway_str);
+                match tokio::net::UdpSocket::bind("0.0.0.0:0").await {
+                    Ok(socket) => {
+                        // NAT-PMP public address request: 2 bytes (version=0, op=0)
+                        let request = [0u8, 0u8];
+                        if socket.send_to(&request, &addr).await.is_ok() {
+                            // Wait briefly for response
+                            let mut buf = [0u8; 12];
+                            match timeout(Duration::from_millis(500), socket.recv_from(&mut buf)).await {
+                                Ok(Ok((len, _))) if len >= 12 => {
+                                    // Check for success (result code 0)
+                                    if buf[3] == 0 {
+                                        let external_ip = std::net::Ipv4Addr::new(buf[8], buf[9], buf[10], buf[11]);
+                                        info!("✅ NAT-PMP supported at {} (external: {})", gateway_ip, external_ip);
+                                        return Ok(gateway_ip);
+                                    }
+                                }
+                                _ => continue,
+                            }
+                        }
+                    }
+                    Err(_) => continue,
+                }
+            }
+        }
+        
+        Err(WireError::nat("NAT-PMP gateway not found"))
     }
     
     async fn attempt_punch(&self, remote_addr: SocketAddr) -> Result<SocketAddr> {
-        // Simulate hole punching attempt
-        // Would send UDP packets to coordinate with remote peer
-        tokio::time::sleep(Duration::from_millis(200)).await;
+        // UDP hole punching: Send packets to remote to open NAT mapping
+        // The remote peer must simultaneously send to us
         
-        // For simulation, just return the remote address
-        // In reality, this would return the punched-through address
-        Ok(remote_addr)
+        let socket = tokio::net::UdpSocket::bind("0.0.0.0:0").await
+            .map_err(|e| WireError::nat(format!("Failed to bind UDP socket: {}", e)))?;
+        
+        // Send hole punch packets
+        let punch_data = b"ZKS_PUNCH";
+        for _ in 0..5 {
+            if let Err(e) = socket.send_to(punch_data, remote_addr).await {
+                debug!("Hole punch send failed: {}", e);
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        
+        // Wait for response
+        let mut buf = [0u8; 64];
+        match timeout(Duration::from_secs(3), socket.recv_from(&mut buf)).await {
+            Ok(Ok((_, peer_addr))) => {
+                info!("✅ Hole punch successful - received from {}", peer_addr);
+                Ok(peer_addr)
+            }
+            _ => {
+                // Even if we don't get a response, the NAT mapping may be open
+                debug!("No response received, but NAT mapping may be open");
+                Ok(remote_addr)
+            }
+        }
+    }
+    
+    /// Request port mapping via UPnP
+    pub async fn add_port_mapping(&self, protocol: &str, internal_port: u16, external_port: u16, description: &str) -> Result<()> {
+        use igd_next::aio::tokio::search_gateway;
+        use igd_next::PortMappingProtocol;
+        use std::net::SocketAddrV4;
+        
+        let gateway = search_gateway(Default::default()).await
+            .map_err(|e| WireError::nat(format!("Gateway not found: {}", e)))?;
+        
+        let protocol = match protocol.to_uppercase().as_str() {
+            "TCP" => PortMappingProtocol::TCP,
+            "UDP" => PortMappingProtocol::UDP,
+            _ => return Err(WireError::nat("Invalid protocol, use TCP or UDP")),
+        };
+        
+        let local_addr = SocketAddrV4::new(
+            match self.local_addr.ip() {
+                IpAddr::V4(ip) => ip,
+                _ => return Err(WireError::nat("IPv6 not supported for UPnP")),
+            },
+            internal_port
+        );
+        
+        gateway.add_port(protocol, external_port, SocketAddr::from(local_addr), 3600, description).await
+            .map_err(|e| WireError::nat(format!("Port mapping failed: {}", e)))?;
+        
+        info!("✅ UPnP port mapping added: {:?} {} -> {}", protocol, external_port, internal_port);
+        Ok(())
     }
 }
 

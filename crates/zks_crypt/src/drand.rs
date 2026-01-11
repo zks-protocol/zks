@@ -10,6 +10,7 @@
 //! - **Entropy validation**: Validates received entropy for quality and authenticity
 //! - **Network resilience**: Exponential backoff and timeout handling
 //! - **Health monitoring**: Check endpoint health status
+//! - **Connection pooling**: Global HTTP client singleton for efficient reuse
 //! 
 //! ## Usage
 //! ```rust,no_run
@@ -28,6 +29,7 @@
 //!     let mixed_entropy = drand.get_mixed_entropy_with_fallback(user_data).await?;
 //!     
 //!     Ok(())
+
 //! }
 //! ```
 //! 
@@ -41,12 +43,49 @@
 
 use sha2::Sha256;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 use zeroize::Zeroizing;
 use ring::rand::SecureRandom;
 use crate::constant_time::{ct_is_zero, ct_eq};
+
+// =============================================================================
+// Global HTTP Client Singleton
+// =============================================================================
+// 
+// Provides connection pooling across all DrandEntropy instances.
+// This significantly reduces connection overhead and improves performance.
+
+/// Global HTTP client for connection pooling
+static GLOBAL_HTTP_CLIENT: OnceLock<Arc<reqwest::Client>> = OnceLock::new();
+
+/// Get the global HTTP client (creates on first call)
+/// 
+/// This ensures all DrandEntropy instances share the same connection pool,
+/// reducing TCP connection overhead and improving performance.
+fn get_global_http_client() -> Arc<reqwest::Client> {
+    GLOBAL_HTTP_CLIENT.get_or_init(|| {
+        match reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .pool_max_idle_per_host(4)
+            .pool_idle_timeout(std::time::Duration::from_secs(60))
+            .build()
+        {
+            Ok(c) => {
+                info!("🌐 Global HTTP client initialized for drand connection pooling");
+                Arc::new(c)
+            }
+            Err(e) => {
+                warn!("Failed to create optimized HTTP client: {}, using default", e);
+                Arc::new(reqwest::Client::new())
+            }
+        }
+    }).clone()
+}
+
+
 
 /// Validates drand entropy quality and authenticity
 fn validate_drand_entropy(response: &DrandResponse, randomness_bytes: &[u8]) -> Result<(), DrandError> {
@@ -339,19 +378,11 @@ impl DrandEntropy {
     }
 
     /// Create a new drand entropy source with custom configuration
+    /// 
+    /// Uses global HTTP client singleton for connection pooling across instances.
     pub fn with_config(config: DrandConfig) -> Self {
-        // Create shared HTTP client with timeout settings
-        let client = match reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(config.timeout_secs))
-            .connect_timeout(std::time::Duration::from_secs(5))
-            .build()
-        {
-            Ok(c) => Arc::new(c),
-            Err(e) => {
-                warn!("Failed to create HTTP client: {}, using default client", e);
-                Arc::new(reqwest::Client::new())
-            }
-        };
+        // Use global connection-pooled HTTP client
+        let client = get_global_http_client();
         
         Self {
             config,
@@ -360,6 +391,7 @@ impl DrandEntropy {
             client,
         }
     }
+
 
     /// Fetch the latest drand randomness
     /// 
