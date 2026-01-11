@@ -1,0 +1,113 @@
+(* ============================================================================ *)
+(* ZKS Protocol Anti-Replay Mechanism Formal Verification                       *)
+(* ============================================================================ *)
+(* Models the timestamp + nonce based anti-replay protection                    *)
+(*                                                                              *)
+(* Security Properties:                                                         *)
+(*   - Replay attack resistance                                                 *)
+(*   - Nonce uniqueness                                                         *)
+(*   - Message authenticity                                                     *)
+(* ============================================================================ *)
+
+(* --- Type Declarations --- *)
+type nonce.
+type session_id.
+
+(* --- Channels --- *)
+free c: channel.
+
+(* --- Table for tracking seen nonces (simulates anti-replay state) --- *)
+table seen_nonces(bitstring).
+
+(* --- Cryptographic functions --- *)
+fun senc(bitstring, bitstring): bitstring.
+reduc forall m: bitstring, k: bitstring; sdec(senc(m, k), k) = m.
+
+fun mac(bitstring, bitstring): bitstring.
+
+(* Type converters *)
+fun nonce_to_bits(nonce): bitstring [data, typeConverter].
+fun session_to_bits(session_id): bitstring [data, typeConverter].
+
+(* --- Events --- *)
+event SendMessage(bitstring, bitstring).
+event AcceptMessage(bitstring, bitstring).
+event ReplayDetected(bitstring).
+
+(* ============================================================================ *)
+(* Security Queries                                                             *)
+(* ============================================================================ *)
+
+(* Query 1: Each accepted message was actually sent (authenticity) *)
+query sid: bitstring, n: bitstring;
+  event(AcceptMessage(sid, n)) ==> event(SendMessage(sid, n)).
+
+(* Query 2: Replay is detected (reachability - should be false in secure system) *)
+query n: bitstring; event(ReplayDetected(n)).
+
+(* ============================================================================ *)
+(* Protocol Participants                                                        *)
+(* ============================================================================ *)
+
+(* --- Sender Process --- *)
+let Sender(shared_key: bitstring, sid: bitstring) =
+    (* Generate fresh nonce for this message *)
+    new msg_nonce: nonce;
+    let nonce_bits = nonce_to_bits(msg_nonce) in
+    new payload: bitstring;
+    
+    (* Create message with nonce *)
+    let msg_data = (payload, nonce_bits) in
+    
+    (* Compute MAC for integrity *)
+    let msg_mac = mac(msg_data, shared_key) in
+    
+    (* Record that we sent this message *)
+    event SendMessage(sid, nonce_bits);
+    
+    (* Send message *)
+    out(c, (sid, msg_data, msg_mac)).
+
+
+(* --- Receiver Process (with Anti-Replay) --- *)
+let Receiver(shared_key: bitstring, sid: bitstring) =
+    (* Receive message *)
+    in(c, (recv_sid: bitstring, recv_data: bitstring, recv_mac: bitstring));
+    
+    (* Verify session ID matches *)
+    if recv_sid = sid then
+    
+    (* Verify MAC *)
+    let expected_mac = mac(recv_data, shared_key) in
+    if recv_mac = expected_mac then
+    
+    (* Parse message data *)
+    let (payload: bitstring, recv_nonce: bitstring) = recv_data in
+    
+    (* Check if nonce was already seen (anti-replay) *)
+    get seen_nonces(=recv_nonce) in
+        (* Nonce already seen - REPLAY ATTACK detected! *)
+        event ReplayDetected(recv_nonce)
+    else
+        (* Fresh nonce - accept message *)
+        insert seen_nonces(recv_nonce);
+        event AcceptMessage(sid, recv_nonce).
+
+
+(* --- Attacker trying replay attack --- *)
+let ReplayAttacker =
+    in(c, msg: bitstring);
+    out(c, msg);
+    out(c, msg).
+
+
+(* ============================================================================ *)
+(* Main Process                                                                 *)
+(* ============================================================================ *)
+
+process
+    new shared_key: bitstring;
+    new sid: session_id;
+    let sid_bits = session_to_bits(sid) in
+    
+    (!Sender(shared_key, sid_bits)) | (!Receiver(shared_key, sid_bits)) | (!ReplayAttacker)

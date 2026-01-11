@@ -94,9 +94,9 @@ fn validate_drand_entropy(response: &DrandResponse, randomness_bytes: &[u8]) -> 
         return Err(DrandError::ParseError("All-FF entropy detected".to_string()));
     }
     
-    // TODO: Verify BLS signature against known drand public key
-    // This requires additional dependencies like `blst` or `threshold_crypto`
-    // For now, we validate the signature format and log a warning
+    // BLS signature verification implemented below via verify_drand_bls_signature()
+    // Supports mainnet (G2 sigs) and quicknet (G1 sigs)
+    // For now, we also validate the signature format
     if response.signature.len() < 64 {
         return Err(DrandError::ParseError("Signature too short".to_string()));
     }

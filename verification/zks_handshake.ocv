@@ -1,0 +1,123 @@
+(* ============================================================================ *)
+(* ZKS Protocol - CryptoVerif Computational Model                               *)
+(* Post-Quantum Key Exchange with ML-KEM + ML-DSA                               *)
+(* ============================================================================ *)
+
+(* Parameters *)
+param NI, NR [small].  (* Number of initiator/responder sessions *)
+
+(* Type declarations *)
+type kemseed [large, fixed].
+type kemsk [large, fixed].
+type kempk [large, fixed].
+type kemct [large, fixed].
+type kemss [large, fixed].
+
+type sigseed [large, fixed].
+type sigsk [large, fixed].
+type sigpk [large, fixed].
+type signature [large, fixed].
+
+type nonce [large, fixed].
+type sessionkey [large, fixed].
+
+type hashkey [fixed].
+
+(* ML-KEM - IND-CCA2 secure KEM *)
+fun kem_keygen(kemseed): kemsk.
+fun kem_pk(kemsk): kempk.
+fun kem_enc_ct(kempk, kemseed): kemct.
+fun kem_enc_ss(kempk, kemseed): kemss.
+fun kem_dec(kemct, kemsk): kemss
+  reduc forall seed: kemseed, sk: kemsk;
+    kem_dec(kem_enc_ct(kem_pk(sk), seed), sk) = kem_enc_ss(kem_pk(sk), seed).
+
+(* ML-DSA - EUF-CMA secure signature *)
+fun sig_keygen(sigseed): sigsk.
+fun sig_pk(sigsk): sigpk.
+fun sign(bitstring, sigsk): signature.
+fun verify(bitstring, signature, sigpk): bool
+  reduc forall m: bitstring, sk: sigsk;
+    verify(m, sign(m, sk), sig_pk(sk)) = true.
+
+(* HKDF for key derivation *)
+fun hkdf(kemss, nonce, nonce): sessionkey.
+
+(* Hash for confirmation *)
+fun hash(sessionkey): bitstring.
+
+(* Pair functions *)
+fun pair_key_ct(kempk, kemct): bitstring [data].
+
+(* Channel *)
+channel c.
+
+(* Events *)
+event InitAccepts(sigpk, sessionkey).
+event RespAccepts(sigpk, sessionkey).
+
+(* Security Queries *)
+query secret k: sessionkey.
+query pkr: sigpk, k: sessionkey;
+  inj-event(InitAccepts(pkr, k)) ==> inj-event(RespAccepts(pkr, k)).
+
+(* Initiator Process *)
+let processInitiator(trusted_pk: sigpk) =
+  foreach iI <= NI do
+  OI1() :=
+    (* Generate ephemeral KEM keypair *)
+    kseed <-R kemseed;
+    ksk <- kem_keygen(kseed);
+    kpk <- kem_pk(ksk);
+    (* Generate nonce *)
+    n_i <-R nonce;
+    return(kpk, n_i);
+  OI2(kpk_r: kempk, ct: kemct, sig: signature, n_r: nonce, pk_r: sigpk) :=
+    (* Verify responder is trusted *)
+    if pk_r = trusted_pk then
+    (* Verify signature *)
+    let msg = pair_key_ct(kpk_r, ct) in
+    if verify(msg, sig, trusted_pk) then
+    (* Decapsulate *)
+    let ss = kem_dec(ct, ksk) in
+    (* Derive session key *)
+    let k: sessionkey = hkdf(ss, n_i, n_r) in
+    event InitAccepts(trusted_pk, k);
+    return(hash(k)).
+
+(* Responder Process *)
+let processResponder(ssk: sigsk) =
+  foreach iR <= NR do
+  OR1(kpk_i: kempk, n_i: nonce) :=
+    (* Generate ephemeral KEM keypair *)
+    kseed <-R kemseed;
+    ksk <- kem_keygen(kseed);
+    kpk <- kem_pk(ksk);
+    (* Generate nonce *)
+    n_r <-R nonce;
+    (* Encapsulate to initiator *)
+    eseed <-R kemseed;
+    ct <- kem_enc_ct(kpk_i, eseed);
+    ss <- kem_enc_ss(kpk_i, eseed);
+    (* Sign response *)
+    let msg = pair_key_ct(kpk, ct) in
+    let sig = sign(msg, ssk) in
+    (* Derive session key *)
+    let k: sessionkey = hkdf(ss, n_i, n_r) in
+    event RespAccepts(sig_pk(ssk), k);
+    return(kpk, ct, sig, n_r, sig_pk(ssk));
+  OR2(confirm: bitstring) :=
+    if confirm = hash(k) then
+    return().
+
+(* Main Process *)
+process
+  Ostart() :=
+    (* Generate responder's long-term signing key *)
+    sseed <-R sigseed;
+    ssk <- sig_keygen(sseed);
+    spk <- sig_pk(ssk);
+    return(spk);
+  (run processInitiator(spk) | run processResponder(ssk))
+
+(* Expected: CryptoVerif proves session key secrecy and authentication *)

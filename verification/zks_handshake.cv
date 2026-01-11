@@ -1,0 +1,98 @@
+(* ZKS Protocol - CryptoVerif Computational Model *)
+(* Post-Quantum Authenticated Key Exchange *)
+(* Based on signedDH-DDH-auto.cv which proves ALL queries *)
+
+set backtrackOnCrypto = true.
+
+param NA, NB, NK.
+
+type host [bounded].
+type keyseed [large, fixed].
+type pkey [bounded].
+type skey [bounded].
+type blocksize [bounded].
+type signature [bounded].
+type nonce [large, fixed].
+type prfkey [large, fixed].
+type sessionkey [fixed].
+
+(* Signatures - UF-CMA (models ML-DSA) *)
+proba Psign.
+proba Psigncoll.
+expand UF_CMA_proba_signature(keyseed, pkey, skey, blocksize, signature, skgen, pkgen, sign, check, Psign, Psigncoll).
+
+(* PRF for key derivation (models HKDF) *)
+proba Pprf.
+expand PRF_1(prfkey, bitstring, sessionkey, prf, Pprf).
+
+(* Message concatenation *)
+fun concat_msg(host, host, nonce, nonce): blocksize [data].
+fun concat_kdf(nonce, nonce): bitstring [data].
+
+(* Peers *)
+const A, B: host.
+
+(* Channels *)
+channel start, cstart, cA1, cA2, cA3, cB1, cB2, cB3, cK.
+
+(* Events *)
+event beginResp(host, host, nonce, nonce).
+event endInit(host, host, nonce, nonce).
+event endResp(host, host, nonce, nonce).
+
+(* Queries *)
+query secret keyA.
+query secret keyB.
+
+query nB: nonce, nA: nonce;
+  inj-event(endInit(A, B, nA, nB)) ==> inj-event(beginResp(A, B, nA, nB))
+  public_vars keyA, keyB.
+
+(* Main process *)
+process
+  in(start, ());
+  new pk: prfkey;
+  new rkB: keyseed;
+  let skB: skey = skgen(rkB) in
+  let pkB: pkey = pkgen(rkB) in
+  out(cstart, pkB);
+  ((
+    (* Initiator - Alice *)
+    ! i_1 <= NA
+    in(cA1[i_1], hostB: host);
+    new nA: nonce;
+    out(cA2[i_1], (A, hostB, nA));
+    in(cA3[i_1], (=A, =hostB, nB: nonce, s: signature, pkResp: pkey));
+    (* Key lookup - verify responder key *)
+    find j = j' <= NK suchthat defined(Khost[j'], Rkey[j']) && (Khost[j'] = hostB) then
+    let pkhostB: pkey = Rkey[j] in
+    if check(concat_msg(A, hostB, nA, nB), pkhostB, s) then
+    let kA: sessionkey = prf(pk, concat_kdf(nA, nB)) in
+    event endInit(A, hostB, nA, nB);
+    if hostB = B then
+      let keyA: sessionkey = kA
+  ) | (
+    (* Responder - Bob *)
+    ! i_2 <= NB
+    in(cB1[i_2], (hostA: host, =B, nA: nonce));
+    new nB: nonce;
+    let msg: blocksize = concat_msg(hostA, B, nA, nB) in
+    let sig: signature = sign(msg, skB) in
+    let kB: sessionkey = prf(pk, concat_kdf(nA, nB)) in
+    (* beginResp BEFORE output - critical for auth proof *)
+    event beginResp(hostA, B, nA, nB);
+    out(cB2[i_2], (hostA, B, nB, sig, pkB));
+    in(cB3[i_2], ());
+    event endResp(hostA, B, nA, nB);
+    if hostA = A then
+      let keyB: sessionkey = kB
+  ) | (
+    (* Key server *)
+    ! i_3 <= NK
+    in(cK[i_3], (Khost: host, Kkey: pkey));
+    let Rkey: pkey = (if Khost = B then pkB else Kkey)
+  ))
+
+(* EXPECTED
+All queries proved.
+END *)

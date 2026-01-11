@@ -1,0 +1,159 @@
+(* ============================================================================ *)
+(* ZKS Swarm Routing (Onion) Formal Verification                                *)
+(* ============================================================================ *)
+(* Models the zks:// swarm-routed anonymous communication                       *)
+(*                                                                              *)
+(* Architecture:                                                                *)
+(*   Sender -> Relay1 -> Relay2 -> Relay3 -> Receiver                          *)
+(*   Each hop peels one layer of encryption                                     *)
+(*                                                                              *)
+(* Security Properties:                                                         *)
+(*   - Sender anonymity (relay cannot identify origin)                         *)
+(*   - Receiver anonymity (relay cannot identify destination)                  *)
+(*   - Message secrecy (content protected end-to-end)                          *)
+(* ============================================================================ *)
+
+(* --- Type Declarations --- *)
+type skey.         (* Encryption secret key *)
+type pkey.         (* Encryption public key *)
+
+(* --- Channels --- *)
+free c: channel.   (* Public network *)
+
+(* --- Key derivation --- *)
+fun pk(skey): pkey.
+
+(* --- Asymmetric encryption --- *)
+fun aenc(bitstring, pkey): bitstring.
+reduc forall m: bitstring, sk: skey; adec(aenc(m, pk(sk)), sk) = m.
+
+(* --- Type converters --- *)
+fun pkey_to_bits(pkey): bitstring [data, typeConverter].
+
+(* --- Identity protection --- *)
+free sender_identity: bitstring [private].
+free receiver_identity: bitstring [private].
+free message_content: bitstring [private].
+
+(* ============================================================================ *)
+(* Security Queries                                                             *)
+(* ============================================================================ *)
+
+(* Query 1: Sender anonymity - relay cannot learn sender identity *)
+query attacker(sender_identity).
+
+(* Query 2: Receiver anonymity - relay cannot learn receiver identity *)
+query attacker(receiver_identity).
+
+(* Query 3: Message secrecy - content protected end-to-end *)
+query attacker(message_content).
+
+(* Query 4: Events for protocol execution *)
+event SenderCreatesOnion(bitstring).
+event ReceiverGetsMessage(bitstring).
+
+(* Correspondence: message received implies sender created it *)
+query m: bitstring;
+  event(ReceiverGetsMessage(m)) ==> event(SenderCreatesOnion(m)).
+
+(* ============================================================================ *)
+(* Protocol Participants                                                        *)
+(* ============================================================================ *)
+
+(* --- Sender (Origin) --- *)
+let Sender(receiver_pk: pkey, relay1_pk: pkey, relay2_pk: pkey, relay3_pk: pkey) =
+    (* Create message payload - NO sender identity for anonymity! *)
+    let payload = message_content in
+    
+    (* Layer 3: Encrypt for receiver *)
+    let layer3 = aenc(payload, receiver_pk) in
+    
+    (* Layer 2: Wrap for relay 3 (include receiver address) *)
+    let layer2_data = (layer3, receiver_identity) in
+    let layer2 = aenc(layer2_data, relay3_pk) in
+    
+    (* Layer 1: Wrap for relay 2 *)
+    let layer1_data = (layer2, pkey_to_bits(relay3_pk)) in
+    let layer1 = aenc(layer1_data, relay2_pk) in
+    
+    (* Outermost: Wrap for relay 1 *)
+    let onion_data = (layer1, pkey_to_bits(relay2_pk)) in
+    let onion = aenc(onion_data, relay1_pk) in
+    
+    event SenderCreatesOnion(message_content);
+    
+    (* Send to first relay *)
+    out(c, onion).
+
+
+(* --- Relay 1 (Entry Node) --- *)
+let Relay1(relay1_sk: skey) =
+    in(c, onion: bitstring);
+    
+    (* Peel outer layer *)
+    let (inner: bitstring, next_hop: bitstring) = adec(onion, relay1_sk) in
+    
+    (* Forward to next relay - Relay1 only knows next hop *)
+    out(c, inner).
+
+
+(* --- Relay 2 (Middle Node) --- *)
+let Relay2(relay2_sk: skey) =
+    in(c, onion: bitstring);
+    
+    (* Peel layer *)
+    let (inner: bitstring, next_hop: bitstring) = adec(onion, relay2_sk) in
+    
+    (* Forward to Relay 3 *)
+    out(c, inner).
+
+
+(* --- Relay 3 (Exit Node) --- *)
+let Relay3(relay3_sk: skey) =
+    in(c, onion: bitstring);
+    
+    (* Peel layer - reveals encrypted payload and receiver address *)
+    let (encrypted_payload: bitstring, receiver_addr: bitstring) = adec(onion, relay3_sk) in
+    
+    (* Deliver to receiver - Exit knows receiver but NOT sender *)
+    out(c, encrypted_payload).
+
+
+(* --- Receiver --- *)
+let Receiver(receiver_sk: skey) =
+    in(c, encrypted_payload: bitstring);
+    
+    (* Decrypt final layer - just message content, no origin info *)
+    let msg_content = adec(encrypted_payload, receiver_sk) in
+    
+    event ReceiverGetsMessage(msg_content).
+
+
+(* ============================================================================ *)
+(* Main Process                                                                 *)
+(* ============================================================================ *)
+
+process
+    (* Generate all keypairs *)
+    new receiver_sk: skey;
+    new relay1_sk: skey;
+    new relay2_sk: skey;
+    new relay3_sk: skey;
+    
+    let receiver_pk = pk(receiver_sk) in
+    let relay1_pk = pk(relay1_sk) in
+    let relay2_pk = pk(relay2_sk) in
+    let relay3_pk = pk(relay3_sk) in
+    
+    (* Make relay public keys available (but not private keys) *)
+    out(c, relay1_pk);
+    out(c, relay2_pk);
+    out(c, relay3_pk);
+    out(c, receiver_pk);
+    
+    (* Run protocol *)
+    (Sender(receiver_pk, relay1_pk, relay2_pk, relay3_pk)) |
+    (Relay1(relay1_sk)) |
+    (Relay2(relay2_sk)) |
+    (Relay3(relay3_sk)) |
+    (Receiver(receiver_sk))

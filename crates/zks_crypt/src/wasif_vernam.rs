@@ -223,6 +223,11 @@ impl WasifVernam {
                 // Fallback to static swarm seed (computational security)
                 let offset = self.key_offset.fetch_add(data.len() as u64, Ordering::SeqCst);
                 let keystream = self.generate_keystream(offset, data.len());
+                // SECURITY FIX: Validate keystream length to prevent panic
+                if keystream.len() != data.len() {
+                    error!("🚨 HKDF keystream generation failed: expected {} bytes, got {}", data.len(), keystream.len());
+                    return Err(AeadError);
+                }
                 for (i, byte) in mixed_data.iter_mut().enumerate() {
                     *byte ^= keystream[i];
                 }

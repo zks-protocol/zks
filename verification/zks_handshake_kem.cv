@@ -1,0 +1,116 @@
+(* ZKS Protocol - Full CryptoVerif Computational Model *)
+(* Post-Quantum Authenticated Key Exchange with ML-KEM *)
+(* Uses pq.ocvl library for IND-CCA2 KEM *)
+
+set backtrackOnCrypto = true.
+
+param NA, NB, NK.
+
+type host [bounded].
+type keyseed [large, fixed].
+type pkey [bounded].
+type skey [bounded].
+type blocksize [bounded].
+type signature [bounded].
+type nonce [large, fixed].
+type prfkey [large, fixed].
+type sessionkey [fixed].
+
+(* KEM types *)
+type kemkeyseed [large, fixed].
+type kempk [bounded].
+type kemsk [bounded].
+type kemsec [fixed].
+type kemct [bounded].
+type kemoutput [bounded].
+
+(* Signatures - UF-CMA (models ML-DSA) *)
+proba Psign.
+proba Psigncoll.
+expand UF_CMA_proba_signature(keyseed, pkey, skey, blocksize, signature, skgen, pkgen, sign, check, Psign, Psigncoll).
+
+(* ML-KEM - IND-CCA2 secure *)
+proba Pkem.
+proba Pkemkeycoll.
+proba Pkemctcoll.
+expand IND_CCA2_KEM(kemkeyseed, kempk, kemsk, kemsec, kemct, kemoutput, kempkgen, kemskgen, kemencap, kempair, kemdecap, keminjbot, Pkem, Pkemkeycoll, Pkemctcoll).
+
+(* PRF for key derivation (models HKDF) *)
+proba Pprf.
+expand PRF_1(prfkey, bitstring, sessionkey, prf, Pprf).
+
+(* Message concatenation *)
+fun concat_msg(host, host, kemct, nonce): blocksize [data].
+fun concat_kdf(kemsec, nonce, nonce): bitstring [data].
+
+(* Peers *)
+const A, B: host.
+
+(* Channels *)
+channel start, cstart, cA1, cA2, cA3, cB1, cB2, cB3, cK.
+
+(* Events *)
+event beginResp(host, host, kemct, nonce).
+event endInit(host, host, kemct, nonce).
+
+(* Queries *)
+query secret keyA.
+query secret keyB.
+
+query ct: kemct, nB: nonce;
+  inj-event(endInit(A, B, ct, nB)) ==> inj-event(beginResp(A, B, ct, nB))
+  public_vars keyA, keyB.
+
+(* Main process *)
+process
+  in(start, ());
+  new pk: prfkey;
+  new rkB: keyseed;
+  let skB: skey = skgen(rkB) in
+  let pkB: pkey = pkgen(rkB) in
+  out(cstart, pkB);
+  ((
+    (* Initiator - Alice generates ephemeral KEM keypair *)
+    ! i_1 <= NA
+    in(cA1[i_1], hostB: host);
+    new kemks: kemkeyseed;
+    let kemsk_A: kemsk = kemskgen(kemks) in
+    let kempk_A: kempk = kempkgen(kemks) in
+    new nA: nonce;
+    out(cA2[i_1], (A, hostB, kempk_A, nA));
+    in(cA3[i_1], (=A, =hostB, ct: kemct, nB: nonce, s: signature, pkResp: pkey));
+    (* Key lookup *)
+    find j = j' <= NK suchthat defined(Khost[j'], Rkey[j']) && (Khost[j'] = hostB) then
+    let pkhostB: pkey = Rkey[j] in
+    if check(concat_msg(A, hostB, ct, nB), pkhostB, s) then
+    (* Decapsulate KEM ciphertext *)
+    let keminjbot(kem_secret: kemsec) = kemdecap(ct, kemsk_A) in
+    let kA: sessionkey = prf(pk, concat_kdf(kem_secret, nA, nB)) in
+    event endInit(A, hostB, ct, nB);
+    if hostB = B then
+      let keyA: sessionkey = kA
+  ) | (
+    (* Responder - Bob encapsulates to Alice's KEM public key *)
+    ! i_2 <= NB
+    in(cB1[i_2], (hostA: host, =B, kempk_i: kempk, nA: nonce));
+    new nB: nonce;
+    (* Encapsulate to Alice's public key *)
+    let kempair(kem_secret: kemsec, ct: kemct) = kemencap(kempk_i) in
+    let msg: blocksize = concat_msg(hostA, B, ct, nB) in
+    let sig: signature = sign(msg, skB) in
+    let kB: sessionkey = prf(pk, concat_kdf(kem_secret, nA, nB)) in
+    event beginResp(hostA, B, ct, nB);
+    out(cB2[i_2], (hostA, B, ct, nB, sig, pkB));
+    in(cB3[i_2], ());
+    if hostA = A then
+      let keyB: sessionkey = kB
+  ) | (
+    (* Key server *)
+    ! i_3 <= NK
+    in(cK[i_3], (Khost: host, Kkey: pkey));
+    let Rkey: pkey = (if Khost = B then pkB else Kkey)
+  ))
+
+(* EXPECTED with pq.ocvl:
+All queries proved with IND-CCA2 KEM assumption.
+END *)

@@ -1,0 +1,52 @@
+(* ============================================================================ *)
+(* ZKS Protocol - Simplified CryptoVerif Model                                  *)
+(* ============================================================================ *)
+
+(* Use default cryptographic library *)
+
+param N [small].
+
+type pkey [bounded].
+type skey [bounded].
+type keyseed [large, fixed].
+type seed [large, fixed].
+type macs [bounded].
+
+(* Signing - UF-CMA *)
+proba Psign.
+expand UF_CMA_det_signature(keyseed, pkey, skey, bitstring, macs, skgen, pkgen, sign, check, Psign).
+
+(* Channel *)
+channel c.
+
+(* Events *)
+event InitAccepts(pkey).
+event RespSends(pkey).
+
+(* Query *)
+query pk: pkey;
+  event(InitAccepts(pk)) ==> event(RespSends(pk)).
+
+(* Protocol *)
+let Initiator(pk_resp: pkey) =
+  foreach i <= N do
+  OI(msg: bitstring, sig: macs) :=
+    if check(msg, pk_resp, sig) then
+    event InitAccepts(pk_resp);
+    return().
+
+let Responder(sk_resp: skey) =
+  foreach i <= N do
+  OR() :=
+    new m: bitstring;
+    let s = sign(m, sk_resp) in
+    event RespSends(pkgen(sk_resp));
+    return(m, s).
+
+process
+  Ostart() :=
+    new ks: keyseed;
+    let sk = skgen(ks) in
+    let pk = pkgen(sk) in
+    return(pk);
+  (run Initiator(pk) | run Responder(sk))

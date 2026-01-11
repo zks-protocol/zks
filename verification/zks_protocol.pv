@@ -1,0 +1,188 @@
+(* ============================================================================ *)
+(* ZKS Protocol Formal Verification Model - CORRECTED                           *)
+(* ============================================================================ *)
+(* ProVerif model for the ZKS 3-message handshake protocol                     *)
+(*                                                                              *)
+(* Protocol:                                                                    *)
+(*   1. Alice -> Bob: Init(pk_A, nonce_A, timestamp)                           *)
+(*   2. Bob -> Alice: Response(pk_B, ciphertext, signature, nonce_B, timestamp)*)
+(*   3. Alice -> Bob: Finish(confirmation)                                      *)
+(*                                                                              *)
+(* Security Properties Verified:                                                *)
+(*   - Secrecy of shared session key                                           *)
+(*   - Authentication of responder (Bob) to initiator (Alice)                  *)
+(*   - Initiator authentication                                                 *)
+(*                                                                              *)
+(* FIXES Applied:                                                               *)
+(*   - Correct ML-KEM encapsulation direction                                   *)
+(*   - Query actual derived session key                                         *)
+(*   - Added injective correspondence for stronger auth                        *)
+(* ============================================================================ *)
+
+(* --- Type Declarations --- *)
+type skey.        (* ML-KEM secret key *)
+type pkey.        (* ML-KEM public key *)
+type sskey.       (* ML-DSA signing key *)
+type spkey.       (* ML-DSA verification key *)
+type nonce.       (* Random nonce *)
+type timestamp.   (* Timestamp for replay protection *)
+
+(* --- Channels --- *)
+free c: channel.  (* Public network channel *)
+
+(* --- ML-KEM (Key Encapsulation) Functions --- *)
+fun pk(skey): pkey.
+
+(* Encapsulation: produces (ciphertext, shared_secret) for a public key *)
+fun mlkem_enc(bitstring, pkey): bitstring.
+
+(* Decapsulation: recovers shared secret using secret key *)
+reduc forall m: bitstring, sk: skey; mlkem_dec(mlkem_enc(m, pk(sk)), sk) = m.
+
+(* --- ML-DSA (Digital Signature) Functions --- *)
+fun spk(sskey): spkey.
+fun mldsa_sign(bitstring, sskey): bitstring.
+reduc forall m: bitstring, sk: sskey; mldsa_verify(mldsa_sign(m, sk), spk(sk)) = m.
+
+(* --- Key Derivation (HKDF) --- *)
+fun hkdf(bitstring, bitstring): bitstring.
+
+(* --- Hash function for confirmation --- *)
+fun hash(bitstring): bitstring.
+
+(* --- Tuple constructors --- *)
+fun pair(bitstring, bitstring): bitstring.
+reduc forall x: bitstring, y: bitstring; fst(pair(x, y)) = x.
+reduc forall x: bitstring, y: bitstring; snd(pair(x, y)) = y.
+
+(* --- Type conversions --- *)
+fun pkey_to_bits(pkey): bitstring [data, typeConverter].
+fun bits_to_pkey(bitstring): pkey [data, typeConverter].
+fun spkey_to_bits(spkey): bitstring [data, typeConverter].
+fun nonce_to_bits(nonce): bitstring [data, typeConverter].
+fun timestamp_to_bits(timestamp): bitstring [data, typeConverter].
+
+(* --- Long-term Keys --- *)
+free bob_signing_key: sskey [private].
+
+(* ============================================================================ *)
+(* Security Queries                                                             *)
+(* ============================================================================ *)
+
+(* Events for authentication *)
+event beginBobResponse(spkey, bitstring).      (* Bob starts, includes ciphertext *)
+event endAliceAccepts(spkey, bitstring).       (* Alice accepts, includes session_key *)
+event beginAliceInit(pkey).
+event endBobAccepts(pkey, bitstring).
+
+(* Query 1: Injective authentication - Bob to Alice *)
+(* For each Alice acceptance, there was a unique Bob response *)
+query vk: spkey, ct: bitstring;
+  inj-event(endAliceAccepts(vk, ct)) ==> inj-event(beginBobResponse(vk, ct)).
+
+(* Query 2: Authentication - Alice to Bob *)
+query pk_a: pkey, sess_key: bitstring;
+  event(endBobAccepts(pk_a, sess_key)) ==> event(beginAliceInit(pk_a)).
+
+(* Query 3: Session key secrecy - test actual derived keys *)
+event SessionKeyDerived(bitstring).
+query k: bitstring; attacker(k) && event(SessionKeyDerived(k)).
+
+(* ============================================================================ *)
+(* Protocol Processes                                                           *)
+(* ============================================================================ *)
+
+(* --- Initiator (Alice) Process --- *)
+let processAlice(trusted_bob_vk: spkey) =
+    (* Generate ephemeral ML-KEM keypair *)
+    new sk_A: skey;
+    let pk_A = pk(sk_A) in
+    
+    (* Generate random nonce *)
+    new nonce_A: nonce;
+    new ts_A: timestamp;
+    
+    (* Send Init message *)
+    event beginAliceInit(pk_A);
+    out(c, (pkey_to_bits(pk_A), nonce_to_bits(nonce_A), timestamp_to_bits(ts_A)));
+    
+    (* Receive Response from Bob *)
+    in(c, (pk_B_bits: bitstring, ciphertext: bitstring, signature: bitstring, 
+           nonce_B_bits: bitstring, ts_B_bits: bitstring, bob_vk_bits: bitstring));
+    
+    (* Verify Bob's verification key matches trusted key *)
+    if bob_vk_bits = spkey_to_bits(trusted_bob_vk) then
+    
+    (* Verify signature *)
+    let signed_data = pair(pair(pk_B_bits, ciphertext), ts_B_bits) in
+    let verified_msg = mldsa_verify(signature, trusted_bob_vk) in
+    if verified_msg = signed_data then
+    
+    (* CORRECT: Decapsulate ciphertext that was encrypted to OUR public key *)
+    let kem_secret = mlkem_dec(ciphertext, sk_A) in
+    
+    (* Derive session key *)
+    let session_key = hkdf(kem_secret, pair(nonce_to_bits(nonce_A), nonce_B_bits)) in
+    
+    (* Send confirmation *)
+    let confirmation = hash(session_key) in
+    out(c, confirmation);
+    
+    (* Record events *)
+    event SessionKeyDerived(session_key);
+    event endAliceAccepts(trusted_bob_vk, ciphertext);
+    0.
+
+
+(* --- Responder (Bob) Process --- *)
+let processBob(bob_sk: sskey) =
+    let bob_vk = spk(bob_sk) in
+    
+    (* Receive Init from Alice *)
+    in(c, (pk_A_bits: bitstring, nonce_A_bits: bitstring, ts_A_bits: bitstring));
+    
+    (* Parse Alice's public key *)
+    let pk_A = bits_to_pkey(pk_A_bits) in
+    
+    (* Generate ephemeral ML-KEM keypair for Bob *)
+    new sk_B: skey;
+    let pk_B = pk(sk_B) in
+    
+    (* Generate random nonce and timestamp *)
+    new nonce_B: nonce;
+    new ts_B: timestamp;
+    
+    (* CORRECT: Generate shared secret and encapsulate to ALICE's public key *)
+    new kem_secret: bitstring;
+    let ciphertext = mlkem_enc(kem_secret, pk_A) in
+    
+    (* Sign the response *)
+    let signed_data = pair(pair(pkey_to_bits(pk_B), ciphertext), timestamp_to_bits(ts_B)) in
+    let signature = mldsa_sign(signed_data, bob_sk) in
+    
+    (* Send Response *)
+    event beginBobResponse(bob_vk, ciphertext);
+    out(c, (pkey_to_bits(pk_B), ciphertext, signature, 
+            nonce_to_bits(nonce_B), timestamp_to_bits(ts_B), spkey_to_bits(bob_vk)));
+    
+    (* Derive session key *)
+    let session_key = hkdf(kem_secret, pair(nonce_A_bits, nonce_to_bits(nonce_B))) in
+    
+    (* Receive and verify confirmation *)
+    in(c, received_confirmation: bitstring);
+    let expected_confirmation = hash(session_key) in
+    if received_confirmation = expected_confirmation then
+    
+    (* Record events *)
+    event SessionKeyDerived(session_key);
+    event endBobAccepts(pk_A, session_key);
+    0.
+
+
+(* ============================================================================ *)
+(* Main Process                                                                 *)
+(* ============================================================================ *)
+
+process
+    let trusted_bob_vk = spk(bob_signing_key) in
+    (!processAlice(trusted_bob_vk)) | (!processBob(bob_signing_key))

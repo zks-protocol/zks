@@ -179,20 +179,23 @@ impl NatTraversal {
     // Private helper methods
     
     async fn discover_upnp_gateway(&self) -> Result<IpAddr> {
-        // Simulate UPnP gateway discovery
-        // In reality, this would use SSDP multicast
+        // IMPLEMENTATION_STUB: Real UPnP requires SSDP multicast discovery
+        // TODO: Use igd crate for proper UPnP IGD implementation
+        // See: https://crates.io/crates/igd
         tokio::time::sleep(Duration::from_millis(100)).await;
         
-        // Return a dummy gateway address for now
+        // Placeholder for testing - real implementation needed
+        warn!("Using stub UPnP gateway - implement with `igd` crate for production");
         Ok("192.168.1.1".parse().unwrap())
     }
     
     async fn discover_nat_pmp_gateway(&self) -> Result<IpAddr> {
-        // Simulate NAT-PMP gateway discovery
-        // Would try default gateway addresses
+        // IMPLEMENTATION_STUB: Real NAT-PMP requires UDP port 5351 communication
+        // TODO: Implement proper NAT-PMP protocol or use natpmp crate
         tokio::time::sleep(Duration::from_millis(100)).await;
         
-        // Return a dummy gateway address for now
+        // Placeholder for testing - real implementation needed
+        warn!("Using stub NAT-PMP gateway - implement for production");
         Ok("192.168.1.1".parse().unwrap())
     }
     
