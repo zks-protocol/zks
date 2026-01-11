@@ -19,22 +19,31 @@ pub struct ZkConnection {
 
 impl ZkConnection {
     /// Connect to a peer using zk:// protocol
+    /// 
+    /// # Security
+    /// The URL **must** contain the responder's public key for authenticated connection.
+    /// Use format: `zk://host:port?key=<base64_ml_dsa_pubkey>`
+    /// 
+    /// This ensures post-quantum authenticated key exchange with no MITM vulnerability.
     pub async fn connect(url: String, config: ConnectionConfig) -> Result<Self> {
         Self::connect_with_url(url, config).await
     }
     
     /// Connect to a peer using zk:// protocol (internal implementation)
     async fn connect_with_url(url: String, config: ConnectionConfig) -> Result<Self> {
-        let parsed_url = url::Url::parse(&url)
-            .map_err(|e| SdkError::InvalidUrl(format!("Invalid URL: {}", e)))?;
+        // Use ZkUrl for secure parsing with mandatory key validation
+        let zk_url = zks_proto::ZkUrl::parse(&url)
+            .map_err(|e| SdkError::InvalidUrl(format!("URL parse error: {}", e)))?;
         
-        let host = parsed_url.host_str()
-            .ok_or_else(|| SdkError::InvalidUrl("Missing host in URL".to_string()))?;
+        // Security check: responder_key is mandatory (validated in ZkUrl::parse)
+        let responder_key = zk_url.responder_key
+            .ok_or_else(|| SdkError::CryptoError(
+                "Direct connection requires responder key in URL: zk://host:port?key=<base64_pubkey>".into()
+            ))?;
         
-        let port = parsed_url.port().unwrap_or(8080);
-        let addr = format!("{}:{}", host, port);
+        let addr = format!("{}:{}", zk_url.host, zk_url.port);
         
-        info!("Connecting to ZK peer at {}", addr);
+        info!("Connecting to ZK peer at {} (authenticated)", addr);
         
         // Connect via TCP
         let stream = TcpStream::connect(&addr).await
@@ -46,17 +55,17 @@ impl ZkConnection {
         
         debug!("TCP connection established to {}", peer_addr);
         
-        // Perform post-quantum handshake - assume we're the initiator for now
+        // Perform post-quantum handshake with verified responder key
         let encrypted_stream = EncryptedStream::handshake(
             stream,
             &config,
             false, // Not swarm mode
             zks_proto::HandshakeRole::Initiator,
-            "zk-direct".to_string(), // Default room ID for direct connections
-            None, // No trusted responder key for direct connections
+            "zk-direct".to_string(),
+            Some(responder_key), // Pass the verified responder key
         ).await?;
         
-        info!("🔐 ZK connection established with {}", peer_addr);
+        info!("🔐 ZK connection established with {} (PQ-authenticated)", peer_addr);
         
         Ok(Self {
             stream: encrypted_stream,
@@ -64,6 +73,7 @@ impl ZkConnection {
             peer_addr,
         })
     }
+
     
     /// Send data to the peer
     pub async fn send(&mut self, data: &[u8]) -> Result<()> {

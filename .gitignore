@@ -144,9 +144,22 @@ build_error.txt
 *.zip
 
 # =================================
-# Android Build Artifacts
+# Android & Bindings (Ignored)
 # =================================
 *.so
 jniLibs/
-/android/**/build/
-/android/**/.gradle/
+/android/
+/bindings/
+
+# =================================
+# Misc & Scripts (Ignored)
+# =================================
+build-android-aar.*
+ANDROID_AAR_STATUS.md
+AWS*
+"Critical Issues.md"
+ZKS_MCP_SERVER_ROADMAP.md
+
+
+
+

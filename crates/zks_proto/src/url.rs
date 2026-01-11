@@ -29,6 +29,17 @@ pub enum ProtocolMode {
 }
 
 /// Parsed ZK Protocol URL
+/// 
+/// # Security
+/// For direct connections (zk://), a responder key is **mandatory** to ensure
+/// authenticated key exchange. The key must be provided in the URL query string:
+/// 
+/// ```text
+/// zk://host:port?key=<base64_encoded_ml_dsa_public_key>
+/// ```
+/// 
+/// This prevents MITM attacks by requiring pre-shared knowledge of the responder's
+/// public key, ensuring post-quantum authenticated key exchange.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ZkUrl {
     /// Original URL string
@@ -47,10 +58,20 @@ pub struct ZkUrl {
     pub path: String,
     /// Query parameters
     pub query: Option<String>,
+    /// Responder's ML-DSA public key (required for direct connections)
+    /// This ensures authenticated key exchange - no TOFU weakness
+    pub responder_key: Option<Vec<u8>>,
 }
+
 
 impl ZkUrl {
     /// Parse a ZK Protocol URL
+    /// 
+    /// # Security
+    /// For direct connections (zk://), the responder's public key is **mandatory**
+    /// and must be provided via the `key` query parameter (base64 encoded).
+    /// 
+    /// Example: `zk://192.168.1.1:8080?key=<base64_ml_dsa_pubkey>`
     pub fn parse(url_str: &str) -> Result<Self> {
         let url = Url::parse(url_str).map_err(|e| ProtoError::invalid_url(format!("URL parse error: {}", e)))?;
         
@@ -87,6 +108,17 @@ impl ZkUrl {
         let path = url.path().to_string();
         let query = url.query().map(|q| q.to_string());
         
+        // Extract responder key from query parameters
+        let responder_key = Self::extract_responder_key(&url)?;
+        
+        // SECURITY: For direct connections, responder key is MANDATORY
+        // This ensures authenticated key exchange - no MITM possible
+        if scheme == UrlScheme::Direct && responder_key.is_none() {
+            return Err(ProtoError::invalid_url(
+                "Direct connections require responder key: zk://host:port?key=<base64_pubkey>"
+            ));
+        }
+        
         Ok(ZkUrl {
             original: url_str.to_string(),
             scheme,
@@ -96,25 +128,67 @@ impl ZkUrl {
             socket_addr,
             path,
             query,
+            responder_key,
         })
     }
     
-    /// Create a direct zk:// URL
-    pub fn direct(host: &str, port: u16) -> Self {
-        let url_str = format!("zk://{}:{}", host, port);
+    /// Extract responder key from URL query parameters
+    /// Expects base64-encoded ML-DSA public key in `key` parameter
+    fn extract_responder_key(url: &Url) -> Result<Option<Vec<u8>>> {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        
+        let query_pairs: Vec<(String, String)> = url.query_pairs()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+        
+        for (key, value) in query_pairs {
+            if key == "key" {
+                // Decode base64 public key
+                let decoded = STANDARD.decode(&value)
+                    .map_err(|e| ProtoError::invalid_url(format!(
+                        "Invalid base64 responder key: {}. Use: zk://host:port?key=<base64_ml_dsa_pubkey>",
+                        e
+                    )))?;
+                
+                // Validate key size (ML-DSA-65 public key = 1952 bytes)
+                if decoded.len() != 1952 {
+                    return Err(ProtoError::invalid_url(format!(
+                        "Invalid responder key size: expected 1952 bytes (ML-DSA-65), got {}",
+                        decoded.len()
+                    )));
+                }
+                
+                return Ok(Some(decoded));
+            }
+        }
+        
+        Ok(None)
+    }
+
+    /// Create a direct zk:// URL with responder key
+    /// 
+    /// # Arguments
+    /// * `host` - Target hostname or IP
+    /// * `port` - Target port
+    /// * `responder_key` - ML-DSA-65 public key of the responder (required for security)
+    pub fn direct_with_key(host: &str, port: u16, responder_key: Vec<u8>) -> Self {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let key_b64 = STANDARD.encode(&responder_key);
+        let url_str = format!("zk://{}:{}?key={}", host, port, key_b64);
         Self {
-            original: url_str.clone(),
+            original: url_str,
             scheme: UrlScheme::Direct,
             mode: ProtocolMode::Direct,
             host: host.to_string(),
             port,
             socket_addr: format!("{}:{}", host, port).parse().ok(),
             path: String::new(),
-            query: None,
+            query: Some(format!("key={}", key_b64)),
+            responder_key: Some(responder_key),
         }
     }
     
-    /// Create a swarm zks:// URL
+    /// Create a swarm zks:// URL (no key required - swarm handles discovery)
     pub fn swarm(host: &str, port: u16) -> Self {
         let url_str = format!("zks://{}:{}", host, port);
         Self {
@@ -126,8 +200,10 @@ impl ZkUrl {
             socket_addr: format!("{}:{}", host, port).parse().ok(),
             path: String::new(),
             query: None,
+            responder_key: None,
         }
     }
+
     
     /// Get the protocol mode
     pub fn mode(&self) -> ProtocolMode {

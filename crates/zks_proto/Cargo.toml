@@ -33,6 +33,8 @@ subtle = "2.5"
 getrandom = "0.2"
 hkdf = "0.12"
 hmac = "0.12"
+base64 = "0.22"  # For URL-embedded public key encoding
+
 
 # ZK Protocol crates
 zks_pqcrypto = { version = "0.1.0", path = "../zks_pqcrypto" }
