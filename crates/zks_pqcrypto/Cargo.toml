@@ -47,9 +47,10 @@ pqcrypto-kyber = "0.8"  # Alternative Kyber implementation - uses rand_core 0.6
 pqcrypto-dilithium = "0.5"  # Dilithium implementation - uses rand_core 0.6 (COMPATIBLE)
 pqcrypto-traits = "0.3"  # Traits for pqcrypto implementations
 
-# WASM fallback - ed25519 for signatures (pure Rust)
+# WASM-compatible PQ signatures - Pure Rust ML-DSA (RustCrypto)
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-ed25519-dalek = { version = "2.0", features = ["rand_core"] }  # Ed25519 signatures for WASM
+ml-dsa = { version = "0.1.0-rc.3", default-features = false, features = ["rand_core"] }
+
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }

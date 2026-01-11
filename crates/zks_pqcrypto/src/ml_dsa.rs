@@ -10,18 +10,15 @@
 //! - Resistant to both classical and quantum computer attacks
 //!
 //! # Key Sizes
-//! - Public key: 1952 bytes (native), 32 bytes (WASM fallback)
-//! - Secret key: 4032 bytes (native), 64 bytes (WASM fallback)
-//! - Signature: 3309 bytes (native), 64 bytes (WASM fallback)
+//! - Public key: 1952 bytes
+//! - Secret key: 4032 bytes
+//! - Signature: 3309 bytes
 //!
-//! # Conditional Compilation
-//! - Native builds use pqcrypto-dilithium (post-quantum)
-//! - WASM builds use ed25519-dalek (⚠️ NOT quantum-resistant)
+//! # Implementation
+//! - **Native builds**: Use pqcrypto-dilithium (C-based, optimized)
+//! - **WASM builds**: Use RustCrypto ml-dsa (pure Rust, post-quantum secure)
 //!
-//! # ⚠️ WASM Security Warning
-//! The WASM implementation falls back to Ed25519, which is **NOT quantum-resistant**.
-//! This is a temporary limitation until WASM-compatible post-quantum libraries become available.
-//! For quantum-resistant signatures, use native builds only.
+//! Both implementations are fully post-quantum secure with identical key/signature sizes.
 //!
 //! # Example
 //!
@@ -133,41 +130,41 @@ mod native_impl {
     }
 }
 
-// WASM implementation using ed25519-dalek
+// WASM implementation using RustCrypto ml-dsa (pure Rust, post-quantum secure)
 #[cfg(target_arch = "wasm32")]
 mod wasm_impl {
     use super::*;
-    use ed25519_dalek::{SigningKey, VerifyingKey, Signature, Signer, Verifier};
+    use ml_dsa::ml_dsa_65::{SigningKey, VerifyingKey, Signature};
+    use ml_dsa::signature::{Signer, Verifier, RandomizedSigner};
     use rand_core::OsRng;
     
-    /// Ed25519 public key size (32 bytes)
-    pub const PUBLIC_KEY_SIZE: usize = 32;
+    /// ML-DSA-65 public key size (1952 bytes)
+    pub const PUBLIC_KEY_SIZE: usize = 1952;
     
-    /// Ed25519 secret key size (64 bytes) - stores full keypair (32 bytes secret + 32 bytes public)
-    /// This matches ed25519_dalek's SigningKey::to_bytes() output format
-    /// Note: The first 32 bytes are the actual secret key, the last 32 bytes are the public key
-    pub const SECRET_KEY_SIZE: usize = 64;
+    /// ML-DSA-65 secret key size (4032 bytes)
+    pub const SECRET_KEY_SIZE: usize = 4032;
     
-    /// Ed25519 signature size (64 bytes)
-    pub const SIGNATURE_SIZE: usize = 64;
+    /// ML-DSA-65 signature size (3309 bytes)
+    pub const SIGNATURE_SIZE: usize = 3309;
     
-    /// Generate a new Ed25519 keypair (WASM implementation)
+    /// Generate a new ML-DSA-65 keypair (WASM implementation - POST-QUANTUM SECURE)
     pub fn generate_keypair() -> Result<(Vec<u8>, Zeroizing<Vec<u8>>)> {
-        let signing_key = SigningKey::generate(&mut OsRng);
-        let verifying_key = signing_key.verifying_key().to_bytes().to_vec();
-        let signing_key_bytes = signing_key.to_bytes();
-        let signing_key_full = Zeroizing::new(signing_key_bytes.to_vec());
+        let signing_key = SigningKey::random(&mut OsRng);
+        let verifying_key = signing_key.verifying_key();
+        
+        let verifying_key_bytes = verifying_key.to_bytes().to_vec();
+        let signing_key_bytes = Zeroizing::new(signing_key.to_bytes().to_vec());
         
         tracing::info!(
-            "🔐 Generated Ed25519 keypair (vk: {} bytes, sk: {} bytes) - WASM fallback",
-            verifying_key.len(),
-            signing_key_full.len()
+            "🔐 Generated ML-DSA-65 keypair (vk: {} bytes, sk: {} bytes) - WASM PQ-SECURE",
+            verifying_key_bytes.len(),
+            signing_key_bytes.len()
         );
         
-        Ok((verifying_key, signing_key_full))
+        Ok((verifying_key_bytes, signing_key_bytes))
     }
     
-    /// Sign a message using the signing key (WASM implementation)
+    /// Sign a message using the signing key (WASM implementation - POST-QUANTUM SECURE)
     pub fn sign(message: impl AsRef<[u8]>, signing_key: &[u8]) -> Result<Vec<u8>> {
         if signing_key.len() != SECRET_KEY_SIZE {
             return Err(PqcError::InvalidKey(format!(
@@ -177,15 +174,15 @@ mod wasm_impl {
             )));
         }
 
-        let signing_key_array = <[u8; 32]>::try_from(&signing_key[..32])
+        let signing_key_array: [u8; SECRET_KEY_SIZE] = signing_key.try_into()
             .map_err(|_| PqcError::InvalidKey("Invalid signing key format".to_string()))?;
         
         let signing_key_obj = SigningKey::from_bytes(&signing_key_array);
-        let signature = signing_key_obj.sign(message.as_ref());
+        let signature = signing_key_obj.sign_with_rng(&mut OsRng, message.as_ref());
         let signature_bytes = signature.to_bytes().to_vec();
 
         tracing::debug!(
-            "🖊️ Signed {} byte message with Ed25519, signature: {} bytes",
+            "🖊️ Signed {} byte message with ML-DSA-65, signature: {} bytes (WASM PQ)",
             message.as_ref().len(),
             signature_bytes.len()
         );
@@ -193,7 +190,7 @@ mod wasm_impl {
         Ok(signature_bytes)
     }
     
-    /// Verify a signature using the verifying key (WASM implementation)
+    /// Verify a signature using the verifying key (WASM implementation - POST-QUANTUM SECURE)
     pub fn verify(message: &[u8], signature: &[u8], public_key: &[u8]) -> Result<()> {
         if public_key.len() != PUBLIC_KEY_SIZE {
             return Err(PqcError::InvalidKey(format!(
@@ -211,21 +208,21 @@ mod wasm_impl {
             )));
         }
 
-        let public_key_array = <[u8; 32]>::try_from(public_key)
+        let public_key_array: [u8; PUBLIC_KEY_SIZE] = public_key.try_into()
             .map_err(|_| PqcError::InvalidKey("Invalid public key format".to_string()))?;
         
-        let signature_array = <[u8; 64]>::try_from(signature)
+        let signature_array: [u8; SIGNATURE_SIZE] = signature.try_into()
             .map_err(|_| PqcError::InvalidSignature("Invalid signature format".to_string()))?;
         
-        let public_key_obj = VerifyingKey::from_bytes(&public_key_array)
-            .map_err(|e| PqcError::InvalidKey(format!("Failed to create public key: {}", e)))?;
+        let verifying_key = VerifyingKey::from_bytes(&public_key_array)
+            .map_err(|e| PqcError::InvalidKey(format!("Failed to create public key: {:?}", e)))?;
         
         let signature_obj = Signature::from_bytes(&signature_array);
 
-        public_key_obj.verify(message, &signature_obj)
-            .map_err(|e| PqcError::InvalidSignature(format!("Signature verification failed: {}", e)))?;
+        verifying_key.verify(message, &signature_obj)
+            .map_err(|e| PqcError::InvalidSignature(format!("Signature verification failed: {:?}", e)))?;
 
-        tracing::debug!("✅ Ed25519 signature verification successful - WASM fallback");
+        tracing::debug!("✅ ML-DSA-65 signature verification successful - WASM PQ-SECURE");
 
         Ok(())
     }
