@@ -1,12 +1,20 @@
 # ZKS Protocol Formal Verification
 
-This directory contains ProVerif models for formally verifying the security properties of the ZKS Protocol.
+This directory contains **ProVerif** (symbolic) and **CryptoVerif** (computational) models for formally verifying the security properties of the ZKS Protocol.
 
 ## Files
 
-| File | Description |
-|:-----|:------------|
-| `zks_protocol.pv` | Full 3-message handshake protocol model |
+| File | Tool | Description |
+|:-----|:-----|:------------|
+| `zks_protocol.pv` | ProVerif | Full 3-message handshake protocol |
+| `anti_replay.pv` | ProVerif | Anti-replay protection with sliding window |
+| `forward_secrecy.pv` | ProVerif | Phase-based forward secrecy verification |
+| `swarm_routing.pv` | ProVerif | Onion routing anonymity & secrecy |
+| `zks_handshake.cv` | CryptoVerif | Computational secrecy + authentication |
+| `zks_handshake_kem.ocv` | CryptoVerif | ML-KEM IND-CCA2 secrecy proof |
+| `zks_handshake.ocv` | CryptoVerif | Oracle front-end handshake model |
+| `zks_simple.ocv` | CryptoVerif | Minimal signature authentication |
+
 
 ## Security Properties Verified
 
@@ -63,17 +71,41 @@ Alice (Initiator)                          Bob (Responder)
 
 ### Prerequisites
 - ProVerif 2.05 or later
+- CryptoVerif 2.12 or later (with `pq.ocvl` library for KEM models)
 
-### Commands
+### ProVerif Commands
 ```bash
-# Verify all properties
+# Verify handshake protocol
 proverif zks_protocol.pv
 
-# Expected output for a secure protocol:
-# RESULT not attacker(shared_session_key[]) is true.
-# RESULT event(endAliceAccepts(pk_bob)) ==> event(beginBobResponse(pk_bob)) is true.
-# RESULT event(endBobAccepts(pk_alice)) ==> event(beginAliceInit(pk_alice)) is true.
+# Verify anti-replay protection
+proverif anti_replay.pv
+
+# Verify forward secrecy
+proverif forward_secrecy.pv
+
+# Verify swarm routing anonymity
+proverif swarm_routing.pv
 ```
+
+### CryptoVerif Commands
+```bash
+# Verify computational secrecy + authentication (channel model)
+cryptoverif zks_handshake.cv
+
+# Verify ML-KEM IND-CCA2 secrecy (oracle model with pq.ocvl)
+cryptoverif -lib pq.ocvl zks_handshake_kem.ocv
+```
+
+### Expected Results
+
+| Model | Expected Output |
+|:---|:---|
+| `zks_handshake.cv` | `RESULT Proved secrecy of keyA/keyB` + `RESULT Proved inj-event(endInit) ==> inj-event(beginResp)` |
+| `zks_handshake_kem.ocv` | `RESULT Proved secrecy of keyA/keyB` |
+
+> **Note**: KEM authentication cannot be proven under IND-CCA2 ([documented limitation](https://github.com/Inria-Prosecco/pqxdh-analysis)).
+
 
 ## Security Model Assumptions
 
