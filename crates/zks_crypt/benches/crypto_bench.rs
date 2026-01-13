@@ -21,19 +21,20 @@ fn benchmark_encrypt(c: &mut Criterion) {
     let sizes = [32, 64, 256, 1024, 4096, 16384, 65536];
     
     for size in sizes {
-        // Create cipher
+        // Prepare data and key
         let key: [u8; 32] = random_bytes(32).try_into().unwrap();
-        let mut cipher = WasifVernam::new(key).expect("Failed to create cipher");
-        
-        // Prepare data
         let data = random_bytes(size);
         
         group.throughput(Throughput::Bytes(size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &data, |b, data| {
-            b.iter(|| {
-                let encrypted = cipher.encrypt(black_box(data)).unwrap();
-                black_box(encrypted)
-            })
+            b.iter_batched(
+                || WasifVernam::new(key).expect("Failed to create cipher"),
+                |mut cipher| {
+                    let encrypted = cipher.encrypt(black_box(data)).unwrap();
+                    black_box(encrypted)
+                },
+                criterion::BatchSize::SmallInput
+            )
         });
     }
     
@@ -49,20 +50,23 @@ fn benchmark_true_vernam(c: &mut Criterion) {
     
     for size in sizes {
         let key: [u8; 32] = random_bytes(32).try_into().unwrap();
-        let mut cipher = WasifVernam::new(key).expect("Failed to create cipher");
-        
-        // Enable synchronized Vernam mode
         let shared_seed: [u8; 32] = random_bytes(32).try_into().unwrap();
-        cipher.enable_synchronized_vernam(shared_seed);
-        
         let data = random_bytes(size);
         
         group.throughput(Throughput::Bytes(size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &data, |b, data| {
-            b.iter(|| {
-                let encrypted = cipher.encrypt_true_vernam(black_box(data)).unwrap();
-                black_box(encrypted)
-            })
+            b.iter_batched(
+                || {
+                    let mut cipher = WasifVernam::new(key).expect("Failed to create cipher");
+                    cipher.enable_synchronized_vernam(shared_seed);
+                    cipher
+                },
+                |mut cipher| {
+                    let encrypted = cipher.encrypt_true_vernam(black_box(data)).unwrap();
+                    black_box(encrypted)
+                },
+                criterion::BatchSize::SmallInput
+            )
         });
     }
     
@@ -79,18 +83,20 @@ fn benchmark_decrypt(c: &mut Criterion) {
         let key: [u8; 32] = random_bytes(32).try_into().unwrap();
         
         // Create cipher and encrypt data once
-        let mut encrypt_cipher = WasifVernam::new(key).expect("Failed to create cipher");
+        let mut setup_cipher = WasifVernam::new(key).expect("Failed to create cipher");
         let data = random_bytes(size);
-        let encrypted = encrypt_cipher.encrypt(&data).unwrap();
+        let encrypted = setup_cipher.encrypt(&data).unwrap();
         
-        // Clone key for decrypt cipher - use same cipher that encrypted
         group.throughput(Throughput::Bytes(size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &encrypted, |b, encrypted| {
-            b.iter(|| {
-                // Decrypt with same cipher state
-                let decrypted = encrypt_cipher.decrypt(black_box(encrypted)).unwrap();
-                black_box(decrypted)
-            })
+            b.iter_batched(
+                || WasifVernam::new(key).expect("Failed to create cipher"),
+                |mut cipher| {
+                    let decrypted = cipher.decrypt(black_box(encrypted)).unwrap();
+                    black_box(decrypted)
+                },
+                criterion::BatchSize::SmallInput
+            )
         });
     }
     
