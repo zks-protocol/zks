@@ -432,6 +432,27 @@ See [SECURITY.md](SECURITY.md) for our full security policy.
 
 ---
 
+## 📊 Performance
+
+ZKS Protocol provides competitive performance while maintaining information-theoretic security:
+
+| Operation | Latency | Throughput |
+|-----------|---------|------------|
+| Wasif-Vernam Encrypt (1KB) | 5.2 µs | 187 MiB/s |
+| SynchronizedVernam (1KB) | 1.1 µs | 875 MiB/s |
+| 3-Hop Onion Encrypt (512B) | 567 ns | - |
+| ML-KEM768 Keygen | ~60 µs | - |
+
+For detailed benchmarks, see [BENCHMARKS.md](BENCHMARKS.md).
+
+```bash
+# Run performance benchmarks
+cargo bench -p zks_crypt
+cargo bench -p zks_wire --bench onion_routing_bench
+```
+
+---
+
 ## 🧪 Testing
 
 ```bash
