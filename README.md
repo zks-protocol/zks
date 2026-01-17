@@ -27,7 +27,7 @@
 
 ## 🌟 Why ZKS?
 
-ZKS Protocol is the **world's first unbreakable networking protocol**, backed by **fundamental physics and mathematics**. Built with 100% safe Rust, it provides mathematically proven unbreakable encryption that cannot be broken by any amount of computational power, quantum computers, or universal energy.
+ZKS Protocol is the **world's first unbreakable networking protocol**, backed by **fundamental physics and mathematics**. Built with Rust, it provides mathematically proven unbreakable encryption that cannot be broken by any amount of computational power, quantum computers, or universal energy.
 
 | Protocol | Description | Security Model |
 |----------|-------------|----------------|
