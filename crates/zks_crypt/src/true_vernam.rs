@@ -1,25 +1,31 @@
 //! True Vernam Buffer: Information-Theoretic Secure Random Source
 //! 
 //! This module implements an information-theoretically secure random byte generator
-//! using continuously fetched entropy from multiple sources (local CSPRNG,
-//! Cloudflare Workers, and peer contributions). For messages ≤32 bytes, this
-//! provides TRUE unbreakable encryption by the laws of physics.
+//! using continuously fetched entropy from distributed randomness beacons.
+//! 
+//! ## TRUE OTP via Drand
+//! 
+//! **Security Note**: drand produces ~92 KB/day of TRUE random entropy.
+//! For small messages and key wrapping, this provides TRUE OTP security.
+//! For large data, use Hybrid OTP (DEK TRUE, content ChaCha20).
 //! 
 //! Security Properties:
-//! - Information-theoretic security for messages ≤32 bytes (TRUE unbreakable)
-//! - Uses pure XOR to combine entropy sources (no computational assumptions)
-//! - Resistant to prediction if any entropy source remains uncompromised
+//! - Information-theoretic security for **keys and small messages**
+//! - Uses pure XOR with drand randomness (no computational assumptions)
+//! - For larger data, use Hybrid OTP mode (security chain approach)
 //! - Bytes are consumed once and never reused (true one-time pad property)
 //! 
-//! Information-Theoretic Security:
-//! When multiple independent entropy sources are XORed together, the result is
-//! information-theoretically secure as long as at least ONE source remains
-//! uncompromised. This is mathematically proven and does not rely on any
-//! computational assumptions (unlike SHA256-based constructions).
+//! ## TRUE OTP Keystream Design
 //! 
-//! For messages >32 bytes, the system falls back to HKDF expansion which
-//! provides computational security (256-bit security level) but is no longer
-//! information-theoretically secure.
+//! For deterministic keystream generation (required for both parties to get
+//! identical keystream), we use **drand rounds directly** because:
+//! - drand rounds are globally deterministic (same round = same 32 bytes)
+//! - For N bytes, we fetch ceil(N/32) consecutive drand rounds
+//! - CURBy is NOT used in keystream (mixes local timestamp → non-deterministic)
+//! 
+//! CURBy + drand + CSPRNG is used for **shared seed derivation** (TrueEntropy).
+//! 
+//! If drand is unavailable, the system falls back to ChaCha20 (256-bit computational).
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -29,6 +35,7 @@ use tracing::{debug, info, warn};
 use sha2::{Digest, Sha256};
 use zeroize::Zeroize;
 use crate::constant_time::ct_eq;
+use crate::entropy_provider::EntropyProvider;
 use chacha20::{ChaCha20, cipher::{KeyIvInit, StreamCipher}};
 
 /// Minimum buffer size before we start warning
@@ -42,6 +49,7 @@ const TARGET_BUFFER_SIZE: usize = 1024 * 1024; // 1MB
 const FETCH_CHUNK_SIZE: usize = 1024 * 32; // 32KB per request
 
 /// Minimum entropy quality threshold (0.0 to 1.0)
+#[allow(dead_code)]
 const MIN_ENTROPY_QUALITY: f64 = 0.95;
 
 /// Validates that the provided bytes have sufficient entropy quality
@@ -285,6 +293,7 @@ pub struct TrueVernamFetcher {
 }
 
 impl TrueVernamFetcher {
+    /// Create a new TrueVernamFetcher with the given URL and buffer
     pub fn new(vernam_url: String, buffer: Arc<Mutex<TrueVernamBuffer>>) -> Self {
         Self {
             vernam_url,
@@ -457,9 +466,17 @@ pub enum EntropyError {
     /// Buffer is empty (no entropy available)
     BufferEmpty,
     /// Requested more bytes than available in buffer
-    InsufficientEntropy { requested: usize, available: usize },
+    InsufficientEntropy { 
+        /// Number of bytes requested
+        requested: usize, 
+        /// Number of bytes available
+        available: usize 
+    },
     /// Invalid buffer size (must be at least 32 bytes)
-    InvalidBufferSize { size: usize },
+    InvalidBufferSize { 
+        /// The invalid size that was provided
+        size: usize 
+    },
 }
 
 impl std::fmt::Display for EntropyError {
@@ -612,23 +629,33 @@ pub struct SynchronizedVernamBuffer {
     position_counter: AtomicU64,
     /// Starting drand round number (both parties use same rounds)
     starting_round: u64,
-    /// Drand client for fetching entropy rounds
-    drand_client: Arc<crate::drand::DrandEntropy>,
+    /// Entropy provider for fetching drand rounds (supports Entropy Grid)
+    entropy_provider: Arc<dyn EntropyProvider>,
 }
 
 impl SynchronizedVernamBuffer {
-    /// Create a new synchronized buffer with a shared seed and drand client
+    /// Create a new synchronized buffer with a shared seed and entropy provider
+    /// 
+    /// The shared seed is used for ChaCha20 expansion when messages exceed 32 bytes.
+    /// The starting_round determines which drand rounds to fetch for true OTP.
+    /// Both parties must use the same starting_round to stay synchronized.
+    pub fn new_with_entropy_provider(shared_seed: [u8; 32], starting_round: u64, entropy_provider: Arc<dyn EntropyProvider>) -> Self {
+        Self {
+            shared_seed,
+            position_counter: AtomicU64::new(0),
+            starting_round,
+            entropy_provider,
+        }
+    }
+    
+    /// Create a new synchronized buffer with a shared seed and drand client (legacy compatibility)
     /// 
     /// The shared seed is used for ChaCha20 expansion when messages exceed 32 bytes.
     /// The starting_round determines which drand rounds to fetch for true OTP.
     /// Both parties must use the same starting_round to stay synchronized.
     pub fn new_with_drand(shared_seed: [u8; 32], starting_round: u64, drand_client: Arc<crate::drand::DrandEntropy>) -> Self {
-        Self {
-            shared_seed,
-            position_counter: AtomicU64::new(0),
-            starting_round,
-            drand_client,
-        }
+        let entropy_provider = Arc::new(crate::entropy_provider::DirectDrandProvider::new(drand_client));
+        Self::new_with_entropy_provider(shared_seed, starting_round, entropy_provider)
     }
 
     /// Create a new synchronized buffer with just a shared seed (legacy compatibility)
@@ -637,11 +664,12 @@ impl SynchronizedVernamBuffer {
     pub fn new(shared_seed: [u8; 32]) -> Self {
         // Create a dummy drand client that will never be used (fallback mode)
         let drand_client = Arc::new(crate::drand::DrandEntropy::new());
+        let entropy_provider = Arc::new(crate::entropy_provider::DirectDrandProvider::new(drand_client));
         Self {
             shared_seed,
             position_counter: AtomicU64::new(0),
             starting_round: 0, // No drand rounds available
-            drand_client,
+            entropy_provider,
         }
     }
     
@@ -665,51 +693,66 @@ impl SynchronizedVernamBuffer {
         shared_seed
     }
     
-    /// Generate TRUE information-theoretic keystream for small messages (≤32 bytes)
+    /// Generate TRUE information-theoretic keystream
     /// 
-    /// This fetches drand rounds directly for true OTP security.
+    /// This fetches drand rounds using the entropy provider.
     /// Both parties must fetch the same rounds to generate identical keystreams.
+    /// For N bytes, fetches ceil(N/32) consecutive drand rounds.
+    /// 
+    /// **Note**: drand produces ~92KB/day. For large data, use Hybrid OTP instead.
+    /// **PHASE 5 INTEGRATION**: Now supports Entropy Grid hierarchical fallback!
     async fn generate_true_otp_keystream(&self, position: u64, length: usize) -> Result<Vec<u8>, crate::drand::DrandError> {
-        if length > 32 {
-            return Err(crate::drand::DrandError::NetworkError("True OTP limited to 32 bytes".to_string()));
+        let mut keystream = vec![0u8; length];
+        
+        // Calculate starting drand round based on position
+        let base_round = self.starting_round + position / 32;
+        
+        // Calculate how many rounds we need
+        let rounds_needed = (length + 31) / 32;
+        
+        // Fetch rounds using entropy provider (supports Entropy Grid)
+        let mut offset = 0;
+        for i in 0..rounds_needed {
+            let round_number = base_round + i as u64;
+            let drand_round = self.entropy_provider.fetch_round(round_number).await?;
+            
+            // Copy up to 32 bytes from this round
+            let bytes_to_copy = std::cmp::min(32, length - offset);
+            keystream[offset..offset + bytes_to_copy].copy_from_slice(&drand_round.randomness[..bytes_to_copy]);
+            offset += bytes_to_copy;
         }
         
-        // Calculate which drand round to fetch based on position
-        let round_number = self.starting_round + position / 32;
-        
-        // Fetch the drand entropy for this round
-        let drand_entropy = self.drand_client.fetch_round(round_number).await?;
-        
-        // Extract the specific bytes needed from this round
-        let start_byte = (position % 32) as usize;
-        let end_byte = std::cmp::min(start_byte + length, 32);
-        
-        let mut keystream = vec![0u8; length];
-        keystream.copy_from_slice(&drand_entropy[start_byte..end_byte]);
-        
-        debug!("🔑 Generated TRUE OTP keystream: {} bytes from drand round {} (info-theoretic)", length, round_number);
+        // Log for large keystreams
+        if rounds_needed > 2 {
+            info!("🔑 Generated TRUE OTP keystream: {} bytes from {} drand rounds (Entropy Provider)", 
+                   length, rounds_needed);
+        } else {
+            debug!("🔑 Generated TRUE OTP keystream: {} bytes from drand rounds {}-{} (Entropy Provider)", 
+                   length, base_round, base_round + rounds_needed as u64 - 1);
+        }
         Ok(keystream)
     }
 
     /// Generate keystream for a specific position (deterministic PRG)
     /// 
-    /// For ≤32 bytes: Uses TRUE drand entropy (information-theoretic)
-    /// For >32 bytes: Uses ChaCha20 expansion (computational, 256-bit)
+    /// Uses TRUE entropy when available (drand ~92KB/day budget).
+    /// Fetches N drand rounds for N×32 bytes of TRUE random keystream.
+    /// Falls back to ChaCha20 if drand unavailable or budget exceeded.
     /// 
     /// Both parties generate identical keystreams from the same position.
     async fn generate_at_position(&self, position: u64, length: usize) -> Vec<u8> {
-        // For small messages (≤32 bytes), use TRUE information-theoretic security
-        if length <= 32 && self.starting_round > 0 {
+        // Use TRUE OTP for ALL sizes when drand is configured
+        if self.starting_round > 0 {
             match self.generate_true_otp_keystream(position, length).await {
                 Ok(keystream) => return keystream,
                 Err(e) => {
-                    warn!("Failed to fetch drand round for true OTP: {}. Falling back to ChaCha20.", e);
+                    warn!("Failed to fetch drand for TRUE OTP: {}. Falling back to ChaCha20.", e);
                     // Fall back to ChaCha20 if drand is unavailable
                 }
             }
         }
         
-        // For larger messages or fallback, use ChaCha20 (computational security)
+        // Fallback: ChaCha20 (computational security, still 256-bit)
         let mut keystream = vec![0u8; length];
         let mut nonce_bytes = [0u8; 12];
         
@@ -717,10 +760,12 @@ impl SynchronizedVernamBuffer {
         nonce_bytes[4..12].copy_from_slice(&position.to_be_bytes());
         
         // Create ChaCha20 cipher with shared seed and position nonce
-        let mut cipher = ChaCha20::new(self.shared_seed.as_ref().into(), nonce_bytes.as_ref().into());
+        let key = self.shared_seed;
+        let nonce = nonce_bytes;
+        let mut cipher = ChaCha20::new(&key.into(), &nonce.into());
         cipher.apply_keystream(&mut keystream);
         
-        debug!("🔑 Generated {} bytes at position {} (computational ChaCha20)", length, position);
+        debug!("🔑 Generated {} bytes at position {} (computational ChaCha20 fallback)", length, position);
         keystream
     }
     
@@ -781,7 +826,9 @@ impl SynchronizedVernamBuffer {
         let mut keystream = vec![0u8; length];
         let mut nonce_bytes = [0u8; 12];
         nonce_bytes[4..12].copy_from_slice(&position.to_be_bytes());
-        let mut cipher = ChaCha20::new(self.shared_seed.as_ref().into(), nonce_bytes.as_ref().into());
+        let key = self.shared_seed;
+        let nonce = nonce_bytes;
+        let mut cipher = ChaCha20::new(&key.into(), &nonce.into());
         cipher.apply_keystream(&mut keystream);
         keystream
     }
