@@ -8,14 +8,28 @@
 #![warn(missing_docs)]
 
 pub mod anti_replay;
+/// Beacon entropy source for distributed security
+/// Uses drand (18+ operators) for defense-in-depth
+pub mod beacon_entropy;
 pub mod constant_time;
 pub mod drand;
+/// Entropy block storage and management for ZKS Protocol
+pub mod entropy_block;
+/// Entropy provider trait for abstraction
+pub mod entropy_provider;
+/// Hybrid TRUE OTP: Information-theoretic security for any file size
+pub mod hybrid_otp;
 pub mod recursive_chain;
 pub mod scramble;
+pub mod session_rotation;
+pub mod true_entropy;
 pub mod true_vernam;
 pub mod wasif_vernam;
 
 pub mod prelude;
+
+#[cfg(test)]
+mod phase5_test;
 
 #[cfg(test)]
 mod debug_tests {

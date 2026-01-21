@@ -1,0 +1,33 @@
+[package]
+name = "zks_otp"
+version = "0.1.0"
+edition = "2021"
+description = "Offline One-Time Pad encryption with hardware RNG support"
+authors = ["ZKS Protocol Team"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/zks-protocol/zks"
+keywords = ["cryptography", "otp", "one-time-pad", "encryption", "security"]
+categories = ["cryptography"]
+
+[dependencies]
+zeroize = { version = "1.8", features = ["derive"] }
+getrandom = "0.3"
+thiserror = "2.0"
+tracing = "0.1"
+rand = "0.8"
+sha2 = "0.10"
+clap = { version = "4", features = ["derive"], optional = true }
+serialport = { version = "4.7", optional = true }
+tempfile = "3.8"
+chrono = "0.4"
+chacha20poly1305 = "0.10"
+
+[features]
+default = []
+cli = ["clap"]
+hardware-rng = ["serialport"]
+
+[[bin]]
+name = "zks-otp"
+path = "src/bin/zks-otp.rs"
+required-features = ["cli"]

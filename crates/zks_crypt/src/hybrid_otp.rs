@@ -31,21 +31,29 @@ pub fn unwrap_dek_true_otp(wrapped: &[u8; 32], otp: &[u8; 32]) -> Zeroizing<[u8;
     dek
 }
 
-/// Encrypt with Hybrid TRUE OTP
+/// Encrypt with Hybrid TRUE OTP (returns OTP separately for secure management)
 /// 
-/// ⚠️  SECURITY WARNING: This function generates a random OTP that is NOT stored.
-/// To decrypt, you MUST use the same OTP. Use `encrypt_with_sync`/`decrypt_with_sync` 
-/// for production use cases where decryption is required.
+/// ✅ SECURE: This function returns the OTP separately so caller can manage it securely.
+/// The OTP is NOT included in the envelope, preserving TRUE OTP security properties.
+/// 
+/// For synchronized encryption where both parties have a shared seed, use
+/// `HybridOtp::encrypt_with_sync()` instead.
+/// 
+/// # Returns
+/// Tuple of (envelope, otp) where:
+/// - envelope: Encrypted data without OTP (safe to transmit)
+/// - otp: The OTP used (caller must securely transmit or store separately)
 pub fn encrypt_hybrid_otp(
     plaintext: &[u8],
     _entropy_source: &dyn crate::entropy_provider::EntropyProvider,
-) -> Result<Vec<u8>, HybridOtpError> {
+) -> Result<(Vec<u8>, [u8; 32]), HybridOtpError> {
     // 1. Generate TRUE random DEK (32 bytes)
     let entropy = TrueEntropy::global();
     let dek = entropy.get_entropy_32_sync();
     
     // 2. Get TRUE OTP (32 bytes from Entropy Grid - NEVER reused)
     let otp = entropy.get_entropy_32_sync();
+    let otp_copy: [u8; 32] = *otp; // Copy for return
     
     // 3. Wrap DEK with TRUE OTP (Shannon-secure)
     let wrapped_dek = wrap_dek_true_otp(&dek, &*otp);
@@ -59,26 +67,34 @@ pub fn encrypt_hybrid_otp(
     let ciphertext = cipher.encrypt(&nonce_bytes.into(), plaintext)
         .map_err(|_| HybridOtpError::Encryption)?;
     
-    // 5. Build envelope: [Version:1][Mode:1][OTP:32][WrappedDEK:32][Nonce:12][Ciphertext]
-    //    Include OTP in envelope so decryption can work
-    let mut envelope = Vec::with_capacity(1 + 1 + 32 + 32 + 12 + ciphertext.len());
+    // 5. Build envelope: [Version:1][Mode:1][WrappedDEK:32][Nonce:12][Ciphertext]
+    //    ✅ SECURITY FIX: OTP is NOT included in envelope - returned separately
+    let mut envelope = Vec::with_capacity(1 + 1 + 32 + 12 + ciphertext.len());
     envelope.push(0x01); // Version
-    envelope.push(0x03); // Mode: Hybrid OTP
-    envelope.extend_from_slice(&*otp); // Store OTP for decryption
+    envelope.push(0x04); // Mode: Hybrid OTP (OTP external) - new mode
     envelope.extend_from_slice(&wrapped_dek);
     envelope.extend_from_slice(&nonce_bytes);
     envelope.extend_from_slice(&ciphertext);
     
-    Ok(envelope)
+    Ok((envelope, otp_copy))
 }
 
-/// Decrypt with Hybrid TRUE OTP
+/// Decrypt with Hybrid TRUE OTP (OTP provided externally)
+/// 
+/// ✅ SECURE: The OTP is provided separately, not extracted from envelope.
+/// This preserves TRUE OTP security properties.
+/// 
+/// # Arguments
+/// * `envelope` - Encrypted envelope from `encrypt_hybrid_otp()` (Mode 0x04)
+/// * `otp` - The OTP that was returned from `encrypt_hybrid_otp()`
+/// * `_entropy_source` - Entropy provider (unused, kept for API compatibility)
 pub fn decrypt_hybrid_otp(
     envelope: &[u8],
+    otp: &[u8; 32],
     _entropy_source: &dyn crate::entropy_provider::EntropyProvider,
 ) -> Result<Vec<u8>, HybridOtpError> {
-    // Validate envelope structure
-    if envelope.len() < 1 + 1 + 32 + 32 + 12 {
+    // Validate envelope structure: [Version:1][Mode:1][WrappedDEK:32][Nonce:12][Ciphertext]
+    if envelope.len() < 1 + 1 + 32 + 12 + 16 { // 16 is min tag size
         return Err(HybridOtpError::InvalidEnvelope);
     }
     
@@ -90,20 +106,35 @@ pub fn decrypt_hybrid_otp(
     if !ct_eq(&[version], &[0x01]) {
         return Err(HybridOtpError::InvalidEnvelope);
     }
-    if !ct_eq(&[mode], &[0x03]) {
+    // Accept both Mode 0x03 (legacy with OTP in envelope) and 0x04 (new secure mode)
+    if !ct_eq(&[mode], &[0x04]) && !ct_eq(&[mode], &[0x03]) {
         return Err(HybridOtpError::InvalidEnvelope);
     }
     
-    let otp: [u8; 32] = envelope[2..34].try_into()
-        .map_err(|_| HybridOtpError::InvalidEnvelope)?;
-    let wrapped_dek: [u8; 32] = envelope[34..66].try_into()
-        .map_err(|_| HybridOtpError::InvalidEnvelope)?;
-    let nonce_bytes: [u8; 12] = envelope[66..78].try_into()
-        .map_err(|_| HybridOtpError::InvalidEnvelope)?;
-    let ciphertext = &envelope[78..];
+    // Parse based on mode
+    let (wrapped_dek, nonce_bytes, ciphertext) = if ct_eq(&[mode], &[0x03]) {
+        // Legacy mode: OTP was in envelope (skip it, use provided OTP)
+        if envelope.len() < 1 + 1 + 32 + 32 + 12 + 16 {
+            return Err(HybridOtpError::InvalidEnvelope);
+        }
+        let wrapped_dek: [u8; 32] = envelope[34..66].try_into()
+            .map_err(|_| HybridOtpError::InvalidEnvelope)?;
+        let nonce_bytes: [u8; 12] = envelope[66..78].try_into()
+            .map_err(|_| HybridOtpError::InvalidEnvelope)?;
+        let ciphertext = &envelope[78..];
+        (wrapped_dek, nonce_bytes, ciphertext)
+    } else {
+        // New secure mode: OTP not in envelope
+        let wrapped_dek: [u8; 32] = envelope[2..34].try_into()
+            .map_err(|_| HybridOtpError::InvalidEnvelope)?;
+        let nonce_bytes: [u8; 12] = envelope[34..46].try_into()
+            .map_err(|_| HybridOtpError::InvalidEnvelope)?;
+        let ciphertext = &envelope[46..];
+        (wrapped_dek, nonce_bytes, ciphertext)
+    };
     
-    // Unwrap DEK with TRUE OTP
-    let dek = unwrap_dek_true_otp(&wrapped_dek, &otp);
+    // Unwrap DEK with TRUE OTP (provided externally - secure!)
+    let dek = unwrap_dek_true_otp(&wrapped_dek, otp);
     
     // Decrypt content with ChaCha20-Poly1305(DEK)
     let cipher = ChaCha20Poly1305::new_from_slice(&*dek)
@@ -115,29 +146,38 @@ pub fn decrypt_hybrid_otp(
     Ok(plaintext)
 }
 
+/// Error type for Hybrid OTP operations
 #[derive(Debug, thiserror::Error)]
 pub enum HybridOtpError {
+    /// Cipher initialization failed
     #[error("Cipher initialization failed")]
     CipherInit,
+    /// Encryption operation failed
     #[error("Encryption failed")]
     Encryption,
+    /// Decryption operation failed
     #[error("Decryption failed")]
     Decryption,
+    /// Invalid envelope format
     #[error("Invalid envelope format")]
     InvalidEnvelope,
+    /// Insufficient entropy available from entropy sources
     #[error("Insufficient entropy available")]
     InsufficientEntropy,
+    /// OTP reuse detected - this would break TRUE OTP security
     #[error("OTP reuse detected - this would break TRUE OTP security")]
     OtpReuse,
 }
 
 /// Hybrid TRUE OTP with synchronized entropy support
 pub struct HybridOtp {
+    #[allow(dead_code)]
     entropy_source: Arc<dyn crate::entropy_provider::EntropyProvider>,
     used_otps: std::sync::Mutex<std::collections::HashSet<[u8; 32]>>,
 }
 
 impl HybridOtp {
+    /// Create a new HybridOtp instance with the specified entropy provider
     pub fn new(entropy_source: Arc<dyn crate::entropy_provider::EntropyProvider>) -> Self {
         Self { 
             entropy_source,
@@ -266,17 +306,20 @@ mod tests {
         let provider = DirectDrandProvider::new(Arc::new(crate::drand::DrandEntropy::new()));
         let plaintext = b"Hello, Hybrid TRUE OTP!";
         
-        // This test demonstrates the API - now includes OTP in envelope
+        // This test demonstrates the API - OTP is now returned separately for secure storage
         let result = encrypt_hybrid_otp(plaintext, &provider);
         assert!(result.is_ok());
         
-        let envelope = result.unwrap();
-        assert!(envelope.len() > 78); // Minimum envelope size (1+1+32+32+12+ciphertext)
+        let (envelope, otp) = result.unwrap();
+        assert!(envelope.len() > 46); // Minimum envelope size (1+1+32+12+ciphertext)
         assert_eq!(envelope[0], 0x01); // Version
-        assert_eq!(envelope[1], 0x03); // Mode: Hybrid OTP
+        assert_eq!(envelope[1], 0x04); // Mode: Hybrid OTP (OTP external)
         
-        // Test that we can decrypt what we encrypted
-        let decrypted = decrypt_hybrid_otp(&envelope, &provider);
+        // OTP must be transmitted separately via secure channel
+        assert_eq!(otp.len(), 32);
+        
+        // Test that we can decrypt what we encrypted (requires the OTP)
+        let decrypted = decrypt_hybrid_otp(&envelope, &otp, &provider);
         assert!(decrypted.is_ok());
         assert_eq!(decrypted.unwrap(), plaintext);
     }
@@ -652,7 +695,7 @@ mod tests {
     
     /// SHANNON PROOF TEST 7: Full entropy test with TRUE random
     /// 
-    /// Uses TrueEntropy (drand + CURBy + CSPRNG) to verify the full
+    /// Uses TrueEntropy (drand + CSPRNG) to verify the full
     /// encryption chain maintains Shannon security.
     #[test]
     fn test_full_chain_with_true_entropy() {
