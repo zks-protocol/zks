@@ -27,7 +27,7 @@
 
 ## 🌟 Why ZKS?
 
-ZKS Protocol is the **world's first unbreakable networking protocol**, backed by **fundamental physics and mathematics**. Built with Rust, it provides mathematically proven unbreakable encryption that cannot be broken by any amount of computational power, quantum computers, or universal energy.
+ZKS Protocol is a **post-quantum secure networking protocol** built with 100% safe Rust. It provides defense-in-depth encryption with multiple layers of security, including an offline mode that achieves **true Information-Theoretic Security** via physical key exchange.
 
 | Protocol | Description | Security Model |
 |----------|-------------|----------------|
@@ -101,29 +101,28 @@ ZKS Protocol's security is **proven by mathematics**, not assumptions:
 ### Shannon's Perfect Secrecy (1949)
 
 ```
-Hybrid OTP Encryption:
-  DEK ← TrueRandom(32 bytes)      // Data Encryption Key
-  OTP ← drand_beacon(round)        // TRUE random (BLS verified)
-  wrapped_DEK ← DEK ⊕ OTP          // Shannon-secure
+Hybrid OTP Encryption (Network Mode):
+  DEK ← CSPRNG(32 bytes)              // Data Encryption Key
+  entropy ← drand ⊕ local_CSPRNG      // Computational security (256-bit)
+  wrapped_DEK ← DEK ⊕ entropy         // Defense-in-depth
 
-Mathematical Proof:
-  P(DEK | wrapped_DEK) = P(DEK)    // Zero information leakage
+Security Level: 256-bit computational (NOT information-theoretic)
 
-∴ Cannot recover DEK → Cannot decrypt → UNBREAKABLE ∎
+∴ Secure against all known attacks including quantum computers ∎
 ```
 
 ### Security Properties
 
 | Property | Guarantee |
 |----------|-----------|
-| DEK wrapping | **Information-theoretic** (Shannon-secure) |
+| DEK wrapping | Defense-in-depth (drand ⊕ CSPRNG) |
 | Bulk encryption | ChaCha20-Poly1305 (256-bit) |
-| Attack immunity | Quantum, brute force, frequency analysis |
-| Entropy source | drand beacon (~6.3M rounds available) |
+| Overall security | **256-bit post-quantum computational** |
+| Entropy source | drand beacon + local CSPRNG |
 
-> **"Given TRUE random OTP and single-use constraint, no adversary—regardless of computational power—can recover the plaintext."**
-> 
-> [📄 Full Mathematical Proof](docs/MATHEMATICAL_SECURITY_PROOF.md)
+> **⚠️ IMPORTANT:** Network-mode entropy (drand + CSPRNG) provides **256-bit computational security**, not information-theoretic security. For TRUE ITS, use `zks_otp` with physical key exchange.
+>
+> [📄 Full Security Documentation](docs/SECURITY.md)
 
 ---
 
@@ -227,30 +226,29 @@ console.log("✅ Signature valid:", isValid);
 
 | Component | Algorithm | Security Level |
 |-----------|-----------|----------------|
-| Key Exchange | ML-KEM-768 (Kyber) | NIST Level 3 (IND-CCA2) |
+| Key Exchange | ML-KEM-1024 (Kyber) | NIST Level 5 (IND-CCA2) |
 | Signatures | ML-DSA-65 (Dilithium) | NIST Level 3 (EUF-CMA) |
-| Symmetric Encryption | Wasif-Vernam Cipher | ChaCha20-Poly1305 + XOR |
-| Random Entropy | Multiple sources XOR | Information-theoretic secure |
+| Symmetric Encryption | Wasif-Vernam Cipher | ChaCha20-Poly1305 + XOR layer |
+| Random Entropy | drand ⊕ CSPRNG | 256-bit computational |
 
 ### 🛡️ Hybrid TRUE OTP Security
 
-ZKS Protocol achieves **effectively unbreakable encryption** through a security chain:
+ZKS Protocol achieves **256-bit post-quantum security** through defense-in-depth:
 
-**Hybrid TRUE OTP Architecture**
-- **Key wrapping**: 32-byte DEK wrapped with TRUE OTP (Shannon-secure)
+**Hybrid Encryption Architecture**
+- **Key wrapping**: DEK XORed with drand ⊕ CSPRNG entropy
 - **Bulk encryption**: Content encrypted with ChaCha20-Poly1305(DEK)
-- **Security chain**: Must break TRUE OTP first → IMPOSSIBLE
-- **Result**: File/message inherits unbreakability of its key
+- **Defense-in-depth**: Multiple independent entropy sources
+- **Result**: 256-bit computational security, quantum-resistant
 
-**TRUE Entropy Budget** (drand produces ~92KB/day):
-- ✅ **Keys and small messages**: TRUE OTP directly
-- ✅ **Large files**: Hybrid mode (DEK TRUE, content ChaCha20)
-- ⚠️ Note: Direct TRUE OTP for large files is not practical
+**Entropy Budget** (Network Mode):
+- ✅ **All messages**: 256-bit computational security via drand ⊕ CSPRNG
+- ℹ️ **For TRUE ITS**: Use `zks_otp` (Offline Mode) with physical key exchange
 
 **Mathematical Foundation**:
-- **Shannon's perfect secrecy**: DEK wrapping reveals zero information
-- **No computational assumptions**: Key protection based purely on probability
-- **Defense-in-depth**: XOR of drand, CURBy quantum randomness, and local CSPRNG
+- **Defense-in-depth**: XOR of drand beacon and local CSPRNG
+- **No single point of failure**: Secure if either source is uncompromised
+- **Post-quantum**: ML-KEM-1024 key exchange resists quantum attacks
 
 **Protocol-Level Anonymity**:
 - **Session rotation**: Sessions become cryptographically unlinkable
@@ -258,8 +256,8 @@ ZKS Protocol achieves **effectively unbreakable encryption** through a security 
 - **Cover traffic**: Constant bandwidth prevents timing analysis
 
 **Fallback (if drand unavailable)**:
-- **256-bit ChaCha20-Poly1305**: Physically unbreakable due to universal energy constraints
-- **Landauer limit**: Brute-force requires energy exceeding total cosmic output by 10¹³×
+- **256-bit ChaCha20-Poly1305**: Computationally secure, quantum-resistant
+- **Landauer limit**: Brute-force energy requirements make attacks impractical
 
 ### 🔄 3-Message Handshake
 
@@ -296,7 +294,8 @@ zks/
 ├── zks_proto      # Handshake protocol, URL parsing
 ├── zks_wire       # Swarm networking, NAT traversal
 ├── zks_types      # Common type definitions
-└── zks_wasm       # WebAssembly bindings
+├── zks_wasm       # WebAssembly bindings
+└── zks_otp        # Offline OTP (TRUE Information-Theoretic Security)
 ```
 
 | Crate | Description | Key Features |
@@ -308,6 +307,7 @@ zks/
 | `zks_wire` | Network layer | STUN, NAT traversal, swarm |
 | `zks_types` | Shared types | Error types, crypto params |
 | `zks_wasm` | Browser support | JS bindings via wasm-bindgen |
+| `zks_otp` | **Offline OTP** | Physical key exchange, TRUE ITS |
 
 ---
 
@@ -328,8 +328,8 @@ The `zks://` protocol provides **onion routing** through a decentralized swarm n
 
 | Property | Description | Verification |
 |----------|-------------|--------------|
-| **Information-Theoretic** | Wasif-Vernam at each hop | ✅ 56 security tests |
-| **Post-Quantum** | ML-KEM768 key exchange | ✅ 7 PQ handshake tests |
+| **256-bit Security** | Wasif-Vernam at each hop | ✅ 56 security tests |
+| **Post-Quantum** | ML-KEM-1024 key exchange | ✅ 7 PQ handshake tests |
 | **Anonymity** | Hop isolation | ✅ 8 hop anonymity tests |
 | **Untraceability** | No node knows both source + destination | ✅ Traffic analysis tests |
 
@@ -337,9 +337,9 @@ The `zks://` protocol provides **onion routing** through a decentralized swarm n
 
 | Feature | Tor | I2P | Faisal Swarm |
 |---------|-----|-----|--------------|
-| **Encryption** | AES-128 | ElGamal + AES | **Wasif-Vernam (TRUE OTP)** |
-| **Key Exchange** | RSA/Curve25519 | ElGamal/ECDSA | **ML-KEM768 (Post-Quantum)** |
-| **Security Model** | Computational | Computational | **Information-Theoretic** |
+| **Encryption** | AES-128 | ElGamal + AES | **ChaCha20 + XOR layer** |
+| **Key Exchange** | RSA/Curve25519 | ElGamal/ECDSA | **ML-KEM-1024 (Post-Quantum)** |
+| **Security Model** | Computational | Computational | **Computational (256-bit PQ)** |
 | **Quantum Resistance** | ❌ | ❌ | ✅ |
 | **Anonymity** | ✅ 3 hops | ✅ Tunnel routing | ✅ 3-7 configurable hops |
 
@@ -399,23 +399,37 @@ cargo run --example file_transfer
 
 ### Security Model
 
-- **Post-quantum resistance**: All key exchanges use NIST-standardized algorithms
-- **Information-theoretic security**: TRUE unbreakable encryption for ≤32-byte messages via XOR of multiple entropy sources
+- **Post-quantum resistance**: All key exchanges use NIST-standardized ML-KEM-1024
+- **Defense-in-depth**: DEK wrapped with drand ⊕ CSPRNG (256-bit computational)
 - **Forward secrecy**: Session keys are derived per-connection with recursive key chains
 - **Zero trust**: End-to-end encryption with mutual authentication
 - **Memory safety**: 100% safe Rust, no `unsafe` code in core crates
 
-### 🔐 Information-Theoretic Security
+### 🔐 256-bit Post-Quantum Security
 
-ZKS Protocol implements **TRUE unbreakable encryption** based on fundamental mathematical principles:
+ZKS Protocol achieves **256-bit computational security** through defense-in-depth:
 
-**Mathematical Foundation**: When multiple independent entropy sources are XORed together, the result is information-theoretically secure as long as **at least ONE source remains uncompromised**. This is mathematically proven and does not rely on computational assumptions.
+**Mathematical Foundation**: XOR of independent entropy sources provides computational security. If you need TRUE information-theoretic security, use `zks_otp` with physical key exchange.
 
-**Entropy Sources**:
-- Local CSPRNG (trusted device entropy)
-- drand beacon (public verifiable randomness)  
-- Peer contributions (swarm entropy)
-- Optional: Cloudflare Workers (cost-optimized, skipped in trustless mode)
+**Entropy Sources (Network Mode)**:
+- **Local CSPRNG**: OS entropy pool (Windows BCrypt, Linux /dev/urandom)
+- **drand beacon**: BLS12-381 verified randomness from 18+ distributed operators
+
+These two sources are **XORed together** for defense-in-depth.
+
+**Entropy Grid** (Hierarchical Distribution):
+
+The Entropy Grid distributes drand rounds across the swarm to reduce API load:
+
+```
+Fetch Order:
+1. Local Cache     → Fastest (in-memory)
+2. Swarm Peers     → P2P via GossipSub
+3. IPFS            → Decentralized storage
+4. drand API       → Final fallback
+```
+
+> **Note:** The Entropy Grid distributes drand data—it does not contribute additional entropy sources. The XOR combination is: `drand ⊕ local_CSPRNG`.
 
 **Security Properties**:
 - **Hybrid TRUE OTP**: Keys wrapped with TRUE OTP, bulk data with ChaCha20
@@ -423,7 +437,29 @@ ZKS Protocol implements **TRUE unbreakable encryption** based on fundamental mat
 - **Session rotation**: Auto-rotate every 10 min for cryptographic unlinkability
 - **Fallback**: ChaCha20 if drand unavailable (still post-quantum secure)
 
-**Trustless Operation**: System operates in fully trustless mode with distributed entropy sources.
+**Defense-in-Depth Operation**: System combines multiple entropy sources (drand + local CSPRNG) for strong computational security.
+
+### 🔒 TRUE Information-Theoretic Security (Offline Mode)
+
+For scenarios requiring **mathematically unbreakable** encryption, ZKS provides an offline mode via `zks_otp`:
+
+```bash
+# Generate physical key on USB drive
+zks-otp generate --output E:\key.zkskey --size 1GB --hardware
+
+# Physically deliver key to recipient
+
+# Encrypt file (ITS - unbreakable by any power)
+zks-otp encrypt --input secret.txt --key E:\key.zkskey --output secret.enc
+```
+
+**Security Modes:**
+
+| Mode | Security Level | Use Case |
+|------|----------------|----------|
+| **Offline Strict** | Information-Theoretic (Shannon) | Small critical data, ultimate security |
+| **Offline Efficient** | 256-bit Computational | Large files with OTP-wrapped DEK |
+| **Network** | 256-bit Post-Quantum | Real-time communication |
 
 ### 🌌 Physical Unbreakability (>32 Bytes)
 
@@ -552,7 +588,12 @@ See [LICENSE](LICENSE) for the full license text.
 
 ### 🧮 Mathematical Security Foundation
 
-The ZKS Protocol achieves **information-theoretic security** through the fundamental property that XOR of independent random sources maintains perfect secrecy when at least one source is truly random. This provides **unbreakable encryption** that cannot be compromised even by quantum computers or unlimited computational power.
+The ZKS Protocol provides **two security tiers**:
+
+1. **Network Mode**: 256-bit post-quantum computational security via ML-KEM + ChaCha20
+2. **Offline Mode** (`zks_otp`): TRUE information-theoretic security via physical one-time pad
+
+Only the Offline Mode with physical key exchange achieves Shannon's perfect secrecy. Network communications are computationally secure but not information-theoretically secure.
 
 **Key Properties**:
 - **No computational assumptions**: Security relies on mathematical laws, not hardness assumptions
