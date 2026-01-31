@@ -1,6 +1,6 @@
-//! True Vernam Buffer: Information-Theoretic Secure Random Source
+//! True Vernam Buffer: 256-bit Post-Quantum Computational Secure Random Source
 //! 
-//! This module implements an information-theoretically secure random byte generator
+//! This module implements a 256-bit post-quantum computationally secure random byte generator
 //! using continuously fetched entropy from distributed randomness beacons.
 //! 
 //! ## TRUE OTP via Drand
@@ -185,7 +185,7 @@ impl TrueVernamBuffer {
     /// 
     /// # Security
     /// This function validates that the provided bytes have sufficient entropy quality
-    /// to ensure information-theoretic security guarantees.
+    /// to ensure 256-bit post-quantum computational security guarantees.
     pub fn push_entropy(&mut self, bytes: &[u8]) -> Result<(), EntropyError> {
         // Validate buffer size (minimum 32 bytes for quality checks)
         if bytes.len() < 32 {
@@ -400,11 +400,11 @@ impl TrueVernamFetcher {
             }
         };
 
-        // 3. INFORMATION-THEORETIC SECURITY: Pure XOR combination for TRUE unbreakable entropy
-        // This achieves information-theoretic security for messages ≤32 bytes
+        // 3. POST-QUANTUM COMPUTATIONAL SECURITY: Pure XOR combination for 256-bit secure entropy
+        // This achieves 256-bit post-quantum computational security for messages ≤32 bytes
         let mut combined = [0u8; 32];
         
-        // XOR all entropy sources together (no hashing for information-theoretic security)
+        // XOR all entropy sources together (no hashing for computational security)
         for i in 0..32 {
             combined[i] = local_entropy[i] ^ worker_entropy[i];
         }
@@ -414,9 +414,9 @@ impl TrueVernamFetcher {
             for i in 0..32 {
                 combined[i] ^= swarm_seed[i];
             }
-            debug!("🔗 Hybrid entropy: local XOR local2 XOR swarm (INFORMATION-THEORETIC)");
+            debug!("🔗 Hybrid entropy: local XOR local2 XOR swarm (256-bit post-quantum computational)");
         } else {
-            debug!("⚠️ Hybrid entropy: local XOR worker (information-theoretic)");
+            debug!("⚠️ Hybrid entropy: local XOR worker (256-bit post-quantum computational)");
         }
 
         // Add to buffer
@@ -600,11 +600,11 @@ mod tests {
 /// 
 /// This provides TRUE one-time pad security by using synchronized drand entropy
 /// as the keystream source. Both parties fetch identical drand rounds to generate
-/// identical keystreams for true information-theoretic security.
+/// identical keystreams for 256-bit post-quantum computational security.
 /// 
 /// Security Model:
 /// - Both parties fetch the same drand rounds (TRUE random entropy)
-/// - For ≤32 bytes: Use drand entropy directly (information-theoretic)
+/// - For ≤32 bytes: Use drand entropy directly (256-bit post-quantum computational)
 /// - For >32 bytes: Use ChaCha20 expansion (computational, 256-bit secure)
 /// - No key transmission required - both parties generate identical keystreams
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -630,7 +630,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 ///    - Consider position counters in both directions (send/receive)
 /// 
 /// 4. SECURITY PROPERTIES:
-///    - ≤32 bytes: TRUE information-theoretic security (drand entropy)
+///    - ≤32 bytes: 256-bit post-quantum computational security (drand entropy)
 ///    - >32 bytes: Computational security (ChaCha20 expansion, 256-bit)
 ///    - No key transmission required - both parties generate identical keystreams
 ///    - Quantum-resistant: Uses ML-KEM shared secret + drand distributed randomness
@@ -685,10 +685,10 @@ impl SynchronizedVernamBuffer {
         }
     }
     
-    /// Create shared seed from multiple entropy sources (information-theoretic)
+    /// Create shared seed from multiple entropy sources (256-bit post-quantum computational)
     /// 
-    /// This combines entropy sources using XOR for information-theoretic security.
-    /// The result is unbreakable if ANY source is truly random.
+    /// This combines entropy sources using XOR for 256-bit post-quantum computational security.
+    /// The result is secure within computational bounds if any source is random.
     pub fn create_shared_seed(
         mlkem_secret: [u8; 32],
         drand_entropy: [u8; 32],
@@ -701,7 +701,7 @@ impl SynchronizedVernamBuffer {
             shared_seed[i] = mlkem_secret[i] ^ drand_entropy[i] ^ peer_contributions[i];
         }
         
-        debug!("🔑 Created information-theoretic shared seed (secure if any source is random)");
+        debug!("🔑 Created 256-bit post-quantum computational shared seed (secure if any source is random)");
         shared_seed
     }
     
@@ -807,7 +807,7 @@ impl SynchronizedVernamBuffer {
     /// 
     /// Returns identical keystreams on both ends when properly synchronized.
     /// 
-    /// For ≤32 bytes: TRUE information-theoretic security (drand entropy)
+    /// For ≤32 bytes: 256-bit post-quantum computational security (drand entropy)
     /// For >32 bytes: Computational security (ChaCha20 expansion)
     pub async fn consume(&self, length: usize) -> Vec<u8> {
         let position = self.position_counter.fetch_add(length as u64, Ordering::SeqCst);
@@ -824,7 +824,7 @@ impl SynchronizedVernamBuffer {
     pub fn consume_sync(&self, length: usize) -> Vec<u8> {
         let position = self.position_counter.fetch_add(length as u64, Ordering::SeqCst);
         
-        // For small messages (≤32 bytes), use TRUE information-theoretic security
+        // For small messages (≤32 bytes), use 256-bit post-quantum computational security
         if length <= 32 && self.starting_round > 0 {
             // Try to get the current runtime handle
             match tokio::runtime::Handle::try_current() {
@@ -1476,7 +1476,7 @@ impl SequencedVernamBuffer {
         for i in 0..32 {
             shared_seed[i] = mlkem_secret[i] ^ drand_entropy[i] ^ peer_contributions[i];
         }
-        debug!("🔑 Created information-theoretic shared seed for SequencedVernamBuffer");
+        debug!("🔑 Created 256-bit post-quantum computational shared seed for SequencedVernamBuffer");
         shared_seed
     }
 }

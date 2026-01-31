@@ -36,7 +36,7 @@ use tracing::{debug, error, info, warn};
 /// receiver generates keystream at the correct position regardless of delivery order.
 /// 
 /// Security Modes:
-/// - Mode 0x01: TRUE OTP via SequencedVernamBuffer (information-theoretic, unbreakable, desync-resistant)
+/// - Mode 0x01: TRUE OTP via SequencedVernamBuffer (256-bit post-quantum computational, effectively unbreakable, desync-resistant)
 /// - Mode 0x02: HKDF-based XOR (computational, 256-bit security)
 /// - Mode 0x03: Legacy SynchronizedVernamBuffer (deprecated - use Mode 0x01)
 /// - Mode 0x02: HKDF-based XOR (computational, 256-bit security)
@@ -45,6 +45,8 @@ use tracing::{debug, error, info, warn};
 /// For TRUE OTP: Both parties must derive the same shared seed during handshake (e.g., from
 /// ML-KEM shared secret + drand entropy + peer contributions). The keystream is generated
 /// deterministically from seed + sequence number - NO key transmission required!
+/// 
+/// NOTE: This provides 256-bit post-quantum computational security, not information-theoretic security.
 pub struct WasifVernam {
     cipher: ChaCha20Poly1305,
     nonce_counter: AtomicU64,
@@ -93,7 +95,7 @@ impl WasifVernam {
     /// ⚠️ WARNING: This mode is vulnerable to desync if messages are lost or reordered.
     /// Use `enable_sequenced_vernam()` for desync-resistant encryption.
     /// 
-    /// This provides information-theoretic security by using a shared seed
+    /// This provides 256-bit post-quantum computational security by using a shared seed
     /// derived from multiple entropy sources (ML-KEM + drand + peer contributions).
     /// Both parties generate identical keystreams from the same shared seed.
     /// 
@@ -127,13 +129,13 @@ impl WasifVernam {
         let seq_buffer = SequencedVernamBuffer::new(shared_seed);
         self.sequenced_buffer = Some(Arc::new(seq_buffer));
         self.has_swarm_entropy = true;
-        info!("✅ Enabled SEQUENCED Vernam mode (desync-resistant, information-theoretic security)");
+        info!("✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)");
     }
     
     /// Enable TRUE Vernam mode with SEQUENCED keystream generation and drand TRUE OTP
     /// 
     /// Same as `enable_sequenced_vernam()` but with explicit drand configuration for
-    /// TRUE information-theoretic security on all message sizes.
+    /// 256-bit post-quantum computational security on all message sizes.
     /// 
     /// # Arguments
     /// * `shared_seed` - 32-byte shared seed from create_shared_seed()
@@ -153,12 +155,12 @@ impl WasifVernam {
 
     /// Create a shared seed from multiple entropy sources for TRUE OTP
     /// 
-    /// This combines multiple entropy sources using XOR for information-theoretic security:
+    /// This combines multiple entropy sources using XOR for 256-bit post-quantum computational security:
     /// - ML-KEM shared secret from handshake
     /// - drand entropy (both parties fetch same round)
     /// - Peer contributions XOR'd during handshake
     /// 
-    /// The result is information-theoretically secure if at least one source is random.
+    /// The result is 256-bit post-quantum computationally secure if at least one source is random.
     /// 
     /// # Arguments
     /// * `mlkem_secret` - 32-byte shared secret from ML-KEM handshake
@@ -174,12 +176,12 @@ impl WasifVernam {
     ) -> [u8; 32] {
         let mut shared_seed = [0u8; 32];
         
-        // Information-theoretic XOR combination: secure if any source is random
+        // 256-bit post-quantum computational XOR combination: secure if any source is random
         for i in 0..32 {
             shared_seed[i] = mlkem_secret[i] ^ drand_entropy[i] ^ peer_contributions[i];
         }
         
-        debug!("🔑 Created shared seed from ML-KEM + drand + peer contributions (information-theoretic)");
+        debug!("🔑 Created shared seed from ML-KEM + drand + peer contributions (256-bit post-quantum computational)");
         shared_seed
     }
 
@@ -251,7 +253,7 @@ impl WasifVernam {
         // Key rotation logic
         if let Some(ref mut chain) = self.key_chain {
             if counter % 1000 == 0 && counter > 0 {
-                // SECURITY: Use TrueEntropy for information-theoretic security
+                // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security
                 use crate::true_entropy::get_sync_entropy;
                 let entropy = get_sync_entropy(32);
                 let mut entropy_arr = [0u8; 32];
@@ -271,7 +273,7 @@ impl WasifVernam {
         // True Vernam XOR layer (if swarm entropy available)
         let mut mixed_data = Zeroizing::new(data.to_vec());
         let key_offset = if self.has_swarm_entropy {
-            // Use synchronized buffer if available (information-theoretic security)
+            // Use synchronized buffer if available (256-bit post-quantum computational security)
             if let Some(ref sync_buffer) = self.synchronized_buffer {
                 let keystream = sync_buffer.consume_sync(data.len());
                 for (i, byte) in mixed_data.iter_mut().enumerate() {
@@ -353,7 +355,7 @@ impl WasifVernam {
 
         // Reverse XOR layer (if swarm entropy was used)
         if self.has_swarm_entropy && key_offset > 0 {
-            // Use synchronized buffer if available (information-theoretic security)
+            // Use synchronized buffer if available (256-bit post-quantum computational security)
             if let Some(ref sync_buffer) = self.synchronized_buffer {
                 let keystream = sync_buffer.consume_sync(plaintext.len());
                 for (i, byte) in plaintext.iter_mut().enumerate() {
@@ -548,22 +550,22 @@ impl WasifVernam {
 
         // ⚠️ SECURITY LIMITATION: This is "synthetic" OTP, not true OTP.
         // TRUE OTP requires pre-synchronized entropy between parties.
-        // This implementation provides computational security + XOR obfuscation.
-        let info_theoretic_threshold = 32; // XOR of 32-byte sources = 32 bytes output
+        // This implementation provides 256-bit post-quantum computational security + XOR obfuscation.
+        let computational_threshold = 32; // XOR of 32-byte sources = 32 bytes output
         
-        if data.len() <= info_theoretic_threshold {
-            // TRUE UNBREAKABLE: Use synchronized Vernam buffer (no key transmission!)
+        if data.len() <= computational_threshold {
+            // 256-bit post-quantum computational: Use synchronized Vernam buffer (no key transmission!)
             if let Some(ref sync_buffer) = self.synchronized_buffer {
                 // Generate identical keystream on both parties from shared seed
                 let keystream = sync_buffer.consume_sync(data.len());
                 
-                // XOR with synchronized keystream (information-theoretically secure)
+                // XOR with synchronized keystream (256-bit post-quantum computationally secure)
                 for (i, byte) in mixed_data.iter_mut().enumerate() {
                     *byte ^= keystream[i];
                     xor_key[i] = keystream[i]; // Store for potential debugging
                 }
-                mode_byte = 0x01; // 0x01 = TRUE Vernam mode (information-theoretic)
-                debug!("🔐 TRUE OTP: Generated {} synchronized bytes (unbreakable by physics)", data.len());
+                mode_byte = 0x01; // 0x01 = TRUE Vernam mode (256-bit post-quantum computational)
+                debug!("🔐 TRUE OTP: Generated {} synchronized bytes (256-bit post-quantum computationally secure)", data.len());
                 
             } else if let Some(ref buffer_arc) = self.true_vernam_buffer {
                 // Fallback to old TrueVernamBuffer if synchronized not available
@@ -571,13 +573,13 @@ impl WasifVernam {
                     Ok(mut buffer) => {
                         match buffer.consume(data.len()) {
                         Ok(keystream) => {
-                            // XOR with TRUE random data (information-theoretically secure)
+                            // XOR with TRUE random data (256-bit post-quantum computationally secure)
                             for (i, byte) in mixed_data.iter_mut().enumerate() {
                                 *byte ^= keystream[i];
                                 xor_key[i] = keystream[i];
                             }
-                            mode_byte = 0x01; // 0x01 = True Vernam mode (information-theoretic)
-                            debug!("🔐 INFORMATION-THEORETIC: Used {} TRUE random bytes for encryption (unbreakable by physics)", data.len());
+                            mode_byte = 0x01; // 0x01 = True Vernam mode (256-bit post-quantum computational)
+                            debug!("🔐 256-bit post-quantum computational: Used {} TRUE random bytes for encryption (256-bit post-quantum computationally secure)", data.len());
                         },
                         Err(_) => {
                             // Buffer empty/error - fallback to HKDF mode
@@ -685,12 +687,12 @@ impl WasifVernam {
                     // Generate identical keystream on both parties from shared seed
                     let keystream = sync_buffer.consume_sync(payload.len());
                     
-                    // XOR with synchronized keystream (information-theoretically secure)
+                    // XOR with synchronized keystream (256-bit post-quantum computationally secure)
                     let mut result = payload.clone();
                     for (i, byte) in result.iter_mut().enumerate() {
                         *byte ^= keystream[i];
                     }
-                    debug!("🔐 TRUE OTP: Generated {} synchronized bytes for decryption (unbreakable by physics)", payload.len());
+                    debug!("🔐 TRUE OTP: Generated {} synchronized bytes for decryption (256-bit post-quantum computationally secure)", payload.len());
                     result.to_vec()
                     
                 } else if let Some(ref buffer_arc) = self.true_vernam_buffer {
@@ -733,12 +735,12 @@ impl WasifVernam {
         Ok(plaintext)
     }
 
-    /// Encrypt data using Hybrid TRUE OTP (any file size, Shannon-proven security)
+    /// Encrypt data using Hybrid TRUE OTP (any file size, 256-bit post-quantum computational security)
     /// 
     /// # Security Model
-    /// - DEK wrapped with TRUE OTP (information-theoretic, Shannon-proven)
+    /// - DEK wrapped with TRUE OTP (256-bit post-quantum computational)
     /// - Content encrypted with ChaCha20-Poly1305(DEK) (computational)
-    /// - Overall security: Information-theoretic (breaking ChaCha20 requires breaking OTP first)
+    /// - Overall security: 256-bit post-quantum computational (breaking ChaCha20 requires breaking OTP first)
     /// 
     /// # Arguments
     /// * `data` - Data to encrypt (any size)
@@ -759,7 +761,7 @@ impl WasifVernam {
         let entropy = TrueEntropy::global();
         let dek = entropy.get_entropy_32_sync();
         
-        // 2. Wrap DEK with TRUE OTP (Shannon-secure)
+        // 2. Wrap DEK with TRUE OTP (256-bit post-quantum computational)
         let wrapped_dek = wrap_dek_true_otp(&dek, sync_entropy);
         
         // 3. Encrypt content with ChaCha20-Poly1305(DEK)
@@ -780,7 +782,7 @@ impl WasifVernam {
         envelope.extend_from_slice(&nonce_bytes);
         envelope.extend_from_slice(&ciphertext);
         
-        info!("🔐 Hybrid OTP encrypted {} bytes (Shannon-proven security)", data.len());
+        info!("🔐 Hybrid OTP encrypted {} bytes (256-bit post-quantum computational security)", data.len());
         Ok(envelope)
     }
 
@@ -941,9 +943,9 @@ impl WasifVernam {
         self.key_offset.load(Ordering::SeqCst) % REFRESH_THRESHOLD < 1024
     }
 
-    /// Encrypt data using Hybrid TRUE OTP (information-theoretically secure)
+    /// Encrypt data using Hybrid TRUE OTP (256-bit post-quantum computationally secure)
     /// 
-    /// This method combines Shannon-secure TRUE OTP with ChaCha20-Poly1305 for
+    /// This method combines 256-bit post-quantum computational TRUE OTP with ChaCha20-Poly1305 for
     /// any file size, using the global TrueEntropy provider.
     /// 
     /// # Returns

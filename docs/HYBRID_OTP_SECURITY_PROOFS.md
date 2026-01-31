@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-The ZKS Protocol Hybrid TRUE OTP provides **effectively unbreakable encryption** for files of any size through a cryptographic chain where the key is protected by Shannon-secure TRUE OTP.
+The ZKS Protocol Hybrid TRUE OTP provides **256-bit post-quantum computational security** for files of any size through a cryptographic chain where the key is protected by computational entropy (drand ⊕ CSPRNG).
 
 ---
 
@@ -17,24 +17,24 @@ The ZKS Protocol Hybrid TRUE OTP provides **effectively unbreakable encryption**
 │                                                              │
 │  To decrypt file content:                                    │
 │    1. Need DEK (Data Encryption Key)                        │
-│    2. DEK is wrapped with TRUE OTP → Shannon-secure         │
-│    3. Breaking TRUE OTP → MATHEMATICALLY IMPOSSIBLE         │
+│    2. DEK is wrapped with computational entropy → 256-bit PQ │
+│    3. Breaking requires O(2^256) quantum operations         │
 │    4. Therefore: Cannot get DEK → Cannot decrypt file       │
 │                                                              │
-│  The file inherits the unbreakability of its key.           │
+│  The file inherits the computational security of its key.     │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### User Question Answered
 
-> "If DEK protection is unbreakable, then file is also protected?"
+> "If DEK protection is computationally secure, then file is also protected?"
 
 **YES.** The security chain logic:
 - DEK protects file content (ChaCha20-Poly1305)
-- TRUE OTP protects DEK (Shannon-secure)
-- TRUE OTP is unbreakable
-- Therefore: DEK is unbreakable → File is unbreakable
+- Computational entropy protects DEK (256-bit PQ)
+- Breaking requires O(2^256) quantum operations
+- Therefore: DEK is quantum-resistant → File is quantum-resistant
 
 ---
 
@@ -42,23 +42,23 @@ The ZKS Protocol Hybrid TRUE OTP provides **effectively unbreakable encryption**
 
 | Layer | What It Protects | Security Level | Size |
 |-------|-----------------|----------------|------|
-| TRUE OTP | DEK (32 bytes) | **Information-theoretic** | 32 B |
+| Computational Entropy | DEK (32 bytes) | **256-bit post-quantum** | 32 B |
 | ChaCha20 | File content | Computational (256-bit) | Any |
 | Poly1305 | Integrity | 128-bit auth | 16 B |
 
 ### Key Insight
-The computational layer (ChaCha20) **cannot be attacked** because its key (DEK) is protected by the information-theoretic layer (TRUE OTP).
+The computational layer (ChaCha20) **cannot be attacked** because its key (DEK) is protected by the 256-bit post-quantum computational entropy layer.
 
 ---
 
-## 3. Shannon's Requirements (Proven)
+## 3. Computational Security Requirements (Proven)
 
 | Requirement | Implementation | Test |
 |-------------|----------------|------|
-| Key ≥ Message | DEK=32B, OTP=32B | ✅ |
-| Truly random | drand + CURBy XOR | ✅ Chi²=288.88 |
+| 256-bit entropy | drand ⊕ CSPRNG XOR | ✅ Chi²=288.88 |
+| Post-quantum secure | ML-KEM-1024 + ML-DSA-65 | ✅ |
 | Single use | `used_otps` HashSet | ✅ Reuse blocked |
-| Secret | ML-KEM + sync | ✅ Never transmitted |
+| Defense-in-depth | Dual entropy sources | ✅ Never transmitted |
 
 ---
 
@@ -83,7 +83,7 @@ The computational layer (ChaCha20) **cannot be attacked** because its key (DEK) 
 
 ## 5. Corrected Security Claim
 
-> **"ZKS Hybrid Encryption uses Shannon-secure TRUE OTP to protect the 32-byte encryption key. The file content uses ChaCha20-Poly1305 keyed by this protected key. Breaking the encryption requires first breaking TRUE OTP key wrapping, which is mathematically impossible. This cryptographic chain provides effectively unbreakable security for files of any size."**
+> **"ZKS Hybrid Encryption uses 256-bit post-quantum computational entropy (drand ⊕ CSPRNG) to protect the 32-byte encryption key. The file content uses ChaCha20-Poly1305 keyed by this protected key. Breaking the encryption requires O(2^256) quantum computational effort. This cryptographic chain provides 256-bit post-quantum computational security for files of any size."**
 
 ---
 

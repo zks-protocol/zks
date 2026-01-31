@@ -120,7 +120,7 @@ Security Level: 256-bit computational (NOT information-theoretic)
 | Overall security | **256-bit post-quantum computational** |
 | Entropy source | drand beacon + local CSPRNG |
 
-> **⚠️ IMPORTANT:** Network-mode entropy (drand + CSPRNG) provides **256-bit computational security**, not information-theoretic security. For TRUE ITS, use `zks_otp` with physical key exchange.
+> **⚠️ IMPORTANT:** Network-mode entropy (drand + CSPRNG) provides **256-bit computational security**, not information-theoretic security.
 >
 > [📄 Full Security Documentation](docs/SECURITY.md)
 
@@ -243,7 +243,7 @@ ZKS Protocol achieves **256-bit post-quantum security** through defense-in-depth
 
 **Entropy Budget** (Network Mode):
 - ✅ **All messages**: 256-bit computational security via drand ⊕ CSPRNG
-- ℹ️ **For TRUE ITS**: Use `zks_otp` (Offline Mode) with physical key exchange
+- ℹ️ **Entropy source**: drand beacon + local CSPRNG provides 256-bit computational security
 
 **Mathematical Foundation** (Computational Security):
 - **Defense-in-depth**: XOR of drand beacon and local CSPRNG provides 256-bit computational security
@@ -296,7 +296,7 @@ zks/
 ├── zks_wire       # Swarm networking, NAT traversal
 ├── zks_types      # Common type definitions
 ├── zks_wasm       # WebAssembly bindings
-└── zks_otp        # Offline OTP (TRUE Information-Theoretic Security)
+├── zks_wire       # Swarm networking, NAT traversal
 ```
 
 | Crate | Description | Key Features |
@@ -308,7 +308,7 @@ zks/
 | `zks_wire` | Network layer | STUN, NAT traversal, swarm |
 | `zks_types` | Shared types | Error types, crypto params |
 | `zks_wasm` | Browser support | JS bindings via wasm-bindgen |
-| `zks_otp` | **Offline OTP** | Physical key exchange, TRUE ITS |
+| `zks_wire` | **Network Layer** | STUN, NAT traversal, swarm |
 
 ---
 
@@ -410,7 +410,7 @@ cargo run --example file_transfer
 
 ZKS Protocol achieves **256-bit computational security** through defense-in-depth:
 
-**Mathematical Foundation**: XOR of independent entropy sources provides computational security. If you need TRUE information-theoretic security, use `zks_otp` with physical key exchange.
+**Mathematical Foundation**: XOR of independent entropy sources provides computational security.
 
 **Entropy Sources (Network Mode)**:
 - **Local CSPRNG**: OS entropy pool (Windows BCrypt, Linux /dev/urandom)
@@ -440,34 +440,13 @@ Fetch Order:
 
 **Defense-in-Depth Operation**: System combines multiple entropy sources (drand + local CSPRNG) for strong computational security.
 
-### 🔒 TRUE Information-Theoretic Security (Offline Mode)
-
-For scenarios requiring **mathematically unbreakable** encryption, ZKS provides an offline mode via `zks_otp`:
-
-```bash
-# Generate physical key on USB drive
-zks-otp generate --output E:\key.zkskey --size 1GB --hardware
-
-# Physically deliver key to recipient
-
-# Encrypt file (ITS - unbreakable by any power)
-zks-otp encrypt --input secret.txt --key E:\key.zkskey --output secret.enc
-```
-
-**Security Model Distinction:**
-
-ZKS Protocol provides two distinct security tiers with different assumptions and guarantees:
+### 🔒 Post-Quantum Computational Security (Network Mode)
 
 | Mode | Security Type | Mathematical Foundation | Requirements | Guarantees |
 |------|---------------|------------------------|--------------|------------|
 | **Network** (`zk://`, `zks://`) | **Computational** | 256-bit post-quantum cryptography | Standard computational assumptions | Quantum-resistant, computationally bounded |
-| **Offline Strict** (`zks_otp`) | **Information-Theoretic** | Shannon's perfect secrecy | Physical key exchange, true randomness | Unbreakable by any computational power |
-| **Offline Efficient** (`zks_otp`) | **Computational** | ChaCha20-Poly1305 + OTP key wrapping | 32 bytes key per file | 256-bit computational security |
 
-**Critical Distinction**: 
-- ✅ **Network mode** provides 256-bit **computational security** - resistant to quantum computers but theoretically breakable with sufficient computational power
-- ✅ **Offline Strict mode** provides **information-theoretic security** - mathematically unbreakable when used with truly random keys and physical key exchange
-- ⚠️ **Do not confuse** computational security claims with information-theoretic guarantees
+**Critical Distinction**: Network mode provides 256-bit **computational security** - resistant to quantum computers but theoretically breakable with sufficient computational power
 
 ### 🌌 Computational Security Bounds (>32 Bytes)
 
@@ -599,9 +578,6 @@ See [LICENSE](LICENSE) for the full license text.
 The ZKS Protocol provides **two security tiers**:
 
 1. **Network Mode**: 256-bit post-quantum computational security via ML-KEM + ChaCha20
-2. **Offline Mode** (`zks_otp`): TRUE information-theoretic security via physical one-time pad
-
-Only the Offline Mode with physical key exchange achieves Shannon's perfect secrecy. Network communications are computationally secure but not information-theoretically secure.
 
 **Key Properties**:
 - **No computational assumptions**: Security relies on mathematical laws, not hardness assumptions

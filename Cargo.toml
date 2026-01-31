@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/zks_cover", "crates/zks_crypt", "crates/zks_mcp", "crates/zks_pqcrypto", "crates/zks_proto", "crates/zks_sdk", "crates/zks_surb", "crates/zks_types", "crates/zks_uniffi", "crates/zks_wasm", "crates/zks_wire"]
 resolver = "2"
 
 [workspace.package]

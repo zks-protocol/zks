@@ -1,6 +1,6 @@
 # Making the Impossible Possible: How I Made the One-Time Pad Practical for the Internet Age
 
-*A technical deep-dive into the Wasif-Vernam cipher and how ZKS Protocol achieves mathematically unbreakable encryption without pre-shared keys*
+*A technical deep-dive into the Wasif-Vernam cipher and how ZKS Protocol achieves 256-bit post-quantum computational security without pre-shared keys*
 
 ---
 
@@ -10,11 +10,11 @@
 
 ## The Holy Grail of Cryptography
 
-In 1882, Frank Miller invented a cipher that would later be proven **mathematically unbreakable** — not just hard to break, but *physically impossible* to break, no matter how much computing power an adversary possesses [1]. This cipher, formalized by Gilbert Vernam in 1917 and proven secure by Claude Shannon in 1949, is known as the **One-Time Pad (OTP)** [2][3].
+In 1882, Frank Miller invented a cipher that would later be proven **information-theoretically secure** — not just hard to break, but *physically impossible* to break with unlimited computational power [1]. This cipher, formalized by Gilbert Vernam in 1917 and proven secure by Claude Shannon in 1949, is known as the **One-Time Pad (OTP)** [2][3].
 
 Shannon's proof was elegant: if your key is truly random, as long as your message, and never reused, then the ciphertext reveals *zero* information about the plaintext. An attacker with infinite computing power — even a quantum computer — cannot break it [4].
 
-> "The one-time pad is the only encryption method that has been mathematically proven to be unconditionally secure."
+> "The one-time pad is the only encryption method that has been mathematically proven to be information-theoretically secure."
 > — *Bruce Schneier, Applied Cryptography* [5]
 
 So why isn't everyone using it?
@@ -172,7 +172,7 @@ The Wasif-Vernam cipher provides a **tiered security model**:
 - *Security Level:* 256-bit computational
 - *Guarantee:* Attackers Cannot Break It without more energy than the sun produces
 
-For messages of 32 bytes or less (which includes most encryption keys, authentication tokens, and short messages), you get TRUE one-time pad security — mathematically proven unbreakable.
+For messages of 32 bytes or less (which includes most encryption keys, authentication tokens, and short messages), you get 256-bit post-quantum computational security — effectively unbreakable with current and foreseeable technology.
 
 For larger messages, the cipher falls back to ChaCha20 expansion, which provides 256-bit security — considered secure against all known attacks, including quantum computers using Grover's algorithm [9].
 
@@ -230,7 +230,7 @@ By combining:
 2. **Distributed verifiable randomness** (true physical entropy)
 3. **Synchronized keystream generation** (infinite non-repeating keys)
 
-We achieve what was thought impossible: **practical, internet-scale, mathematically unbreakable encryption**.
+We achieve what was thought impossible: **practical, internet-scale, 256-bit post-quantum computational security**.
 
 The future of cryptography isn't about making harder problems — it's about eliminating the assumptions that can be broken.
 

@@ -38,9 +38,9 @@ fn test_ciphertext_uniformity() {
     assert!((ratio - 0.5).abs() < 0.01, "Ciphertext is not uniformly random: {:.4}", ratio);
 }
 
-/// Test 3: Perfect secrecy property
-/// For Shannon's perfect secrecy: P(M|C) = P(M)
-/// Given any ciphertext, all plaintexts are equally likely
+/// Test 3: Computational security property
+/// For computational security: P(M|C) ≈ P(M) within computational bounds
+/// Given any ciphertext, all plaintexts are computationally indistinguishable
 #[test]
 fn test_perfect_secrecy_property() {
     // Create two different keys
@@ -237,7 +237,7 @@ fn test_true_vernam_perfect_secrecy() {
     let shared_seed = [0xCD; 32]; // This would come from ML-KEM handshake in real usage
     cipher.enable_synchronized_vernam(shared_seed);
     
-    let message = b"This message has information-theoretic security!";
+    let message = b"This message has 256-bit post-quantum computational security!";
     let ciphertext = cipher.encrypt(message).unwrap();
     let decrypted = cipher.decrypt(&ciphertext).unwrap();
     
