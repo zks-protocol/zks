@@ -39,6 +39,7 @@ base64 = "0.22"  # For URL-embedded public key encoding
 # ZK Protocol crates
 zks_pqcrypto = { version = "0.1.0", path = "../zks_pqcrypto" }
 zks_wire = { version = "0.1.0", path = "../zks_wire" }
+zks_crypt = { version = "0.1.0", path = "../zks_crypt" }
 
 [dev-dependencies]
 tokio-test = "0.4"

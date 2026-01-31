@@ -14,9 +14,11 @@ categories = ["cryptography", "no-std"]
 
 [dependencies]
 zks_types = { version = "0.1.0", path = "../zks_types" }
+zks_pqcrypto = { version = "0.1.0", path = "../zks_pqcrypto" }
 chacha20poly1305 = "0.10"
 chacha20 = "0.9"
 sha2 = "0.10"
+sha3 = "0.10"
 hkdf = "0.12"
 zeroize = { version = "1.7", features = ["zeroize_derive"] }
 tokio = { version = "1.0", features = ["sync", "time", "macros", "rt-multi-thread"] }
@@ -24,6 +26,7 @@ tracing = "0.1"
 getrandom = "0.2"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
 hex = "0.4"
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 once_cell = "1.19"
@@ -35,11 +38,22 @@ rand_chacha = "0.3"
 blst = "0.3"
 thiserror = "1.0"
 group = "0.13"
+async-trait = "0.1"
 
 [dev-dependencies]
 tokio-test = "0.4"
 criterion = { version = "0.5", features = ["html_reports"] }
+proptest = "1.5"
+bytes = "1.5"
 
 [[bench]]
 name = "crypto_bench"
+harness = false
+
+[[bench]]
+name = "ml_kem_bench"
+harness = false
+
+[[bench]]
+name = "wasif_vernam_bench"
 harness = false

@@ -1,0 +1,5 @@
+---
+source: crates/zks_wire/tests/snapshot_error_messages.rs
+expression: "format!(\"{:?}\", error)"
+---
+NotEnoughPeers("Need at least 3 peers, found 1")

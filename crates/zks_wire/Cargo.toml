@@ -41,13 +41,20 @@ getrandom = "0.2"
 base64 = "0.21"
 url = "2.4"
 hex = "0.4"
+bincode = "1.3"
+async-trait = "0.1"
+lru = "0.12"
 
 # NAT traversal - UPnP IGD port mapping
 igd-next = { version = "0.15", features = ["aio_tokio"] }
 
 # Cryptography
 zks_crypt = { version = "0.1.0", path = "../zks_crypt" }
+zks_pqcrypto = { version = "0.1.0", path = "../zks_pqcrypto" }
 zeroize = "1.6"
+sha2 = "0.10"
+hkdf = "0.12"
+ml-kem = "0.2"  # Post-quantum ML-KEM (Kyber) implementation
 
 # WebSocket support (Android compatible)
 tokio-tungstenite = { version = "0.21", features = ["rustls-tls-native-roots"] }
@@ -55,7 +62,24 @@ futures-util = "0.3"
 uuid = { version = "1.0", features = ["v4"] }
 
 # P2P networking
-libp2p = { version = "0.53", features = ["tcp", "tokio", "noise", "yamux", "ping", "relay", "dcutr", "macros", "tls"] }
+libp2p = { version = "0.53", features = ["tcp", "tokio", "noise", "yamux", "ping", "relay", "dcutr", "macros", "tls", "request-response", "gossipsub", "kad"] }
+
+# CLI
+clap = { version = "4.0", features = ["derive"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
+criterion = { version = "0.5", features = ["html_reports"] }
+turmoil = "0.7"
+proptest = "1.5"
+insta = { version = "1.46", features = ["json"] }
+test-strategy = "0.4"
+
+[[bin]]
+name = "zks-seeder"
+path = "src/bin/seeder.rs"
+
+[[bench]]
+name = "onion_routing_bench"
+harness = false

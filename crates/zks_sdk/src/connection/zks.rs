@@ -84,14 +84,19 @@ impl ZksConnection {
         // Box the stream for trait object compatibility
         let boxed_stream: Box<dyn ZksStream> = Box::new(onion_stream);
         
-        // Perform post-quantum handshake - assume we're the initiator for now
+        // SECURITY NOTE: Swarm mode uses onion routing which provides anonymity
+        // but the exit node is not cryptographically authenticated like in zk:// mode.
+        // This is the standard trade-off in onion routing (like Tor):
+        // - You get strong sender anonymity
+        // - But the exit node could potentially MITM the final hop
+        // For maximum security, use end-to-end encryption at the application layer.
         let encrypted_stream = EncryptedStream::handshake(
             boxed_stream,
             &config,
-            true, // Swarm mode
+            true, // Swarm mode - enables scrambling for traffic analysis resistance
             zks_proto::HandshakeRole::Initiator,
             room_id.to_string(),
-            None, // No trusted responder key for now
+            None, // Exit node not authenticated - use app-layer E2E encryption for sensitive data
         ).await?;
         
         info!("🔐 ZKS connection established with {} via onion circuit {} ({} hops)", peer_addr, circuit_id, max_hops);
@@ -195,10 +200,11 @@ impl ZksConnection {
     }
     
     /// Check if the connection is still active
+    /// 
+    /// Note: For full health checking, consider implementing ping/pong at the application layer.
     pub fn is_connected(&self) -> bool {
-        // This is a simplified check - in a full implementation,
-        // we'd need to implement proper connection health checking
-        true
+        // Check if encrypted stream handshake is complete and circuit exists
+        self.stream.is_handshake_complete() && self.circuit_id.is_some()
     }
     
     /// Build a circuit through the swarm for onion routing

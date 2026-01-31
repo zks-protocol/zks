@@ -68,9 +68,9 @@ async fn test_post_quantum_key_exchange() {
     assert!(!public_key.is_empty());
     assert!(!secret_key.is_empty());
     
-    // ML-KEM public key should be 1184 bytes, secret key 2400 bytes
-    assert_eq!(public_key.len(), 1184);
-    assert_eq!(secret_key.len(), 2400);
+    // ML-KEM-1024 public key should be 1568 bytes, secret key 3168 bytes (NIST Level 5)
+    assert_eq!(public_key.len(), 1568);
+    assert_eq!(secret_key.len(), 3168);
 }
 
 #[tokio::test]

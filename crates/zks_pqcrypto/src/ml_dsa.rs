@@ -1,18 +1,18 @@
 //! ML-DSA (Module-Lattice-Based Digital Signature Algorithm) implementation
 //!
-//! This module provides a Rust implementation of ML-DSA-65, which is the NIST
+//! This module provides a Rust implementation of ML-DSA-87, which is the NIST
 //! standardized version of Dilithium. ML-DSA provides post-quantum digital
 //! signatures with EUF-CMA security.
 //!
 //! # Security Level
-//! - NIST Level 3 (192-bit post-quantum security)
+//! - NIST Level 5 (256-bit post-quantum security) - MAXIMUM
 //! - EUF-CMA (Existential Unforgeability under Chosen Message Attack) secure
 //! - Resistant to both classical and quantum computer attacks
 //!
 //! # Key Sizes
-//! - Public key: 1952 bytes
-//! - Secret key: 4032 bytes
-//! - Signature: 3309 bytes
+//! - Public key: 2592 bytes
+//! - Secret key: 4896 bytes
+//! - Signature: 4627 bytes
 //!
 //! # Implementation
 //! - **Native builds**: Use pqcrypto-dilithium (C-based, optimized)
@@ -45,26 +45,26 @@ use crate::errors::{PqcError, Result};
 #[cfg(not(target_arch = "wasm32"))]
 mod native_impl {
     use super::*;
-    use pqcrypto_dilithium::dilithium3;
+    use pqcrypto_dilithium::dilithium5;
     use pqcrypto_traits::sign::{PublicKey, SecretKey, DetachedSignature};
     
-    /// ML-DSA-65 public key size (1952 bytes)
-    pub const PUBLIC_KEY_SIZE: usize = dilithium3::public_key_bytes();
+    /// ML-DSA-87 public key size (2592 bytes)
+    pub const PUBLIC_KEY_SIZE: usize = dilithium5::public_key_bytes();
     
-    /// ML-DSA-65 secret key size (4032 bytes)
-    pub const SECRET_KEY_SIZE: usize = dilithium3::secret_key_bytes();
+    /// ML-DSA-87 secret key size (4896 bytes)
+    pub const SECRET_KEY_SIZE: usize = dilithium5::secret_key_bytes();
     
-    /// ML-DSA-65 signature size (3309 bytes)
-    pub const SIGNATURE_SIZE: usize = dilithium3::signature_bytes();
+    /// ML-DSA-87 signature size (4627 bytes)
+    pub const SIGNATURE_SIZE: usize = dilithium5::signature_bytes();
     
     /// Generate a new ML-DSA keypair (native implementation)
     pub fn generate_keypair() -> Result<(Vec<u8>, Zeroizing<Vec<u8>>)> {
-        let (public_key, secret_key) = dilithium3::keypair();
+        let (public_key, secret_key) = dilithium5::keypair();
         let verifying_key = public_key.as_bytes().to_vec();
         let signing_key = Zeroizing::new(secret_key.as_bytes().to_vec());
         
         tracing::info!(
-            "🔐 Generated ML-DSA-65 keypair (vk: {} bytes, sk: {} bytes)",
+            "🔐 Generated ML-DSA-87 keypair (vk: {} bytes, sk: {} bytes) - NIST Level 5",
             verifying_key.len(),
             signing_key.len()
         );
@@ -82,14 +82,14 @@ mod native_impl {
             )));
         }
 
-        let secret_key = dilithium3::SecretKey::from_bytes(signing_key)
+        let secret_key = dilithium5::SecretKey::from_bytes(signing_key)
             .map_err(|e| PqcError::InvalidKey(format!("Failed to create secret key: {}", e)))?;
         
-        let signature = dilithium3::detached_sign(message.as_ref(), &secret_key);
+        let signature = dilithium5::detached_sign(message.as_ref(), &secret_key);
         let signature_bytes = signature.as_bytes().to_vec();
 
         tracing::debug!(
-            "🖊️ Signed {} byte message, signature: {} bytes",
+            "🖊️ Signed {} byte message with ML-DSA-87, signature: {} bytes",
             message.as_ref().len(),
             signature_bytes.len()
         );
@@ -115,16 +115,16 @@ mod native_impl {
             )));
         }
 
-        let public_key_obj = dilithium3::PublicKey::from_bytes(public_key)
+        let public_key_obj = dilithium5::PublicKey::from_bytes(public_key)
             .map_err(|e| PqcError::InvalidKey(format!("Failed to create public key: {}", e)))?;
         
-        let signature_obj = dilithium3::DetachedSignature::from_bytes(signature)
+        let signature_obj = dilithium5::DetachedSignature::from_bytes(signature)
             .map_err(|e| PqcError::InvalidSignature(format!("Failed to create signature: {}", e)))?;
 
-        dilithium3::verify_detached_signature(&signature_obj, message, &public_key_obj)
+        dilithium5::verify_detached_signature(&signature_obj, message, &public_key_obj)
             .map_err(|e| PqcError::InvalidSignature(format!("Signature verification failed: {}", e)))?;
 
-        tracing::debug!("✅ ML-DSA signature verification successful");
+        tracing::debug!("✅ ML-DSA-87 signature verification successful - NIST Level 5");
 
         Ok(())
     }
@@ -134,29 +134,31 @@ mod native_impl {
 #[cfg(target_arch = "wasm32")]
 mod wasm_impl {
     use super::*;
-    use ml_dsa::ml_dsa_65::{SigningKey, VerifyingKey, Signature};
+    use ml_dsa::ml_dsa_87::{SigningKey, VerifyingKey, Signature};
     use ml_dsa::signature::{Signer, Verifier, RandomizedSigner};
-    use rand_core::OsRng;
+    use zks_crypt::true_entropy::TrueEntropyRng;
     
-    /// ML-DSA-65 public key size (1952 bytes)
-    pub const PUBLIC_KEY_SIZE: usize = 1952;
+    /// ML-DSA-87 public key size (2592 bytes)
+    pub const PUBLIC_KEY_SIZE: usize = 2592;
     
-    /// ML-DSA-65 secret key size (4032 bytes)
-    pub const SECRET_KEY_SIZE: usize = 4032;
+    /// ML-DSA-87 secret key size (4896 bytes)
+    pub const SECRET_KEY_SIZE: usize = 4896;
     
-    /// ML-DSA-65 signature size (3309 bytes)
-    pub const SIGNATURE_SIZE: usize = 3309;
+    /// ML-DSA-87 signature size (4627 bytes)
+    pub const SIGNATURE_SIZE: usize = 4627;
     
-    /// Generate a new ML-DSA-65 keypair (WASM implementation - POST-QUANTUM SECURE)
+    /// Generate a new ML-DSA-87 keypair (WASM implementation - POST-QUANTUM + TRUE ENTROPY)
     pub fn generate_keypair() -> Result<(Vec<u8>, Zeroizing<Vec<u8>>)> {
-        let signing_key = SigningKey::random(&mut OsRng);
+        // SECURITY: Use TrueEntropy for information-theoretic security
+        let mut rng = TrueEntropyRng;
+        let signing_key = SigningKey::random(&mut rng);
         let verifying_key = signing_key.verifying_key();
         
         let verifying_key_bytes = verifying_key.to_bytes().to_vec();
         let signing_key_bytes = Zeroizing::new(signing_key.to_bytes().to_vec());
         
         tracing::info!(
-            "🔐 Generated ML-DSA-65 keypair (vk: {} bytes, sk: {} bytes) - WASM PQ-SECURE",
+            "🔐 Generated ML-DSA-87 keypair (vk: {} bytes, sk: {} bytes) - WASM NIST Level 5",
             verifying_key_bytes.len(),
             signing_key_bytes.len()
         );
@@ -164,7 +166,7 @@ mod wasm_impl {
         Ok((verifying_key_bytes, signing_key_bytes))
     }
     
-    /// Sign a message using the signing key (WASM implementation - POST-QUANTUM SECURE)
+    /// Sign a message using the signing key (WASM implementation - POST-QUANTUM + TRUE ENTROPY)
     pub fn sign(message: impl AsRef<[u8]>, signing_key: &[u8]) -> Result<Vec<u8>> {
         if signing_key.len() != SECRET_KEY_SIZE {
             return Err(PqcError::InvalidKey(format!(
@@ -178,11 +180,13 @@ mod wasm_impl {
             .map_err(|_| PqcError::InvalidKey("Invalid signing key format".to_string()))?;
         
         let signing_key_obj = SigningKey::from_bytes(&signing_key_array);
-        let signature = signing_key_obj.sign_with_rng(&mut OsRng, message.as_ref());
+        // SECURITY: Use TrueEntropy for signing randomness
+        let mut rng = TrueEntropyRng;
+        let signature = signing_key_obj.sign_with_rng(&mut rng, message.as_ref());
         let signature_bytes = signature.to_bytes().to_vec();
 
         tracing::debug!(
-            "🖊️ Signed {} byte message with ML-DSA-65, signature: {} bytes (WASM PQ)",
+            "🖊️ Signed {} byte message with ML-DSA-87, signature: {} bytes (WASM NIST Level 5)",
             message.as_ref().len(),
             signature_bytes.len()
         );
@@ -222,7 +226,7 @@ mod wasm_impl {
         verifying_key.verify(message, &signature_obj)
             .map_err(|e| PqcError::InvalidSignature(format!("Signature verification failed: {:?}", e)))?;
 
-        tracing::debug!("✅ ML-DSA-65 signature verification successful - WASM PQ-SECURE");
+        tracing::debug!("✅ ML-DSA-87 signature verification successful - WASM NIST Level 5");
 
         Ok(())
     }
@@ -389,7 +393,7 @@ impl MlDsa {
         }
 
         if all_valid {
-            tracing::debug!("✅ All {} ML-DSA signatures verified", messages.len());
+            tracing::debug!("✅ All {} ML-DSA-87 signatures verified", messages.len());
             Ok(())
         } else {
             // Return the first error encountered (but only after checking all signatures)

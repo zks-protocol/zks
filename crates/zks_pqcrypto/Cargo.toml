@@ -27,6 +27,7 @@ rand_core = "0.6"   # Use rand_core 0.6 for compatibility with ml-kem
 rand = "0.8"        # RNG implementations (compatible with rand_core 0.6)
 rand_chacha = "0.3" # ChaCha RNG for deterministic generation (compatible with rand_core 0.6)
 getrandom = { version = "0.2", features = ["js"] }   # OS random number generator with WASM support
+ring = "0.17"       # Secondary CSPRNG for defense-in-depth
 
 # Error handling
 thiserror = "1.0"   # Ergonomic error handling

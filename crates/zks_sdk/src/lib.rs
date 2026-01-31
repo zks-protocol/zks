@@ -59,6 +59,10 @@ pub mod prelude {
     // Re-export commonly used items from sub-crates
     pub use zks_crypt::wasif_vernam::WasifVernam;
     pub use zks_pqcrypto::prelude::*;
+    
+    // Cover traffic and SURB exports
+    pub use zks_cover::{CoverGenerator, CoverConfig};
+    pub use zks_surb::{ZksSurb, ReplyRequest, SurbConfig};
 }
 
 #[cfg(test)]

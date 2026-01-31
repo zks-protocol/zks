@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, debug, warn};
+use tracing::{info, debug};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::p2p::NativeP2PTransport;
@@ -16,10 +16,14 @@ use crate::signaling::SignalingClient;
 #[cfg(target_arch = "wasm32")]
 use crate::signaling::SignalingClient;
 
+use crate::faisal_swarm::FaisalSwarmManager;
+
 /// Platform detection and transport selection
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Platform {
+    /// Native platform (desktop/mobile) with full P2P capabilities
     Native,
+    /// WebAssembly platform (browser) with limited P2P capabilities
     WebAssembly,
 }
 
@@ -42,8 +46,13 @@ pub struct SwarmController {
     platform: Platform,
     signaling_client: Arc<RwLock<Option<SignalingClient>>>,
     
+    /// Native P2P transport (desktop/mobile only, currently unused but kept for future transport selection)
     #[cfg(not(target_arch = "wasm32"))]
+    #[allow(dead_code)]
     native_transport: Arc<RwLock<Option<NativeP2PTransport>>>,
+    
+    /// Faisal Swarm manager for onion routing circuits
+    faisal_swarm_manager: Arc<RwLock<Option<FaisalSwarmManager>>>,
     
     is_connected: Arc<RwLock<bool>>,
     local_peer_id: Arc<RwLock<Option<String>>>,
@@ -61,6 +70,9 @@ impl SwarmController {
             
             #[cfg(not(target_arch = "wasm32"))]
             native_transport: Arc::new(RwLock::new(None)),
+            
+            // Faisal Swarm manager for onion routing circuits
+            faisal_swarm_manager: Arc::new(RwLock::new(None)),
             
             is_connected: Arc::new(RwLock::new(false)),
             local_peer_id: Arc::new(RwLock::new(None)),
@@ -87,7 +99,42 @@ impl SwarmController {
         let signaling_client = SignalingClient::connect(signaling_url, local_peer_id).await
             .map_err(|e| SwarmControllerError::SignalingError(format!("Failed to connect to signaling server: {}", e)))?;
         
-        *self.signaling_client.write().await = Some(signaling_client);
+        *self.signaling_client.write().await = Some(signaling_client.clone());
+        
+        // Initialize Faisal Swarm manager
+        use libp2p::{identity::Keypair, tcp::Config as TcpConfig, noise, yamux, Transport};
+        
+        // Create keypair for libp2p
+        let keypair = Keypair::generate_ed25519();
+        let local_peer_id = libp2p::PeerId::from(keypair.public());
+        
+        // Create transport with TCP, noise, and yamux
+        let _transport = libp2p::tcp::tokio::Transport::new(TcpConfig::default())
+            .upgrade(libp2p::core::upgrade::Version::V1)
+            .authenticate(noise::Config::new(&keypair).map_err(|e| SwarmControllerError::TransportError(format!("Noise error: {}", e)))?)
+            .multiplex(yamux::Config::default())
+            .boxed();
+        
+        // Create swarm behavior
+        let behaviour = crate::p2p::NativeSwarmBehaviour::new(local_peer_id);
+        
+        // Create swarm
+        let swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
+            .with_tokio()
+            .with_tcp(
+                TcpConfig::default(),
+                noise::Config::new,
+                yamux::Config::default,
+            ).map_err(|e| SwarmControllerError::TransportError(format!("Swarm build error: {}", e)))?
+            .with_behaviour(|_| behaviour).map_err(|e| SwarmControllerError::TransportError(format!("Behaviour error: {}", e)))?
+            .build();
+        
+        let faisal_swarm_manager = FaisalSwarmManager::new(
+            Arc::new(signaling_client),
+            Arc::new(RwLock::new(swarm)),
+        );
+        
+        *self.faisal_swarm_manager.write().await = Some(faisal_swarm_manager);
         *self.is_connected.write().await = true;
         
         info!("Successfully connected to swarm via signaling server");
@@ -174,7 +221,7 @@ impl SwarmController {
         }
     }
     
-    /// Build an onion circuit for the specified number of hops
+    /// Build an onion circuit for the specified number of hops using Faisal Swarm
     pub async fn build_onion_circuit(&self, target_peer: &str, min_hops: u8, max_hops: u8) -> Result<String, SwarmControllerError> {
         let capabilities = self.transport_capabilities();
         
@@ -186,117 +233,157 @@ impl SwarmController {
             )));
         }
         
-        // For now, we'll use a simple approach: select random peers from the room
-        // In a full implementation, this would involve complex path selection algorithms
-        
+        // Use Faisal Swarm Manager to build the circuit
         let room_id = "default"; // TODO: Get from configuration
-        let peers = self.discover_peers(room_id).await?;
         
-        if peers.len() < (max_hops as usize - 1) {
-            return Err(SwarmControllerError::NotEnoughPeers(format!(
-                "Need at least {} peers for {}-hop circuit, found {}",
-                max_hops - 1,
-                max_hops,
-                peers.len()
-            )));
+        if let Some(ref faisal_manager) = *self.faisal_swarm_manager.read().await {
+            info!("Building {}-hop Faisal Swarm circuit to {} via room {}", max_hops, target_peer, room_id);
+            
+            // Create circuit using Faisal Swarm
+            let circuit_id = faisal_manager.create_circuit(room_id, max_hops as usize).await
+                .map_err(|e| SwarmControllerError::CircuitError(format!("Faisal Swarm circuit creation failed: {}", e)))?;
+            
+            info!("✅ Faisal Swarm circuit {} created successfully", circuit_id);
+            Ok(circuit_id.to_string())
+        } else {
+            Err(SwarmControllerError::CircuitError("Faisal Swarm Manager not initialized".to_string()))
         }
-        
-        // Select random peers for the circuit
-        use rand::seq::SliceRandom;
-        let mut rng = rand::thread_rng();
-        let mut selected_peers = peers.clone();
-        selected_peers.shuffle(&mut rng);
-        
-        let target_peer_info = crate::signaling::PeerInfo {
-            peer_id: target_peer.to_string(),
-            public_key: vec![],
-            capabilities: crate::signaling::PeerCapabilities::default(),
-            last_seen: 0,
-            addresses: vec![],
-        };
-        
-        let circuit_peers: Vec<_> = selected_peers
-            .iter()
-            .take((max_hops - 1) as usize)
-            .chain(std::iter::once(&target_peer_info))
-            .collect();
-        
-        info!("Building {}-hop onion circuit to {} via {} peers", max_hops, target_peer, circuit_peers.len() - 1);
-        
-        // Generate circuit ID
-        let circuit_id = format!("circuit_{}", uuid::Uuid::new_v4());
-        
-        // For WASM, we would use the browser onion transport
-        // For native, we would use direct P2P connections
-        // This is a simplified implementation
-        
-        Ok(circuit_id)
     }
     
-    /// Send data through an established onion circuit
+    /// Send data through an established onion circuit using Faisal Swarm
     pub async fn send_through_circuit(&self, circuit_id: &str, data: &[u8]) -> Result<(), SwarmControllerError> {
-        // This would implement the actual onion routing protocol
-        // For now, this is a placeholder
-        debug!("Would send {} bytes through circuit {}", data.len(), circuit_id);
-        Ok(())
+        if let Some(ref faisal_manager) = *self.faisal_swarm_manager.read().await {
+            // Parse circuit ID from string to CircuitId
+            let circuit_id_u32 = circuit_id.parse::<u32>()
+                .map_err(|e| SwarmControllerError::CircuitError(format!("Invalid circuit ID: {}", e)))?;
+            
+            debug!("Sending {} bytes through Faisal Swarm circuit {}", data.len(), circuit_id);
+            
+            // Send data through Faisal Swarm circuit
+            faisal_manager.send_via_swarm(circuit_id_u32, data).await
+                .map_err(|e| SwarmControllerError::CircuitError(format!("Failed to send data: {}", e)))?;
+            
+            info!("✅ Successfully sent {} bytes through Faisal Swarm circuit {}", data.len(), circuit_id);
+            Ok(())
+        } else {
+            Err(SwarmControllerError::CircuitError("Faisal Swarm Manager not initialized".to_string()))
+        }
     }
     
-    /// Receive data from any circuit
+    /// Receive data from any circuit using Faisal Swarm
     pub async fn receive_from_circuit(&self, circuit_id: &str) -> Result<Option<Vec<u8>>, SwarmControllerError> {
-        // This would implement receiving data through the onion circuit
-        // For now, this is a placeholder
-        debug!("Would receive data from circuit {}", circuit_id);
-        Ok(None)
+        if let Some(ref faisal_manager) = *self.faisal_swarm_manager.read().await {
+            // Parse circuit ID from string to CircuitId
+            let circuit_id_u32 = circuit_id.parse::<u32>()
+                .map_err(|e| SwarmControllerError::CircuitError(format!("Invalid circuit ID: {}", e)))?;
+            
+            debug!("Receiving data from Faisal Swarm circuit {}", circuit_id);
+            
+            // Receive data from Faisal Swarm circuit
+            match faisal_manager.receive_from_swarm(circuit_id_u32).await {
+                Ok(data) => {
+                    info!("✅ Successfully received {} bytes from Faisal Swarm circuit {}", data.len(), circuit_id);
+                    Ok(Some(data))
+                },
+                Err(e) => Err(SwarmControllerError::CircuitError(format!("Failed to receive data: {}", e)))
+            }
+        } else {
+            Err(SwarmControllerError::CircuitError("Faisal Swarm Manager not initialized".to_string()))
+        }
     }
     
-    /// Tear down an onion circuit
+    /// Tear down an onion circuit using Faisal Swarm
     pub async fn teardown_circuit(&self, circuit_id: &str) -> Result<(), SwarmControllerError> {
-        info!("Tearing down circuit {}", circuit_id);
-        // This would implement circuit teardown
-        Ok(())
+        if let Some(ref faisal_manager) = *self.faisal_swarm_manager.read().await {
+            // Parse circuit ID from string to CircuitId
+            let circuit_id_u32 = circuit_id.parse::<u32>()
+                .map_err(|e| SwarmControllerError::CircuitError(format!("Invalid circuit ID: {}", e)))?;
+            
+            info!("Tearing down Faisal Swarm circuit {}", circuit_id);
+            
+            // Close circuit using Faisal Swarm Manager
+            faisal_manager.close_circuit(circuit_id_u32).await
+                .map_err(|e| SwarmControllerError::CircuitError(format!("Failed to close circuit: {}", e)))?;
+            
+            info!("✅ Successfully tore down Faisal Swarm circuit {}", circuit_id);
+            Ok(())
+        } else {
+            Err(SwarmControllerError::CircuitError("Faisal Swarm Manager not initialized".to_string()))
+        }
     }
     
-    /// Create an onion stream that routes through the specified circuit
+    /// Create an onion stream that routes through the specified circuit using Faisal Swarm
     pub async fn create_onion_stream(&self, circuit_id: &str) -> Result<OnionStream, SwarmControllerError> {
-        info!("Creating onion stream for circuit {}", circuit_id);
-        
-        // For now, create a basic onion stream
-        // In a full implementation, this would establish the actual routing through the circuit
-        Ok(OnionStream::new(circuit_id.to_string()))
+        if let Some(ref faisal_manager) = *self.faisal_swarm_manager.read().await {
+            // Parse circuit ID from string to CircuitId
+            let circuit_id_u32 = circuit_id.parse::<u32>()
+                .map_err(|e| SwarmControllerError::CircuitError(format!("Invalid circuit ID: {}", e)))?;
+            
+            info!("Creating onion stream for Faisal Swarm circuit {}", circuit_id);
+            
+            // Get circuit info to verify it exists and is ready
+            let _circuit_info = faisal_manager.get_circuit_info(circuit_id_u32).await
+                .map_err(|e| SwarmControllerError::CircuitError(format!("Failed to get circuit info: {}", e)))?;
+            
+            debug!("Circuit {} verified, creating onion stream", circuit_id);
+            
+            // Create an onion stream that will route through Faisal Swarm
+            // The stream will use the Faisal Swarm manager for actual data transmission
+            let stream = OnionStream::new(circuit_id.to_string());
+            
+            // In a full implementation, we would establish the actual stream connection here
+            // For now, we return a stream that can be used with send_via_swarm/receive_from_swarm
+            info!("✅ Successfully created onion stream for Faisal Swarm circuit {}", circuit_id);
+            Ok(stream)
+        } else {
+            Err(SwarmControllerError::CircuitError("Faisal Swarm Manager not initialized".to_string()))
+        }
     }
 }
 
 /// Transport capabilities for different platforms
 #[derive(Debug, Clone)]
 pub struct TransportCapabilities {
+    /// Whether the transport supports direct peer-to-peer connections
     pub supports_direct_p2p: bool,
+    /// Whether the transport supports NAT traversal (hole punching)
     pub supports_nat_traversal: bool,
+    /// Whether the transport supports relay connections
     pub supports_relay: bool,
+    /// Maximum number of hops supported by the transport
     pub max_hops: u8,
+    /// Minimum number of hops required by the transport
     pub min_hops: u8,
 }
 
 /// Errors that can occur in the swarm controller
 #[derive(Debug, thiserror::Error)]
 pub enum SwarmControllerError {
+    /// Not connected to the swarm network
     #[error("Not connected to swarm")]
     NotConnected,
     
+    /// Error communicating with signaling server
     #[error("Signaling error: {0}")]
     SignalingError(String),
     
+    /// Transport layer error
     #[error("Transport error: {0}")]
     TransportError(String),
     
+    /// Invalid circuit configuration provided
     #[error("Invalid circuit configuration: {0}")]
     InvalidCircuitConfig(String),
     
+    /// Not enough peers available to form circuit
     #[error("Not enough peers available: {0}")]
     NotEnoughPeers(String),
     
+    /// Error in circuit establishment or operation
     #[error("Circuit error: {0}")]
     CircuitError(String),
     
+    /// I/O operation error
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }

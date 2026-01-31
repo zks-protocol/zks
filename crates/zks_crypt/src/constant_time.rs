@@ -211,6 +211,64 @@ pub fn ct_xor(a: &[u8], b: &[u8]) -> Vec<u8> {
     result
 }
 
+/// Constant-time check if a value is less than a threshold
+/// 
+/// Returns `true` if `value < threshold`, `false` otherwise.
+/// The execution time is independent of the input values.
+/// 
+/// # Security Warning
+/// This function is designed for cryptographic purposes only.
+/// Do NOT use this for non-cryptographic purposes.
+pub fn ct_lt_u64(value: u64, threshold: u64) -> bool {
+    // Use wrapping subtraction to avoid branching
+    let diff = value.wrapping_sub(threshold);
+    // Check if the result has the high bit set (indicating value < threshold)
+    (diff >> 63) != 0
+}
+
+/// Constant-time check if a value is greater than a threshold
+/// 
+/// Returns `true` if `value > threshold`, `false` otherwise.
+/// The execution time is independent of the input values.
+/// 
+/// # Security Warning
+/// This function is designed for cryptographic purposes only.
+/// Do NOT use this for non-cryptographic purposes.
+pub fn ct_gt_u64(value: u64, threshold: u64) -> bool {
+    // Use wrapping subtraction to avoid branching
+    let diff = threshold.wrapping_sub(value);
+    // Check if the result has the high bit set (indicating value > threshold)
+    (diff >> 63) != 0
+}
+
+/// Constant-time check if a value is less than a threshold (usize version)
+/// 
+/// Returns `true` if `value < threshold`, `false` otherwise.
+/// The execution time is independent of the input values.
+/// 
+/// # Security Warning
+/// This function is designed for cryptographic purposes only.
+/// Do NOT use this for non-cryptographic purposes.
+pub fn ct_lt_usize(value: usize, threshold: usize) -> bool {
+    // Use wrapping subtraction to avoid branching
+    let diff = value.wrapping_sub(threshold);
+    // Check if the result has the high bit set (indicating value < threshold)
+    (diff >> (usize::BITS - 1)) != 0
+}
+
+/// Constant-time check if two values are equal (usize version)
+/// 
+/// Returns `true` if `a == b`, `false` otherwise.
+/// The execution time is independent of the input values.
+/// 
+/// # Security Warning
+/// This function is designed for cryptographic purposes only.
+/// Do NOT use this for non-cryptographic purposes.
+pub fn ct_eq_usize(a: usize, b: usize) -> bool {
+    // Use XOR to check equality without branching
+    a ^ b == 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -244,6 +302,34 @@ mod tests {
         
         assert!(ct_eq_fixed(&a, &b));
         assert!(!ct_eq_fixed(&a, &c));
+    }
+    
+    #[test]
+    fn test_ct_lt_u64() {
+        // Test less than
+        assert!(ct_lt_u64(10, 20));
+        assert!(ct_lt_u64(0, 1));
+        assert!(ct_lt_u64(u64::MAX - 1, u64::MAX));
+        
+        // Test not less than
+        assert!(!ct_lt_u64(20, 10));
+        assert!(!ct_lt_u64(10, 10));
+        assert!(!ct_lt_u64(u64::MAX, u64::MAX - 1));
+        assert!(!ct_lt_u64(0, 0));
+    }
+    
+    #[test]
+    fn test_ct_gt_u64() {
+        // Test greater than
+        assert!(ct_gt_u64(20, 10));
+        assert!(ct_gt_u64(1, 0));
+        assert!(ct_gt_u64(u64::MAX, u64::MAX - 1));
+        
+        // Test not greater than
+        assert!(!ct_gt_u64(10, 20));
+        assert!(!ct_gt_u64(10, 10));
+        assert!(!ct_gt_u64(u64::MAX - 1, u64::MAX));
+        assert!(!ct_gt_u64(0, 0));
     }
     
     #[test]
@@ -318,5 +404,32 @@ mod tests {
         
         let result = ct_xor(&a, &b);
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_ct_lt_usize() {
+        // Test less than
+        assert!(ct_lt_usize(10, 20));
+        assert!(ct_lt_usize(0, 1));
+        assert!(ct_lt_usize(usize::MAX - 1, usize::MAX));
+        
+        // Test not less than
+        assert!(!ct_lt_usize(20, 10));
+        assert!(!ct_lt_usize(10, 10));
+        assert!(!ct_lt_usize(usize::MAX, usize::MAX - 1));
+        assert!(!ct_lt_usize(0, 0));
+    }
+
+    #[test]
+    fn test_ct_eq_usize() {
+        // Test equal
+        assert!(ct_eq_usize(10, 10));
+        assert!(ct_eq_usize(0, 0));
+        assert!(ct_eq_usize(usize::MAX, usize::MAX));
+        
+        // Test not equal
+        assert!(!ct_eq_usize(10, 20));
+        assert!(!ct_eq_usize(0, 1));
+        assert!(!ct_eq_usize(usize::MAX, usize::MAX - 1));
     }
 }

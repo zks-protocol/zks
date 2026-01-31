@@ -150,10 +150,10 @@ impl ZkUrl {
                         e
                     )))?;
                 
-                // Validate key size (ML-DSA-65 public key = 1952 bytes)
-                if decoded.len() != 1952 {
+                // Validate key size (ML-DSA-87 public key = 2592 bytes)
+                if decoded.len() != 2592 {
                     return Err(ProtoError::invalid_url(format!(
-                        "Invalid responder key size: expected 1952 bytes (ML-DSA-65), got {}",
+                        "Invalid responder key size: expected 2592 bytes (ML-DSA-87), got {}",
                         decoded.len()
                     )));
                 }
@@ -170,7 +170,7 @@ impl ZkUrl {
     /// # Arguments
     /// * `host` - Target hostname or IP
     /// * `port` - Target port
-    /// * `responder_key` - ML-DSA-65 public key of the responder (required for security)
+    /// * `responder_key` - ML-DSA-87 public key of the responder (required for security)
     pub fn direct_with_key(host: &str, port: u16, responder_key: Vec<u8>) -> Self {
         use base64::{Engine, engine::general_purpose::STANDARD};
         let key_b64 = STANDARD.encode(&responder_key);
@@ -336,7 +336,12 @@ mod tests {
     
     #[test]
     fn test_direct_url_parsing() {
-        let url = ZkUrl::parse("zk://192.168.1.1:8080").unwrap();
+        // Create a dummy ML-DSA-87 public key (2592 bytes required)
+        let dummy_key = vec![0u8; 2592];
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let key_b64 = STANDARD.encode(&dummy_key);
+        
+        let url = ZkUrl::parse(&format!("zk://192.168.1.1:8080?key={}", key_b64)).unwrap();
         assert_eq!(url.scheme, UrlScheme::Direct);
         assert_eq!(url.mode, ProtocolMode::Direct);
         assert_eq!(url.host, "192.168.1.1");
@@ -364,7 +369,8 @@ mod tests {
     
     #[test]
     fn test_url_creation() {
-        let direct = ZkUrl::direct("localhost", 8080);
+        let dummy_key = vec![1u8; 32]; // Dummy ML-DSA-65 public key
+        let direct = ZkUrl::direct_with_key("localhost", 8080, dummy_key);
         assert_eq!(direct.scheme, UrlScheme::Direct);
         assert_eq!(direct.host, "localhost");
         assert_eq!(direct.port, 8080);
@@ -377,8 +383,13 @@ mod tests {
     
     #[test]
     fn test_display() {
-        let url = ZkUrl::parse("zk://192.168.1.1:8080").unwrap();
-        assert_eq!(url.to_string(), "zk://192.168.1.1:8080");
+        // Create a dummy ML-DSA-87 public key (2592 bytes required)
+        let dummy_key = vec![0u8; 2592];
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let key_b64 = STANDARD.encode(&dummy_key);
+        
+        let url = ZkUrl::parse(&format!("zk://192.168.1.1:8080?key={}", key_b64)).unwrap();
+        assert_eq!(url.to_string(), format!("zk://192.168.1.1:8080?key={}", key_b64));
     }
     
     #[test]
@@ -402,16 +413,21 @@ mod tests {
     
     #[test]
     fn test_valid_hostnames() {
+        // Create a dummy ML-DSA-65 public key (1952 bytes required)
+        let dummy_key = vec![0u8; 1952];
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        let key_b64 = STANDARD.encode(&dummy_key);
+        
         // Valid domain names
-        assert!(ZkUrl::parse("zk://example.com:8080").is_ok());
-        assert!(ZkUrl::parse("zk://sub.example.com:8080").is_ok());
-        assert!(ZkUrl::parse("zk://my-host:8080").is_ok());
-        assert!(ZkUrl::parse("zk://host-123:8080").is_ok());
+        assert!(ZkUrl::parse(&format!("zk://example.com:8080?key={}", key_b64)).is_ok());
+        assert!(ZkUrl::parse(&format!("zk://sub.example.com:8080?key={}", key_b64)).is_ok());
+        assert!(ZkUrl::parse(&format!("zk://my-host:8080?key={}", key_b64)).is_ok());
+        assert!(ZkUrl::parse(&format!("zk://host-123:8080?key={}", key_b64)).is_ok());
         
         // Valid IP addresses
-        assert!(ZkUrl::parse("zk://192.168.1.1:8080").is_ok());
-        assert!(ZkUrl::parse("zk://10.0.0.1:8080").is_ok());
-        assert!(ZkUrl::parse("zk://172.16.0.1:8080").is_ok());
-        assert!(ZkUrl::parse("zk://127.0.0.1:8080").is_ok());
+        assert!(ZkUrl::parse(&format!("zk://192.168.1.1:8080?key={}", key_b64)).is_ok());
+        assert!(ZkUrl::parse(&format!("zk://10.0.0.1:8080?key={}", key_b64)).is_ok());
+        assert!(ZkUrl::parse(&format!("zk://172.16.0.1:8080?key={}", key_b64)).is_ok());
+        assert!(ZkUrl::parse(&format!("zk://127.0.0.1:8080?key={}", key_b64)).is_ok());
     }
 }

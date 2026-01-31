@@ -192,10 +192,15 @@ impl RecursiveChain {
 
 /// Serializable chain state
 pub struct ChainState {
+    /// The shared chain state value
     pub chain: [u8; 32],
+    /// Alice's key for this generation
     pub alice_key: [u8; 32],
+    /// Bob's key for this generation
     pub bob_key: [u8; 32],
+    /// Current generation number
     pub generation: u64,
+    /// Whether this is Alice's side of the chain
     pub is_alice: bool,
 }
 

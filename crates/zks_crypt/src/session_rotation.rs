@@ -308,7 +308,11 @@ mod tests {
     #[test]
     fn test_needs_rotation() {
         let secret = [0x42u8; 32];
-        let config = SessionRotationConfig::with_interval(Duration::from_millis(100));
+        
+        // Create a test configuration that bypasses the minimum interval
+        let mut config = SessionRotationConfig::default();
+        config.rotation_interval = Duration::from_millis(100);
+        
         let session = RotatingSession::new(secret, 1000000, config);
         
         // Should not need rotation immediately

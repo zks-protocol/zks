@@ -2,133 +2,55 @@
 
 ## Supported Versions
 
-| Version | Supported |
-|---------|-----------|
-| 0.1.x   | ✅ Yes    |
-
----
-
-## Security Model
-
-### Cryptographic Guarantees
-
-| Component | Algorithm | Security Level |
-|-----------|-----------|----------------|
-| Key Exchange | ML-KEM-768 | NIST Level 3 (192-bit PQ) |
-| Signatures | ML-DSA-65 (Dilithium3) | NIST Level 3 |
-| Encryption | ChaCha20-Poly1305 | 256-bit symmetric |
-| Key Derivation | HKDF-SHA256 | RFC 5869 |
-| TRUE Random | drand beacon | Decentralized, verifiable |
-
-### Protocol Security
-
-| Protocol | Content Protected | IP Hidden | Quantum Safe |
-|----------|-------------------|-----------|--------------|
-| `zk://`  | ✅ Unbreakable | ❌ | ✅ |
-| `zks://` | ✅ Unbreakable | ✅ Onion routing | ✅ |
-
----
-
-## Threat Model
-
-### What We Protect Against
-
-| Threat | Protection |
-|--------|------------|
-| Passive eavesdropping | ✅ All traffic encrypted |
-| Active MITM | ✅ Authenticated handshake |
-| Quantum computers | ✅ ML-KEM + ML-DSA |
-| Traffic correlation (ZKS) | ✅ Multi-hop routing |
-| Replay attacks | ✅ Nonce counters + anti-replay |
-| Key compromise (current) | ✅ Forward secrecy via key rotation |
-
-### What We Do NOT Protect Against
-
-| Threat | Mitigation |
-|--------|------------|
-| Endpoint compromise | Use secure devices |
-| Side-channel attacks | Audit physical security |
-| Timing attacks | Constant-time operations used |
-| Social engineering | User education |
-
----
-
-## Key Management
-
-### Secret Key Handling
-
-All secret keys use `Zeroizing<T>` from the `zeroize` crate:
-- Keys are zeroed on drop
-- No keys in debug output
-- Constant-time comparison
-
-### Key Rotation
-
-| Mode | Rotation Frequency |
-|------|-------------------|
-| Standard | Every 1000 messages |
-| TRUE Vernam | Continuous (per-byte) |
-
----
+| Version | Supported          |
+| ------- | ------------------ |
+| 0.1.x   | :white_check_mark: |
 
 ## Reporting a Vulnerability
 
-### Responsible Disclosure
+**DO NOT** open a public GitHub issue for security vulnerabilities.
 
-**DO NOT** open a public issue for security vulnerabilities.
+### How to Report
 
-**Email:** md.wasif.faisal@g.bracu.ac.bd
+1. **Email** (preferred): security@zks.wasif.app
+2. **GitHub Private Advisory**: [Create a private security advisory](https://github.com/zks-protocol/zks/security/advisories/new)
 
 ### What to Include
 
-1. Description of the vulnerability
-2. Steps to reproduce
-3. Potential impact
-4. Suggested fix (if any)
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact
+- Any suggested fixes (optional)
 
 ### Response Timeline
 
-| Action | Timeframe |
-|--------|-----------|
-| Acknowledgment | 24 hours |
-| Initial assessment | 72 hours |
-| Fix development | 7-30 days |
-| Public disclosure | After fix released |
+- **Initial Response**: Within 48 hours
+- **Status Update**: Within 7 days
+- **Fix Timeline**: Depends on severity
+  - Critical: 24-72 hours
+  - High: 7 days
+  - Medium: 30 days
+  - Low: 90 days
 
----
+### Disclosure Policy
 
-## Security Audits
+We follow responsible disclosure:
+1. We will acknowledge your report within 48 hours
+2. We will work with you to understand and validate the issue
+3. We will develop and test a fix
+4. We will coordinate public disclosure timing with you
+5. We will credit you in security advisories (unless you prefer anonymity)
 
-| Date | Auditor | Status |
-|------|---------|--------|
-| TBD | Independent auditor | Planned |
+## Security Measures
 
----
+ZKS Protocol implements multiple layers of security:
 
-## Cryptographic Dependencies
+- **Post-Quantum Cryptography**: ML-KEM-768 for key exchange
+- **Information-Theoretic Security**: Wasif-Vernam cipher
+- **Memory Safety**: Written in Rust
+- **Anti-Replay Protection**: Bitmap-based nonce tracking
+- **Formal Verification**: Critical components verified with ProVerif
 
-All cryptographic implementations use well-audited libraries:
+## Bug Bounty
 
-| Dependency | Purpose | Audited |
-|------------|---------|---------|
-| `chacha20poly1305` | AEAD cipher | ✅ RustCrypto |
-| `ml-kem` | Post-quantum KEM | ✅ dalek-cryptography |
-| `pqcrypto-dilithium` | Post-quantum signatures | ✅ pqcrypto |
-| `hkdf` | Key derivation | ✅ RustCrypto |
-| `sha2` | Hashing | ✅ RustCrypto |
-
----
-
-## Best Practices for Users
-
-1. **Keep dependencies updated** — Run `cargo update` regularly
-2. **Use TrueVernam for sensitive data** — Maximum security
-3. **Use zks:// for anonymity** — IP hidden via swarm
-4. **Backup keys securely** — Use hardware security modules for production
-5. **Monitor for anomalies** — Log failed authentications
-
----
-
-## License
-
-AGPL-3.0 — See [LICENSE](LICENSE)
+We do not currently have a formal bug bounty program, but we deeply appreciate security researchers who responsibly disclose vulnerabilities and will acknowledge your contribution publicly.

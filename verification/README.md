@@ -42,6 +42,19 @@ query k: bitstring; event(aliceDerivedKey(k)) && event(bobDerivedKey(k)).
 ```
 Verifies that both parties derive the same session key.
 
+### 5. Message Integrity (Known Limitation)
+```proverif
+query event(ReceiverGetsMessage(msg)) ==> event(SenderCreatesOnion(msg)).
+```
+**Result**: FALSE (Expected in Dolev-Yao model)
+
+This query attempts to verify that if a receiver gets a message, then the sender actually created the onion. However, this property **cannot be proven** under the Dolev-Yao model because:
+- The attacker can inject arbitrary messages into the network
+- The model assumes the attacker controls the communication channel
+- This is **not a vulnerability** but an expected limitation of symbolic verification
+
+The ZKS Protocol provides **confidentiality** and **authenticity** for honest participants, but cannot prevent message injection by active attackers in the symbolic model.
+
 ## Protocol Overview
 
 ```

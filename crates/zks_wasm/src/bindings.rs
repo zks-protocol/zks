@@ -19,6 +19,7 @@ use crate::{
 #[wasm_bindgen]
 pub struct ZksOnionTransport {
     inner: Arc<Mutex<BrowserOnionTransport>>,
+    #[allow(dead_code)]
     message_queue: Arc<VecDeque<Vec<u8>>>,
 }
 

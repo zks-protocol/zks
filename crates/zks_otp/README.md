@@ -16,7 +16,7 @@ A Rust implementation of information-theoretically secure file encryption using 
 > - **Strict Mode** provides *information-theoretic security* (ITS) when using truly random keys from a hardware RNG.
 > - **Efficient Mode** provides *computational security* (ChaCha20-Poly1305), which is NOT information-theoretically secure.
 > - System RNG (`getrandom`) provides *cryptographically secure* randomness, but not *true* randomness for ITS.
-> - Intel RDSEED provides hardware entropy that is *probably* true random, but cannot be independently verified.
+> - Intel RDSEED provides hardware entropy that is *computationally indistinguishable* from true random, but cannot be independently verified for information-theoretic security proofs.
 
 ## Installation
 

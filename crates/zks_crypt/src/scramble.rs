@@ -15,7 +15,7 @@
 //! 3. Receiver: unscramble(data) after reception
 //! 4. Mapping is deterministic - both sides produce identical tables
 
-use sha2::{Sha256, Digest};
+
 
 /// Maximum data size we support scrambling (64KB)
 /// Larger data should be chunked

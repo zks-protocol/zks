@@ -257,9 +257,11 @@ impl StunClient {
         // Magic cookie: 0x2112A442
         request.extend_from_slice(&[0x21, 0x12, 0xA4, 0x42]);
         
-        // Transaction ID: 12 cryptographically random bytes for security
+        // Transaction ID: 12 TRUE random bytes (drand + OsRng) for information-theoretic security
+        use zks_crypt::true_entropy::get_sync_entropy;
+        let entropy = get_sync_entropy(12);
         let mut transaction_id = [0u8; 12];
-        getrandom::getrandom(&mut transaction_id).map_err(|_| WireError::stun("Failed to generate random transaction ID"))?;
+        transaction_id.copy_from_slice(&entropy);
         request.extend_from_slice(&transaction_id);
         
         Ok(request)

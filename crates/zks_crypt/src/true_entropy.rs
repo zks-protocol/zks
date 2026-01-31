@@ -48,33 +48,60 @@ use zeroize::Zeroizing;
 use tracing::{debug, warn};
 
 use crate::drand::DrandEntropy;
+use crate::entropy_provider::EntropyProvider;
 
 /// Global TrueEntropy instance for efficient reuse
 static GLOBAL_TRUE_ENTROPY: OnceLock<Arc<TrueEntropy>> = OnceLock::new();
 
-/// Distributed Entropy Provider: Combines drand + local CSPRNG
+/// Distributed Entropy Provider: Combines entropy sources + local CSPRNG
 /// 
 /// ## Security Properties
-/// - XOR combination of TWO entropy sources
+/// - XOR combination of entropy sources
 /// - 256-bit post-quantum computational security
-/// - drand: 32 bytes BLS12-381 verified randomness (18+ operators)
+/// - Support for hierarchical entropy fetching via EntropyGrid
 /// - Local CSPRNG: fallback entropy source
 /// - Automatic fallback if beacon unavailable
+/// 
+/// ## Entropy Sources (via EntropyProvider)
+/// 1. EntropyGrid: Cache → Swarm → IPFS → drand API
+/// 2. DirectDrandProvider: Direct drand API (default)
 /// 
 /// ## Trust Model
 /// No single-provider trust. drand requires threshold of 18+ independent
 /// operators across multiple jurisdictions to be compromised.
 pub struct TrueEntropy {
-    /// drand client for 32-byte distributed randomness
+    /// drand client for 32-byte distributed randomness (legacy direct access)
     drand: Arc<DrandEntropy>,
+    /// Pluggable entropy provider (supports EntropyGrid hierarchical fetching)
+    entropy_provider: Option<Arc<dyn EntropyProvider>>,
 }
 
 impl TrueEntropy {
-    /// Create a new TrueEntropy instance
+    /// Create a new TrueEntropy instance with default direct drand provider
     pub fn new() -> Self {
         Self {
             drand: Arc::new(DrandEntropy::new()),
+            entropy_provider: None,
         }
+    }
+
+    /// Create TrueEntropy with a custom entropy provider (e.g., EntropyGrid)
+    /// 
+    /// This enables hierarchical entropy fetching:
+    /// 1. Local cache (fastest)
+    /// 2. Swarm peers (P2P via GossipSub)
+    /// 3. IPFS (decentralized storage)
+    /// 4. drand API (final fallback)
+    pub fn with_provider(provider: Arc<dyn EntropyProvider>) -> Self {
+        Self {
+            drand: Arc::new(DrandEntropy::new()),
+            entropy_provider: Some(provider),
+        }
+    }
+
+    /// Set the entropy provider dynamically
+    pub fn set_provider(&mut self, provider: Arc<dyn EntropyProvider>) {
+        self.entropy_provider = Some(provider);
     }
 
     /// Get the global TrueEntropy instance (singleton pattern)
@@ -87,12 +114,13 @@ impl TrueEntropy {
         }).clone()
     }
 
-    /// Get entropy asynchronously by combining drand + local CSPRNG
+    /// Get entropy asynchronously by combining entropy sources + local CSPRNG
     /// 
     /// ## Security
     /// Returns 256-bit post-quantum computational security:
-    /// - drand beacon (32 bytes BLS-verified, 18+ operators)
-    /// - Local CSPRNG (fallback)
+    /// - EntropyGrid: Cache → Swarm → IPFS → drand API (if configured)
+    /// - Direct drand: BLS-verified 32 bytes (fallback)
+    /// - Local CSPRNG (always XORed)
     /// 
     /// All sources are XORed together for defense-in-depth.
     pub async fn get_entropy(&self, length: usize) -> Zeroizing<Vec<u8>> {
@@ -107,18 +135,23 @@ impl TrueEntropy {
             let _ = rng.fill(&mut local_entropy);
         }
         
-        // 2. Try to get drand entropy (32 bytes BLS-verified)
-        let drand_entropy: Vec<u8> = match self.drand.get_entropy_with_fallback().await {
-            Ok(entropy) => {
-                debug!("✅ Got BLS-verified drand entropy (32 bytes, 18+ operators)");
-                entropy.to_vec()
-            },
-            Err(e) => {
-                warn!("⚠️ drand unavailable: {}. Using local entropy only.", e);
-                let mut fallback = vec![0u8; 32];
-                let _ = getrandom::getrandom(&mut fallback);
-                fallback
+        // 2. Get drand entropy via EntropyProvider (or direct fallback)
+        let drand_entropy: Vec<u8> = if let Some(provider) = &self.entropy_provider {
+            // Use hierarchical fetching: Cache → Swarm → IPFS → drand API
+            let current_round = self.drand.current_round();
+            match provider.fetch_round(current_round).await {
+                Ok(round) => {
+                    debug!("✅ Got entropy via EntropyGrid (round {})", round.round);
+                    round.randomness.to_vec()
+                },
+                Err(e) => {
+                    warn!("⚠️ EntropyProvider failed: {}. Falling back to direct drand.", e);
+                    self.fetch_direct_drand().await
+                }
             }
+        } else {
+            // Direct drand fallback (no EntropyGrid configured)
+            self.fetch_direct_drand().await
         };
         
         // 3. Expand drand entropy if needed (beyond 32 bytes)
@@ -213,6 +246,22 @@ impl TrueEntropy {
         result.copy_from_slice(&entropy[..32]);
         result
     }
+
+    /// Fetch drand entropy directly (bypassing EntropyGrid)
+    async fn fetch_direct_drand(&self) -> Vec<u8> {
+        match self.drand.get_entropy_with_fallback().await {
+            Ok(entropy) => {
+                debug!("✅ Got BLS-verified drand entropy (32 bytes, 18+ operators)");
+                entropy.to_vec()
+            },
+            Err(e) => {
+                warn!("⚠️ drand unavailable: {}. Using local entropy only.", e);
+                let mut fallback = vec![0u8; 32];
+                let _ = getrandom::getrandom(&mut fallback);
+                fallback
+            }
+        }
+    }
 }
 
 impl Default for TrueEntropy {
@@ -225,7 +274,6 @@ impl Default for TrueEntropy {
 // ENTROPY PROVIDER ADAPTER
 // =============================================================================
 
-use crate::entropy_provider::EntropyProvider;
 use crate::entropy_block::DrandRound;
 use crate::drand::DrandError;
 use async_trait::async_trait;

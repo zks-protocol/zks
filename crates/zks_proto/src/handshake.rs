@@ -9,7 +9,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Serialize, Deserialize};
 use sha2::{Sha256, Digest};
 use subtle::ConstantTimeEq;
-use getrandom::getrandom;
 use hkdf::Hkdf;
 use zks_pqcrypto::ml_kem::{MlKem, MlKemKeypair};
 use zks_pqcrypto::ml_dsa::{MlDsa, MlDsaKeypair};
@@ -235,10 +234,16 @@ impl Handshake {
         Ok(public_key)
     }
     
-    /// Generate random nonce using getrandom for better security
+    /// Generate random nonce using TRUE entropy (drand + OsRng)
+    /// 
+    /// # Security
+    /// Uses TrueEntropy which combines drand beacon + local CSPRNG via XOR
+    /// for information-theoretic security. Unbreakable if ANY source is uncompromised.
     fn generate_nonce(&mut self) -> Result<[u8; 32]> {
-        let mut nonce = [0u8; 32];
-        getrandom(&mut nonce).map_err(|e| ProtoError::handshake(&format!("Failed to generate random nonce: {}", e)))?;
+        // SECURITY: Use TrueEntropy for information-theoretic security
+        use zks_crypt::true_entropy::get_sync_entropy_32;
+        let entropy = get_sync_entropy_32();
+        let nonce = *entropy;  // Copy the 32 bytes
         self.local_nonce = Some(nonce);
         Ok(nonce)
     }
@@ -462,8 +467,9 @@ impl Handshake {
         let trusted_public_key = self.trusted_responder_public_key.as_ref()
             .ok_or_else(|| ProtoError::handshake("No trusted responder public key available"))?;
         
-        // Verify that the public key in the response matches the trusted key
-        if response.signing_public_key != *trusted_public_key {
+        // SECURITY: Use constant-time comparison to prevent timing attacks
+        // This prevents an attacker from learning which bytes differ through timing analysis
+        if !bool::from(response.signing_public_key.as_slice().ct_eq(trusted_public_key.as_slice())) {
             return Err(ProtoError::handshake(
                 "Responder public key does not match trusted key. Possible MITM attack."
             ));
@@ -543,10 +549,17 @@ impl Handshake {
         let salt = b"ZK_HANDSHAKE_HKDF_SALT_V1";
         
         // Use HKDF to derive a strong shared secret
+        // SECURITY: HKDF-SHA256 expand should never fail for 32-byte output,
+        // but we handle it gracefully instead of panicking (defense-in-depth)
         let hkdf = Hkdf::<Sha256>::new(Some(salt), &key_material);
         let mut shared_secret = [0u8; 32];
-        hkdf.expand(b"ZK_HANDSHAKE_SHARED_SECRET_V1", &mut shared_secret)
-            .expect("HKDF expansion failed");
+        if hkdf.expand(b"ZK_HANDSHAKE_SHARED_SECRET_V1", &mut shared_secret).is_err() {
+            // Fallback: use direct SHA256 hash if HKDF fails (should never happen)
+            let mut hasher = Sha256::new();
+            hasher.update(&key_material);
+            hasher.update(b"ZK_HANDSHAKE_FALLBACK_V1");
+            shared_secret.copy_from_slice(&hasher.finalize());
+        }
         
         shared_secret
     }

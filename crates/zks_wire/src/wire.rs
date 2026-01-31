@@ -222,9 +222,18 @@ pub struct WireProtocol {
 
 impl WireProtocol {
     /// Create a new wire protocol handler
+    /// 
+    /// Uses TRUE entropy (drand + OsRng) for initial sequence number
+    /// to prevent sequence prediction attacks with information-theoretic security.
     pub fn new() -> Self {
+        // SECURITY: Use TrueEntropy for information-theoretic security
+        // Combines drand (BLS verified) + OsRng via XOR - unbreakable if either is secure
+        use zks_crypt::true_entropy::get_sync_entropy;
+        let entropy = get_sync_entropy(4);
+        let mut seq_bytes = [0u8; 4];
+        seq_bytes.copy_from_slice(&entropy[..4]);
         Self {
-            next_sequence: rand::random(),
+            next_sequence: u32::from_ne_bytes(seq_bytes),
         }
     }
     

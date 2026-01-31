@@ -347,6 +347,7 @@ impl MlKem {
         }
 
         // Create the encapsulation key from bytes
+        // SAFETY: unwrap is safe here because we validated length == PUBLIC_KEY_SIZE above
         let ek = EncapsulationKey::<MlKem1024Params>::from_bytes(public_key.try_into().unwrap());
         
         // Use our compatible OS RNG for encapsulation
@@ -391,6 +392,7 @@ impl MlKem {
         }
 
         // Create the encapsulation key from bytes
+        // SAFETY: unwrap is safe here because we validated length == PUBLIC_KEY_SIZE above
         let ek = EncapsulationKey::<MlKem1024Params>::from_bytes(public_key.try_into().unwrap());
         
         // Use RNG with external entropy injection
@@ -444,9 +446,11 @@ impl MlKem {
         }
 
         // Create the decapsulation key from bytes
+        // SAFETY: unwrap is safe here because we validated length == SECRET_KEY_SIZE above
         let dk = DecapsulationKey::<MlKem1024Params>::from_bytes(secret_key.try_into().unwrap());
 
         // Decapsulate using the secret key and ciphertext
+        // SAFETY: unwrap is safe here because we validated length == CIPHERTEXT_SIZE above
         let shared_secret = dk.decapsulate(ciphertext.try_into().unwrap())
             .map_err(|()| PqcError::MlKem("Decapsulation failed".to_string()))?;
 

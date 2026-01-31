@@ -48,7 +48,8 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 use zeroize::Zeroizing;
 use ring::rand::SecureRandom;
-use crate::constant_time::{ct_is_zero, ct_eq};
+use crate::constant_time::{ct_is_zero, ct_eq, ct_lt_u64, ct_gt_u64, ct_lt_usize, ct_eq_usize};
+use crate::entropy_block::DrandRound;
 
 // =============================================================================
 // Global HTTP Client Singleton
@@ -99,7 +100,8 @@ fn validate_drand_entropy(response: &DrandResponse, randomness_bytes: &[u8]) -> 
     
     // Check for obvious patterns that suggest tampering
     let unique_bytes: std::collections::HashSet<u8> = randomness_bytes.iter().cloned().collect();
-    if unique_bytes.len() < 16 {
+    // SECURITY: Use constant-time comparison to prevent timing attacks
+    if ct_lt_u64(unique_bytes.len() as u64, 16) {
         return Err(DrandError::ParseError(
             "Entropy has too few unique bytes - possible tampering".to_string()
         ));
@@ -115,7 +117,8 @@ fn validate_drand_entropy(response: &DrandResponse, randomness_bytes: &[u8]) -> 
     let expected_round = current_time / 30;
     let round_diff = response.round.abs_diff(expected_round);
     
-    if round_diff > 100 {
+    // SECURITY: Use constant-time comparison to prevent timing attacks
+    if ct_gt_u64(round_diff, 100) {
         warn!(
             "Drand round {} is far from expected {} (diff: {})",
             response.round, expected_round, round_diff
@@ -136,7 +139,8 @@ fn validate_drand_entropy(response: &DrandResponse, randomness_bytes: &[u8]) -> 
     // BLS signature verification implemented below via verify_drand_bls_signature()
     // Supports mainnet (G2 sigs) and quicknet (G1 sigs)
     // For now, we also validate the signature format
-    if response.signature.len() < 64 {
+    // SECURITY: Use constant-time comparison to prevent timing attacks
+    if ct_lt_usize(response.signature.len(), 64) {
         return Err(DrandError::ParseError("Signature too short".to_string()));
     }
     
@@ -148,7 +152,8 @@ fn validate_drand_entropy(response: &DrandResponse, randomness_bytes: &[u8]) -> 
         }
     };
     
-    if sig_bytes.len() < 48 {
+    // SECURITY: Use constant-time comparison to prevent timing attacks
+    if ct_lt_usize(sig_bytes.len(), 48) {
         return Err(DrandError::ParseError("Decoded signature too short for BLS".to_string()));
     }
     
@@ -156,7 +161,8 @@ fn validate_drand_entropy(response: &DrandResponse, randomness_bytes: &[u8]) -> 
     // Auto-detect scheme based on signature length:
     // - 48 bytes = G1 signature (quicknet)
     // - 96 bytes = G2 signature (mainnet)
-    let scheme = if sig_bytes.len() == 48 {
+    // SECURITY: Use constant-time comparison to prevent timing attacks
+    let scheme = if ct_eq_usize(sig_bytes.len(), 48) {
         DrandScheme::UnchainedOnG1
     } else {
         DrandScheme::PedersenBlsUnchained // Default to unchained for api.drand.sh
@@ -436,7 +442,7 @@ impl DrandEntropy {
         let mut last_error = None;
         
         // Try each configured endpoint with retries
-        for (endpoint_idx, base_url) in self.config.api_urls.iter().enumerate() {
+        for (_endpoint_idx, base_url) in self.config.api_urls.iter().enumerate() {
             for attempt in 0..self.config.max_retries {
                 let url = match &self.config.chain_hash {
                     Some(hash) => format!("{}/{}/public/latest", base_url, hash),
@@ -445,7 +451,7 @@ impl DrandEntropy {
 
                 debug!(
                     "Fetching drand entropy from endpoint {} (attempt {}/{}): {}",
-                    endpoint_idx + 1,
+                    _endpoint_idx + 1,
                     attempt + 1,
                     self.config.max_retries,
                     url
@@ -560,7 +566,7 @@ impl DrandEntropy {
         let mut last_error = None;
         
         // Try each configured endpoint with retries
-        for (endpoint_idx, base_url) in self.config.api_urls.iter().enumerate() {
+        for (_endpoint_idx, base_url) in self.config.api_urls.iter().enumerate() {
             for attempt in 0..self.config.max_retries {
                 let url = match &self.config.chain_hash {
                     Some(hash) => format!("{}/{}/public/{}", base_url, hash, round),
@@ -570,7 +576,7 @@ impl DrandEntropy {
                 debug!(
                     "Fetching drand round {} from endpoint {} (attempt {}/{}): {}",
                     round,
-                    endpoint_idx + 1,
+                    _endpoint_idx + 1,
                     attempt + 1,
                     self.config.max_retries,
                     url
@@ -647,6 +653,165 @@ impl DrandEntropy {
     pub async fn cached_round(&self) -> Option<u64> {
         let cache = self.cache.read().await;
         cache.as_ref().map(|c| c.round)
+    }
+
+    /// Calculate the current expected drand round number
+    /// 
+    /// drand updates every 30 seconds, so round = current_time / 30
+    pub fn current_round(&self) -> u64 {
+        let current_time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        current_time / 30
+    }
+
+    /// Fetch a range of drand rounds efficiently
+    /// 
+    /// This method fetches multiple rounds in sequence and returns them as a vector.
+    /// It's optimized for bulk fetching of entropy blocks.
+    /// 
+    /// # Arguments
+    /// * `start_round` - The first round to fetch (inclusive)
+    /// * `end_round` - The last round to fetch (inclusive)
+    /// 
+    /// # Returns
+    /// A vector of DrandRound structs containing all rounds in the range
+    /// 
+    /// # Errors
+    /// Returns DrandError if any round in the range fails to fetch
+    pub async fn fetch_range(&self, start_round: u64, end_round: u64) -> Result<Vec<DrandRound>, DrandError> {
+        if start_round > end_round {
+            return Err(DrandError::InvalidInput(format!(
+                "Invalid range: start_round ({}) > end_round ({})",
+                start_round, end_round
+            )));
+        }
+
+        if end_round - start_round + 1 > 1_000_000 {
+            return Err(DrandError::InvalidInput(format!(
+                "Range too large: {} rounds (max: 1,000,000)",
+                end_round - start_round + 1
+            )));
+        }
+
+        let mut rounds = Vec::with_capacity((end_round - start_round + 1) as usize);
+        
+        info!("Fetching drand range {}-{} ({} rounds)", start_round, end_round, end_round - start_round + 1);
+        
+        for round_num in start_round..=end_round {
+            match self.fetch_round_with_signatures(round_num).await {
+                Ok(drand_round) => {
+                    rounds.push(drand_round);
+                    
+                    // Progress logging for large ranges
+                    if rounds.len() % 1000 == 0 {
+                        debug!("Fetched {} rounds ({}%)", rounds.len(), 
+                               (rounds.len() * 100) / rounds.capacity());
+                    }
+                }
+                Err(e) => {
+                    return Err(DrandError::NetworkError(format!(
+                        "Failed to fetch round {}: {}", round_num, e
+                    )));
+                }
+            }
+        }
+        
+        info!("Successfully fetched {} drand rounds", rounds.len());
+        Ok(rounds)
+    }
+
+    /// Fetch a single drand round with full signature data
+    /// 
+    /// This is similar to fetch_round but returns the complete DrandRound
+    /// with signature data for block creation.
+    async fn fetch_round_with_signatures(&self, round: u64) -> Result<DrandRound, DrandError> {
+        let mut last_error = None;
+        
+        // Try each configured endpoint with retries
+        for (_endpoint_idx, base_url) in self.config.api_urls.iter().enumerate() {
+            for attempt in 0..self.config.max_retries {
+                let url = match &self.config.chain_hash {
+                    Some(hash) => format!("{}/{}/public/{}", base_url, hash, round),
+                    None => format!("{}/public/{}", base_url, round),
+                };
+
+                match self.client.get(&url).send().await {
+                    Ok(response) => {
+                        if !response.status().is_success() {
+                            let error_msg = format!(
+                                "drand API returned status: {} from {} for round {}",
+                                response.status(),
+                                base_url,
+                                round
+                            );
+                            warn!("{}", error_msg);
+                            last_error = Some(DrandError::ApiError(error_msg));
+                            continue;
+                        }
+
+                        match response.json::<DrandResponse>().await {
+                            Ok(drand_response) => {
+                                // Decode hex randomness to bytes
+                                let randomness_bytes = hex::decode(&drand_response.randomness)
+                                    .map_err(|e| DrandError::ParseError(format!("Failed to decode hex: {}", e)))?;
+
+                                // Validate the entropy quality
+                                validate_drand_entropy(&drand_response, &randomness_bytes)?;
+
+                                if randomness_bytes.len() != 32 {
+                                    return Err(DrandError::ParseError(format!(
+                                        "Expected 32 bytes, got {}",
+                                        randomness_bytes.len()
+                                    )));
+                                }
+
+                                let mut randomness = [0u8; 32];
+                                randomness.copy_from_slice(&randomness_bytes);
+
+                                // Decode signatures
+                                let signature = hex::decode(&drand_response.signature)
+                                    .map_err(|e| DrandError::ParseError(format!("Failed to decode signature: {}", e)))?;
+                                
+                                // For previous_signature, we'll use a placeholder since the API doesn't provide it directly
+                                // In a real implementation, you might need to fetch the previous round or use a different API endpoint
+                                let previous_signature = vec![]; // Placeholder
+
+                                return Ok(DrandRound::new(round, randomness, signature, previous_signature));
+                            }
+                            Err(e) => {
+                                let error_msg = format!("Failed to parse JSON for round {}: {}", round, e);
+                                warn!("{}", error_msg);
+                                last_error = Some(DrandError::ParseError(error_msg));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Network error from {} for round {}: {}", base_url, round, e);
+                        warn!("{}", error_msg);
+                        last_error = Some(DrandError::NetworkError(error_msg));
+                    }
+                }
+
+                // Small delay between retries (exponential backoff)
+                if attempt < self.config.max_retries - 1 {
+                    tokio::time::sleep(std::time::Duration::from_millis(100 * (attempt + 1) as u64)).await;
+                }
+            }
+        }
+
+        // All endpoints failed
+        let error_msg = format!(
+            "All drand endpoints failed for round {} after {} retries each. Last error: {:?}",
+            round,
+            self.config.max_retries,
+            last_error
+        );
+        warn!("{}", error_msg);
+        
+        // Return the last error, or a generic error if somehow we got here
+        Err(last_error.unwrap_or_else(|| DrandError::NetworkError(format!("All drand endpoints unavailable for round {}", round))))
     }
 
     /// Force a fresh fetch, bypassing cache
@@ -775,6 +940,238 @@ impl DrandEntropy {
         
         results
     }
+
+    /// Save multiple drand rounds to an EntropyBlock for efficient storage
+    /// 
+    /// This method fetches a range of drand rounds and saves them as a compressed
+    /// EntropyBlock that can be stored locally or shared via P2P networks.
+    /// 
+    /// # Arguments
+    /// * `start_round` - The first round number to fetch
+    /// * `end_round` - The last round number to fetch (inclusive)
+    /// * `output_path` - Path where to save the entropy block file
+    /// 
+    /// # Returns
+    /// * `Ok(EntropyBlock)` - The created entropy block
+    /// * `Err(DrandError)` - If any round fails to fetch or validation fails
+    /// 
+    /// # Example
+    /// ```rust,no_run
+    /// # use zks_crypt::drand::DrandEntropy;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let drand = DrandEntropy::new();
+    /// 
+    /// // Fetch rounds 1000-2000 and save as entropy block
+    /// let block = drand.save_to_block(1000, 2000, "entropy_block_1000_2000.bin").await?;
+    /// println!("Saved {} rounds to block", block.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn save_to_block(
+        &self,
+        start_round: u64,
+        end_round: u64,
+        output_path: &str,
+    ) -> Result<crate::entropy_block::EntropyBlock, DrandError> {
+        use crate::entropy_block::{DrandRound, EntropyBlock};
+        
+        info!("Fetching drand rounds {}-{} for entropy block", start_round, end_round);
+        
+        let mut block = EntropyBlock::new(start_round);
+        let mut successful_rounds = 0;
+        let total_rounds = end_round - start_round + 1;
+        
+        // Fetch each round sequentially (could be parallelized in future)
+        for round_num in start_round..=end_round {
+            match self.fetch_round_with_response(round_num).await {
+                Ok((randomness, response)) => {
+                    // Create DrandRound with all metadata
+                    let drand_round = DrandRound::new(
+                        round_num,
+                        randomness,
+                        hex::decode(&response.signature).unwrap_or_default(),
+                        response.randomness.clone().into_bytes(), // Use previous signature placeholder for now
+                    );
+                    
+                    match block.add_round(drand_round) {
+                        Ok(()) => {
+                            successful_rounds += 1;
+                            if successful_rounds % 100 == 0 {
+                                debug!("Progress: {}/{} rounds fetched", successful_rounds, total_rounds);
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to add round {} to block: {}", round_num, e);
+                            return Err(DrandError::ParseError(format!("Block validation failed: {}", e)));
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to fetch round {}: {}", round_num, e);
+                    return Err(e);
+                }
+            }
+        }
+        
+        // Verify the complete block
+        if !block.verify_integrity() {
+            return Err(DrandError::ParseError("Entropy block integrity verification failed".to_string()));
+        }
+        
+        // Save to file
+        match block.save_to_file(output_path) {
+            Ok(()) => {
+                info!(
+                    "✅ Saved entropy block with {} rounds ({}-{}) to {}",
+                    block.len(),
+                    block.start_round,
+                    block.end_round,
+                    output_path
+                );
+                Ok(block)
+            }
+            Err(e) => {
+                Err(DrandError::NetworkError(format!("Failed to save block: {}", e)))
+            }
+        }
+    }
+
+    /// Load an EntropyBlock from a file and validate its contents
+    /// 
+    /// This method loads a previously saved entropy block and validates
+    /// that all rounds are properly formatted and sequential.
+    /// 
+    /// # Arguments
+    /// * `block_path` - Path to the entropy block file
+    /// 
+    /// # Returns
+    /// * `Ok(EntropyBlock)` - The loaded and validated entropy block
+    /// * `Err(DrandError)` - If loading or validation fails
+    /// 
+    /// # Example
+    /// ```rust,no_run
+    /// # use zks_crypt::drand::DrandEntropy;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let drand = DrandEntropy::new();
+    /// 
+    /// // Load previously saved entropy block
+    /// let block = drand.load_from_block("entropy_block_1000_2000.bin").await?;
+    /// println!("Loaded {} rounds from block", block.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn load_from_block(&self, block_path: &str) -> Result<crate::entropy_block::EntropyBlock, DrandError> {
+        use crate::entropy_block::EntropyBlock;
+        
+        info!("Loading entropy block from {}", block_path);
+        
+        match EntropyBlock::load_from_file(block_path) {
+            Ok(block) => {
+                info!(
+                    "✅ Loaded entropy block with {} rounds ({}-{})",
+                    block.len(),
+                    block.start_round,
+                    block.end_round
+                );
+                
+                // Additional validation: verify a sample of rounds against live API
+                if block.len() > 0 {
+                    let sample_round = block.start_round + (block.len() / 2) as u64;
+                    if let Some(stored_round) = block.get_round(sample_round) {
+                        debug!("Validating sample round {} against live API", sample_round);
+                        
+                        match self.fetch_round(sample_round).await {
+                            Ok(live_randomness) => {
+                                if live_randomness == stored_round.randomness {
+                                    debug!("Sample round validation PASSED");
+                                } else {
+                                    warn!("Sample round validation FAILED - data mismatch");
+                                }
+                            }
+                            Err(e) => {
+                                warn!("Could not validate sample round against live API: {}", e);
+                                // Don't fail loading due to network issues
+                            }
+                        }
+                    }
+                }
+                
+                Ok(block)
+            }
+            Err(e) => {
+                Err(DrandError::ParseError(format!("Failed to load block: {}", e)))
+            }
+        }
+    }
+    
+    /// Helper method to fetch a round and return both randomness and full response
+    async fn fetch_round_with_response(&self, round: u64) -> Result<([u8; 32], DrandResponse), DrandError> {
+        // This is similar to fetch_round but returns the full response for metadata
+        let mut last_error = None;
+        
+        for (_endpoint_idx, base_url) in self.config.api_urls.iter().enumerate() {
+            for attempt in 0..self.config.max_retries {
+                let url = match &self.config.chain_hash {
+                    Some(hash) => format!("{}/{}/public/{}", base_url, hash, round),
+                    None => format!("{}/public/{}", base_url, round),
+                };
+
+                match self.client.get(&url).send().await {
+                    Ok(response) => {
+                        if !response.status().is_success() {
+                            let error_msg = format!(
+                                "drand API returned status: {} from {} for round {}",
+                                response.status(),
+                                base_url,
+                                round
+                            );
+                            warn!("{}", error_msg);
+                            last_error = Some(DrandError::ApiError(error_msg));
+                            continue;
+                        }
+
+                        match response.json::<DrandResponse>().await {
+                            Ok(drand_response) => {
+                                // Validate and extract randomness
+                                let randomness_bytes = hex::decode(&drand_response.randomness)
+                                    .map_err(|e| DrandError::ParseError(format!("Failed to decode hex: {}", e)))?;
+
+                                if randomness_bytes.len() != 32 {
+                                    return Err(DrandError::ParseError(format!(
+                                        "Expected 32 bytes, got {}",
+                                        randomness_bytes.len()
+                                    )));
+                                }
+
+                                let mut randomness = [0u8; 32];
+                                randomness.copy_from_slice(&randomness_bytes);
+
+                                return Ok((randomness, drand_response));
+                            }
+                            Err(e) => {
+                                let error_msg = format!("Failed to parse JSON for round {}: {}", round, e);
+                                warn!("{}", error_msg);
+                                last_error = Some(DrandError::ParseError(error_msg));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Network error from {} for round {}: {}", base_url, round, e);
+                        warn!("{}", error_msg);
+                        last_error = Some(DrandError::NetworkError(error_msg));
+                    }
+                }
+
+                if attempt < self.config.max_retries - 1 {
+                    tokio::time::sleep(std::time::Duration::from_millis(100 * (attempt + 1) as u64)).await;
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| DrandError::NetworkError(format!("All drand endpoints unavailable for round {}", round))))
+    }
 }
 
 impl Default for DrandEntropy {
@@ -796,6 +1193,8 @@ pub enum DrandError {
     HkdfError,
     /// OS random generation failed (used in fallback mode)
     OsRandomError(String),
+    /// Invalid input parameters
+    InvalidInput(String),
 }
 
 impl std::fmt::Display for DrandError {
@@ -806,6 +1205,7 @@ impl std::fmt::Display for DrandError {
             DrandError::ParseError(e) => write!(f, "drand parse error: {}", e),
             DrandError::HkdfError => write!(f, "HKDF expansion failed"),
             DrandError::OsRandomError(e) => write!(f, "OS random generation failed: {}", e),
+            DrandError::InvalidInput(e) => write!(f, "drand invalid input: {}", e),
         }
     }
 }

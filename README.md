@@ -231,7 +231,7 @@ console.log("✅ Signature valid:", isValid);
 | Symmetric Encryption | Wasif-Vernam Cipher | ChaCha20-Poly1305 + XOR layer |
 | Random Entropy | drand ⊕ CSPRNG | 256-bit computational |
 
-### 🛡️ Hybrid TRUE OTP Security
+### 🛡️ Hybrid Computational Security
 
 ZKS Protocol achieves **256-bit post-quantum security** through defense-in-depth:
 
@@ -245,10 +245,11 @@ ZKS Protocol achieves **256-bit post-quantum security** through defense-in-depth
 - ✅ **All messages**: 256-bit computational security via drand ⊕ CSPRNG
 - ℹ️ **For TRUE ITS**: Use `zks_otp` (Offline Mode) with physical key exchange
 
-**Mathematical Foundation**:
-- **Defense-in-depth**: XOR of drand beacon and local CSPRNG
-- **No single point of failure**: Secure if either source is uncompromised
+**Mathematical Foundation** (Computational Security):
+- **Defense-in-depth**: XOR of drand beacon and local CSPRNG provides 256-bit computational security
+- **No single point of failure**: Secure if either entropy source is uncompromised
 - **Post-quantum**: ML-KEM-1024 key exchange resists quantum attacks
+- **Important distinction**: This provides computational security, not information-theoretic security
 
 **Protocol-Level Anonymity**:
 - **Session rotation**: Sessions become cryptographically unlinkable
@@ -432,8 +433,8 @@ Fetch Order:
 > **Note:** The Entropy Grid distributes drand data—it does not contribute additional entropy sources. The XOR combination is: `drand ⊕ local_CSPRNG`.
 
 **Security Properties**:
-- **Hybrid TRUE OTP**: Keys wrapped with TRUE OTP, bulk data with ChaCha20
-- **Security chain**: Breaking encryption requires breaking TRUE OTP first
+- **Hybrid key wrapping**: DEK wrapped with drand ⊕ CSPRNG entropy, bulk data with ChaCha20
+- **Security chain**: Breaking encryption requires compromising both entropy sources
 - **Session rotation**: Auto-rotate every 10 min for cryptographic unlinkability
 - **Fallback**: ChaCha20 if drand unavailable (still post-quantum secure)
 
@@ -453,19 +454,26 @@ zks-otp generate --output E:\key.zkskey --size 1GB --hardware
 zks-otp encrypt --input secret.txt --key E:\key.zkskey --output secret.enc
 ```
 
-**Security Modes:**
+**Security Model Distinction:**
 
-| Mode | Security Level | Use Case |
-|------|----------------|----------|
-| **Offline Strict** | Information-Theoretic (Shannon) | Small critical data, ultimate security |
-| **Offline Efficient** | 256-bit Computational | Large files with OTP-wrapped DEK |
-| **Network** | 256-bit Post-Quantum | Real-time communication |
+ZKS Protocol provides two distinct security tiers with different assumptions and guarantees:
 
-### 🌌 Physical Unbreakability (>32 Bytes)
+| Mode | Security Type | Mathematical Foundation | Requirements | Guarantees |
+|------|---------------|------------------------|--------------|------------|
+| **Network** (`zk://`, `zks://`) | **Computational** | 256-bit post-quantum cryptography | Standard computational assumptions | Quantum-resistant, computationally bounded |
+| **Offline Strict** (`zks_otp`) | **Information-Theoretic** | Shannon's perfect secrecy | Physical key exchange, true randomness | Unbreakable by any computational power |
+| **Offline Efficient** (`zks_otp`) | **Computational** | ChaCha20-Poly1305 + OTP key wrapping | 32 bytes key per file | 256-bit computational security |
 
-For messages >32 bytes, ZKS Protocol provides **physically unbreakable encryption** through 256-bit ChaCha20-Poly1305 security, bounded by fundamental universal energy constraints:
+**Critical Distinction**: 
+- ✅ **Network mode** provides 256-bit **computational security** - resistant to quantum computers but theoretically breakable with sufficient computational power
+- ✅ **Offline Strict mode** provides **information-theoretic security** - mathematically unbreakable when used with truly random keys and physical key exchange
+- ⚠️ **Do not confuse** computational security claims with information-theoretic guarantees
 
-**The Physics Argument**:
+### 🌌 Computational Security Bounds (>32 Bytes)
+
+For messages >32 bytes, ZKS Protocol provides **256-bit computational security** through ChaCha20-Poly1305, with security bounds derived from fundamental physical constraints:
+
+**The Physics Argument** (Computational Security):
 - **Landauer Limit**: Minimum energy required to erase 1 bit = kT ln(2) ≈ 3×10⁻²¹ J
 - **256-bit key space**: 2²⁵⁶ ≈ 1.16×10⁷⁷ possible keys
 - **Minimum brute-force energy**: ~3.5×10⁵⁶ Joules
@@ -485,7 +493,7 @@ For messages >32 bytes, ZKS Protocol provides **physically unbreakable encryptio
 - Still requires energy exceeding total cosmic output by billions of times
 - Quantum decoherence and error correction make this practically impossible
 
-**Conclusion**: Messages >32 bytes are **physically unbreakable** due to universal energy constraints that make brute-force attacks impossible by the laws of physics, not just computational limitations.
+**Conclusion**: Messages >32 bytes are **computationally secure** with security bounds that make brute-force attacks physically impractical, providing 256-bit post-quantum computational security (NOT information-theoretic security).
 
 ### Responsible Disclosure
 

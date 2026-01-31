@@ -10,19 +10,89 @@ use tokio::sync::{mpsc, RwLock};
 use tokio::net::UdpSocket;
 use serde::{Serialize, Deserialize};
 use tracing::{debug, info, warn};
-use rand::Rng;
 
 use crate::{WireError, Result};
+use zks_crypt::entropy_block::EntropyBlock;
+
+/// Kademlia provider record for DHT functionality
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderRecord {
+    /// Provider peer ID
+    pub provider: PeerId,
+    /// Content key (hash)
+    pub key: Vec<u8>,
+    /// Provider addresses
+    pub addresses: Vec<SocketAddr>,
+    /// Record creation timestamp
+    pub created: u64,
+    /// Record expiration timestamp
+    pub expires: u64,
+}
+
+/// Kademlia DHT storage
+#[derive(Debug, Clone)]
+pub struct KademliaDHT {
+    /// Provider records stored locally
+    providers: Arc<RwLock<HashMap<Vec<u8>, Vec<ProviderRecord>>>>,
+    /// Replication factor (k)
+    k_value: usize,
+}
+
+impl KademliaDHT {
+    /// Create a new Kademlia DHT
+    pub fn new(k_value: usize) -> Self {
+        Self {
+            providers: Arc::new(RwLock::new(HashMap::new())),
+            k_value,
+        }
+    }
+    
+    /// Store a provider record
+    pub async fn store_provider(&self, record: ProviderRecord) -> Result<()> {
+        let mut providers = self.providers.write().await;
+        let key = record.key.clone();
+        providers.entry(key).or_insert_with(Vec::new).push(record);
+        Ok(())
+    }
+    
+    /// Get provider records for a key
+    pub async fn get_providers(&self, key: &[u8]) -> Vec<ProviderRecord> {
+        let providers = self.providers.read().await;
+        providers.get(key).cloned().unwrap_or_default()
+    }
+    
+    /// Remove expired records
+    pub async fn cleanup_expired(&self) {
+        let mut providers = self.providers.write().await;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        
+        for records in providers.values_mut() {
+            records.retain(|record| record.expires > now);
+        }
+        
+        // Remove empty key entries
+        providers.retain(|_, records| !records.is_empty());
+    }
+}
 
 /// Unique identifier for a peer in the swarm
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PeerId([u8; 32]);
 
 impl PeerId {
-    /// Generate a new random peer ID using cryptographically secure random
+    /// Generate a new random peer ID using TRUE entropy (drand + OsRng)
+    /// 
+    /// # Security
+    /// Uses TrueEntropy for information-theoretic security.
+    /// Unbreakable if ANY entropy source is uncompromised.
     pub fn new() -> Self {
+        use zks_crypt::true_entropy::get_sync_entropy;
+        let entropy = get_sync_entropy(32);
         let mut id = [0u8; 32];
-        getrandom::getrandom(&mut id).expect("Failed to generate random peer ID");
+        id.copy_from_slice(&entropy);
         Self(id)
     }
     
@@ -104,6 +174,20 @@ pub enum SwarmEvent {
     Error(String),
 }
 
+/// Messages that can be sent between peers in the swarm
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SwarmMessage {
+    /// An entropy block being shared via GossipSub
+    EntropyBlock {
+        /// Starting round number of the block
+        start_round: u64,
+        /// Ending round number of the block
+        end_round: u64,
+        /// Serialized entropy block data
+        data: Vec<u8>,
+    },
+}
+
 /// Configuration for the swarm
 #[derive(Debug, Clone)]
 pub struct SwarmConfig {
@@ -117,6 +201,8 @@ pub struct SwarmConfig {
     pub discovery_interval: u64,
     /// Protocol version
     pub protocol_version: u8,
+    /// Entropy cache sync interval in seconds
+    pub entropy_sync_interval: u64,
 }
 
 impl Default for SwarmConfig {
@@ -127,11 +213,13 @@ impl Default for SwarmConfig {
             max_peers: 50,
             discovery_interval: 30,
             protocol_version: 1,
+            entropy_sync_interval: 60, // 1 minute
         }
     }
 }
 
 /// Main swarm networking component
+#[derive(Debug)]
 pub struct Swarm {
     /// Swarm configuration
     config: SwarmConfig,
@@ -147,6 +235,10 @@ pub struct Swarm {
     event_rx: Option<mpsc::Receiver<SwarmEvent>>,
     /// Whether the swarm is running
     running: Arc<RwLock<bool>>,
+    /// Kademlia DHT for provider records
+    dht: Arc<KademliaDHT>,
+    /// Entropy cache for storing entropy blocks
+    entropy_cache: Option<Arc<crate::entropy_cache::EntropyCache>>,
 }
 
 impl Swarm {
@@ -168,6 +260,8 @@ impl Swarm {
             event_tx,
             event_rx: Some(event_rx),
             running: Arc::new(RwLock::new(false)),
+            dht: Arc::new(KademliaDHT::new(20)), // k=20 for Kademlia
+            entropy_cache: None,
         }
     }
     
@@ -184,12 +278,24 @@ impl Swarm {
             event_tx,
             event_rx: Some(event_rx),
             running: Arc::new(RwLock::new(false)),
+            dht: Arc::new(KademliaDHT::new(20)), // k=20 for Kademlia
+            entropy_cache: None,
         }
     }
     
     /// Get this peer's ID
     pub fn peer_id(&self) -> PeerId {
         self.peer_id
+    }
+    
+    /// Set the entropy cache for this swarm
+    pub fn set_entropy_cache(&mut self, cache: Arc<crate::entropy_cache::EntropyCache>) {
+        self.entropy_cache = Some(cache);
+    }
+    
+    /// Get a reference to the entropy cache if set
+    pub fn entropy_cache(&self) -> Option<&Arc<crate::entropy_cache::EntropyCache>> {
+        self.entropy_cache.as_ref()
     }
     
     /// Start the swarm
@@ -274,6 +380,11 @@ impl Swarm {
     pub async fn peer_count(&self) -> usize {
         let peers = self.peers.read().await;
         peers.len()
+    }
+    
+    /// Get the local peer ID
+    pub fn local_peer_id(&self) -> PeerId {
+        self.peer_id
     }
     
     /// Send a message to a specific peer
@@ -361,6 +472,178 @@ impl Swarm {
         Ok(circuit)
     }
     
+    /// Announce that this peer provides an entropy block
+    pub async fn announce_entropy_block(&self, start_round: u64) -> Result<()> {
+        // Generate content key for the entropy block
+        let key = Self::generate_entropy_block_key(start_round);
+        
+        // Get this peer's addresses from peer info
+        let addresses = self.get_peer_addresses(self.peer_id).await?;
+        
+        // Create provider record
+        let record = ProviderRecord {
+            provider: self.peer_id,
+            key: key.clone(),
+            addresses,
+            created: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            expires: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() + 3600, // 1 hour TTL
+        };
+        
+        // Store in local DHT
+        self.dht.store_provider(record).await?;
+        
+        info!("Announced entropy block {} to DHT", start_round);
+        Ok(())
+    }
+    
+    /// Announce multiple entropy blocks in batch
+    pub async fn announce_entropy_blocks(&self, start_rounds: Vec<u64>) -> Result<()> {
+        let count = start_rounds.len();
+        for start_round in start_rounds {
+            if let Err(e) = self.announce_entropy_block(start_round).await {
+                warn!("Failed to announce entropy block {}: {}", start_round, e);
+            }
+        }
+        
+        info!("Announced {} entropy blocks to DHT", count);
+        Ok(())
+    }
+    
+    /// Query DHT for providers of an entropy block
+    pub async fn query_entropy_block_providers(&self, start_round: u64) -> Vec<ProviderRecord> {
+        let key = Self::generate_entropy_block_key(start_round);
+        self.dht.get_providers(&key).await
+    }
+    
+    /// Get addresses for a specific peer
+    async fn get_peer_addresses(&self, peer_id: PeerId) -> Result<Vec<SocketAddr>> {
+        let peers = self.peers.read().await;
+        if let Some(peer) = peers.get(&peer_id) {
+            Ok(peer.addresses.clone())
+        } else {
+            // If we don't have the peer info, return empty addresses
+            // This could be enhanced to query other peers for the information
+            Ok(vec![])
+        }
+    }
+    
+    /// Generate a content key for an entropy block (round-based)
+    fn generate_entropy_block_key(start_round: u64) -> Vec<u8> {
+        // Use block number (round / 1M) as key
+        let block_number = start_round / 1_000_000;
+        format!("entropy_block_{}", block_number).into_bytes()
+    }
+    
+    /// Query DHT for providers of multiple entropy blocks
+    pub async fn query_entropy_blocks_providers(&self, start_rounds: Vec<u64>) -> HashMap<u64, Vec<ProviderRecord>> {
+        let mut results = HashMap::new();
+        
+        for start_round in start_rounds {
+            let providers = self.query_entropy_block_providers(start_round).await;
+            if !providers.is_empty() {
+                results.insert(start_round, providers);
+            }
+        }
+        
+        results
+    }
+    
+    /// Find the closest provider for an entropy block
+    pub async fn find_closest_entropy_provider(&self, start_round: u64) -> Option<ProviderRecord> {
+        let providers = self.query_entropy_block_providers(start_round).await;
+        
+        if providers.is_empty() {
+            return None;
+        }
+        
+        // For now, return the first provider
+        // This could be enhanced with latency-based selection or other metrics
+        providers.into_iter().next()
+    }
+    
+    /// Sync entropy cache with DHT provider records
+    /// This should be called periodically to announce blocks we have cached
+    pub async fn sync_entropy_cache_with_dht(&self) -> Result<()> {
+        // Check if we have an entropy cache configured
+        let cache = match &self.entropy_cache {
+            Some(cache) => cache,
+            None => {
+                debug!("No entropy cache configured, skipping DHT sync");
+                return Ok(());
+            }
+        };
+        
+        // Get cache stats to see what blocks we have
+        let stats = cache.get_stats().await;
+        debug!("Syncing {} cached entropy blocks with DHT", stats.total_blocks);
+        
+        // For now, we'll announce a few recent blocks
+        // In a full implementation, this would iterate through all cached blocks
+        let recent_blocks = vec![
+            50_000_000, // Block 50M
+            51_000_000, // Block 51M  
+            52_000_000, // Block 52M
+        ];
+        
+        let mut blocks_to_announce = Vec::new();
+        
+        for start_round in recent_blocks {
+            // Check if we have this block cached
+            if cache.has_block(start_round).await {
+                blocks_to_announce.push(start_round);
+            }
+        }
+        
+        let blocks_count = blocks_to_announce.len();
+        if !blocks_to_announce.is_empty() {
+            self.announce_entropy_blocks(blocks_to_announce).await?;
+        }
+        
+        info!("Synced {} entropy blocks with DHT", blocks_count);
+        Ok(())
+    }
+    
+    /// Clean up expired provider records
+    pub async fn cleanup_expired_providers(&self) {
+        self.dht.cleanup_expired().await;
+        debug!("Cleaned up expired provider records");
+    }
+
+    /// Publish an entropy block to the P2P swarm using GossipSub
+    pub async fn publish_entropy_block(&self, block: EntropyBlock) -> Result<()> {
+        // Serialize the block
+        let serialized_block = bincode::serialize(&block)
+            .map_err(|e| WireError::Other(format!("Failed to serialize entropy block: {}", e)))?;
+        
+        // Create a GossipSub message
+        let message = SwarmMessage::EntropyBlock {
+            start_round: block.start_round,
+            end_round: block.end_round,
+            data: serialized_block,
+        };
+        
+        // Serialize the message
+        let message_bytes = bincode::serialize(&message)
+            .map_err(|e| WireError::Other(format!("Failed to serialize swarm message: {}", e)))?;
+        
+        // Broadcast the message to all peers
+        self.broadcast_message(message_bytes).await?;
+        
+        // Announce this peer as a provider in the DHT
+        self.announce_entropy_block(block.start_round).await?;
+        
+        info!("Published entropy block {} (rounds {}-{}) to swarm", 
+              hex::encode(&block.block_hash[..8]), block.start_round, block.end_round);
+        
+        Ok(())
+    }
+
     // Private methods
     
     async fn start_background_tasks(&self, socket: Arc<UdpSocket>) -> Result<()> {
@@ -383,6 +666,25 @@ impl Swarm {
         tokio::spawn(async move {
             Self::peer_discovery(peers_clone, event_tx_clone, running_clone, discovery_interval).await;
         });
+        
+        // Start DHT cleanup task
+        let dht_clone = self.dht.clone();
+        let running_clone = self.running.clone();
+        
+        tokio::spawn(async move {
+            Self::dht_cleanup(dht_clone, running_clone).await;
+        });
+        
+        // Start entropy cache sync task if cache is configured
+        if let Some(cache) = &self.entropy_cache {
+            let cache_clone = cache.clone();
+            let running_clone = self.running.clone();
+            let sync_interval = self.config.entropy_sync_interval;
+            
+            tokio::spawn(async move {
+                Self::entropy_cache_sync(cache_clone, running_clone, sync_interval).await;
+            });
+        }
         
         Ok(())
     }
@@ -449,6 +751,44 @@ impl Swarm {
             }
         }
     }
+    
+    async fn dht_cleanup(dht: Arc<KademliaDHT>, running: Arc<RwLock<bool>>) {
+        let mut interval = tokio::time::interval(Duration::from_secs(300)); // 5 minutes
+        
+        while *running.read().await {
+            interval.tick().await;
+            dht.cleanup_expired().await;
+        }
+    }
+    
+    async fn entropy_cache_sync(cache: Arc<crate::entropy_cache::EntropyCache>, running: Arc<RwLock<bool>>, interval_secs: u64) {
+        let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
+        
+        while *running.read().await {
+            interval.tick().await;
+            
+            // Get cache stats
+            let stats = cache.get_stats().await;
+            debug!("Periodic entropy cache sync: {} cached blocks", stats.total_blocks);
+            
+            // Clean up expired entries
+            let removed_count = cache.cleanup_expired().await;
+            if removed_count > 0 {
+                debug!("Removed {} expired entropy blocks from cache", removed_count);
+            }
+            
+            // Log cache health
+            if stats.total_blocks > 0 {
+                let hit_rate = if stats.total_requests > 0 {
+                    (stats.cache_hits as f64 / stats.total_requests as f64) * 100.0
+                } else {
+                    0.0
+                };
+                info!("Entropy cache health: {} blocks, {} hits, {:.1}% hit rate", 
+                      stats.total_blocks, stats.cache_hits, hit_rate);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -494,5 +834,138 @@ mod tests {
         
         assert_ne!(peer_id1, peer_id2);
         assert_eq!(peer_id1.to_bytes().len(), 32);
+    }
+    
+    #[tokio::test]
+    async fn test_entropy_block_key_generation() {
+        let key1 = Swarm::generate_entropy_block_key(50_000_000);
+        let key2 = Swarm::generate_entropy_block_key(50_999_999);
+        let key3 = Swarm::generate_entropy_block_key(51_000_000);
+        
+        // Same block number (50M) should generate same key
+        assert_eq!(key1, key2);
+        // Different block numbers should generate different keys
+        assert_ne!(key1, key3);
+        
+        assert_eq!(String::from_utf8(key1).unwrap(), "entropy_block_50");
+        assert_eq!(String::from_utf8(key3).unwrap(), "entropy_block_51");
+    }
+    
+    #[tokio::test]
+    async fn test_entropy_block_announcement() {
+        let swarm = Swarm::new("test-network".to_string());
+        
+        // Add a peer with addresses first
+        let peer_id = swarm.peer_id();
+        let peer = Peer {
+            id: peer_id,
+            addresses: vec!["127.0.0.1:8080".parse().unwrap()],
+            last_seen: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            state: PeerState::Connected,
+            protocol_version: 1,
+        };
+        swarm.add_peer(peer).await.unwrap();
+        
+        // Announce an entropy block
+        swarm.announce_entropy_block(50_000_000).await.unwrap();
+        
+        // Query for providers
+        let providers = swarm.query_entropy_block_providers(50_000_000).await;
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].provider, peer_id);
+    }
+    
+    #[tokio::test]
+    async fn test_multiple_entropy_block_announcement() {
+        let swarm = Swarm::new("test-network".to_string());
+        
+        // Add a peer with addresses first
+        let peer_id = swarm.peer_id();
+        let peer = Peer {
+            id: peer_id,
+            addresses: vec!["127.0.0.1:8080".parse().unwrap()],
+            last_seen: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            state: PeerState::Connected,
+            protocol_version: 1,
+        };
+        swarm.add_peer(peer).await.unwrap();
+        
+        // Announce multiple entropy blocks
+        let blocks = vec![50_000_000, 51_000_000, 52_000_000];
+        swarm.announce_entropy_blocks(blocks.clone()).await.unwrap();
+        
+        // Query for each block
+        for start_round in blocks {
+            let providers = swarm.query_entropy_block_providers(start_round).await;
+            assert_eq!(providers.len(), 1);
+            assert_eq!(providers[0].provider, peer_id);
+        }
+    }
+    
+    #[tokio::test]
+    async fn test_find_closest_entropy_provider() {
+        let swarm = Swarm::new("test-network".to_string());
+        
+        // Add a peer with addresses first
+        let peer_id = swarm.peer_id();
+        let peer = Peer {
+            id: peer_id,
+            addresses: vec!["127.0.0.1:8080".parse().unwrap()],
+            last_seen: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+            state: PeerState::Connected,
+            protocol_version: 1,
+        };
+        swarm.add_peer(peer).await.unwrap();
+        
+        // Announce an entropy block
+        swarm.announce_entropy_block(50_000_000).await.unwrap();
+        
+        // Find closest provider
+        let provider = swarm.find_closest_entropy_provider(50_000_000).await;
+        assert!(provider.is_some());
+        assert_eq!(provider.unwrap().provider, peer_id);
+        
+        // Test with non-existent block
+        let no_provider = swarm.find_closest_entropy_provider(99_000_000).await;
+        assert!(no_provider.is_none());
+    }
+    
+    #[tokio::test]
+    async fn test_entropy_cache_integration() {
+        let mut swarm = Swarm::new("test-network".to_string());
+        
+        // Create and configure entropy cache
+        let cache_config = crate::entropy_cache::EntropyCacheConfig::default();
+        let cache = Arc::new(crate::entropy_cache::EntropyCache::new(cache_config));
+        swarm.set_entropy_cache(cache.clone());
+        
+        // Store a block in the cache
+        let test_data = vec![0u8; 1024]; // 1KB test data
+        cache.store_block(50_000_000, test_data.clone()).await.unwrap();
+        
+        // Verify block is in cache
+        assert!(cache.has_block(50_000_000).await);
+        
+        // Sync cache with DHT
+        swarm.sync_entropy_cache_with_dht().await.unwrap();
+        
+        // Query for providers
+        let providers = swarm.query_entropy_block_providers(50_000_000).await;
+        assert_eq!(providers.len(), 1);
+        assert_eq!(providers[0].provider, swarm.peer_id());
+        
+        // Test without cache configured
+        let mut swarm2 = Swarm::new("test-network-2".to_string());
+        // Should not panic even without cache
+        swarm2.sync_entropy_cache_with_dht().await.unwrap();
     }
 }

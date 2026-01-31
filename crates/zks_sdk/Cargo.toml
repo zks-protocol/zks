@@ -19,6 +19,8 @@ zks_pqcrypto = { version = "0.1.0", path = "../zks_pqcrypto" }
 zks_wire = { version = "0.1.0", path = "../zks_wire" }
 zks_proto = { version = "0.1.0", path = "../zks_proto" }
 zks_crypt = { version = "0.1.0", path = "../zks_crypt" }
+zks_cover = { version = "0.1.0", path = "../zks_cover" }
+zks_surb = { version = "0.1.0", path = "../zks_surb" }
 
 # Async runtime
 tokio = { version = "1.0", features = ["full"] }

@@ -145,7 +145,7 @@ async fn test_onion_encryption() -> Result<(), Box<dyn std::error::Error>> {
     info!("\n--- Test 2: Onion Encryption/Decryption ---");
     
     // Create a circuit with known keys for testing
-    let mut circuit = SwarmCircuit::new();
+    let mut circuit = SwarmCircuit::new()?;
     circuit.set_layer_keys(vec![
         [1u8; 32], // Entry peer key
         [2u8; 32], // Middle peer key  

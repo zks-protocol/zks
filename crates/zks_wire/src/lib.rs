@@ -43,6 +43,12 @@ pub mod wire;
 pub mod signaling;
 pub mod p2p;
 pub mod swarm_controller;
+pub mod faisal_swarm;
+pub mod entropy_swarm;
+pub mod entropy_cache;
+pub mod dht_lookup;
+pub mod seeder;
+pub mod entropy_grid;
 
 pub use error::{WireError, Result};
 pub use nat::{NatTraversal, NatType};
@@ -54,6 +60,12 @@ pub use wire::{WireMessage, WireProtocol, MessageType};
 pub use signaling::{SignalingClient, SignalingMessage, PeerInfo, PeerCapabilities};
 pub use p2p::{NativeP2PTransport, NativeP2PError};
 pub use swarm_controller::{SwarmController, SwarmControllerError, Platform, TransportCapabilities, OnionStream};
+pub use faisal_swarm::{FaisalSwarmCircuit, FaisalSwarmManager, CircuitState, SwarmHop, HopRole};
+pub use entropy_swarm::{EntropySwarm, EntropySwarmConfig, EntropyRequest, EntropyResponse, ENTROPY_TOPIC};
+pub use entropy_cache::{EntropyCache, EntropyCacheConfig, EntropyCacheStats};
+pub use dht_lookup::{DHTLookupManager, DHTLookupService, DHTLookupConfig, DHTLookupResult, DHTLookupError};
+pub use seeder::{EntropySeeder, SeederConfig, SeederError};
+pub use entropy_grid::{EntropyGrid, EntropyGridConfig, EntropyCacheInterface, EntropySwarmInterface, IpfsInterface};
 
 /// Re-export commonly used types
 pub mod prelude {
@@ -61,4 +73,5 @@ pub mod prelude {
     pub use crate::{PeerId, Peer, SwarmEvent};
     pub use crate::{SwarmCircuit, CircuitBuilder};
     pub use crate::{RelayServer, RelayClient, RelayId, RelayConfig};
+    pub use crate::{FaisalSwarmCircuit, FaisalSwarmManager, CircuitState, SwarmHop, HopRole};
 }
