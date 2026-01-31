@@ -101,12 +101,12 @@ ZKS Protocol's security is **proven by mathematics**, not assumptions:
 ### Shannon's Perfect Secrecy (1949)
 
 ```
-Hybrid OTP Encryption (Network Mode):
+Hybrid OTP-Inspired Encryption (Network Mode):
   DEK ← CSPRNG(32 bytes)              // Data Encryption Key
   entropy ← drand ⊕ local_CSPRNG      // Computational security (256-bit)
   wrapped_DEK ← DEK ⊕ entropy         // Defense-in-depth
 
-Security Level: 256-bit computational (NOT information-theoretic)
+Security Level: 256-bit post-quantum computational (OTP-inspired, not true OTP)
 
 ∴ Secure against all known attacks including quantum computers ∎
 ```
@@ -228,7 +228,7 @@ console.log("✅ Signature valid:", isValid);
 |-----------|-----------|----------------|
 | Key Exchange | ML-KEM-1024 (Kyber) | NIST Level 5 (IND-CCA2) |
 | Signatures | ML-DSA-65 (Dilithium) | NIST Level 3 (EUF-CMA) |
-| Symmetric Encryption | Wasif-Vernam Cipher | ChaCha20-Poly1305 + XOR layer |
+| Symmetric Encryption | Wasif-Vernam Cipher (OTP-inspired) | ChaCha20-Poly1305 + XOR layer |
 | Random Entropy | drand ⊕ CSPRNG | 256-bit computational |
 
 ### 🛡️ Hybrid Computational Security
@@ -242,14 +242,14 @@ ZKS Protocol achieves **256-bit post-quantum security** through defense-in-depth
 - **Result**: 256-bit computational security, quantum-resistant
 
 **Entropy Budget** (Network Mode):
-- ✅ **All messages**: 256-bit computational security via drand ⊕ CSPRNG
-- ℹ️ **Entropy source**: drand beacon + local CSPRNG provides 256-bit computational security
+- ✅ **All messages**: 256-bit computational security via drand ⊕ CSPRNG (OTP-inspired)
+- ℹ️ **Entropy source**: drand beacon + local CSPRNG provides 256-bit post-quantum computational security
 
 **Mathematical Foundation** (Computational Security):
 - **Defense-in-depth**: XOR of drand beacon and local CSPRNG provides 256-bit computational security
 - **No single point of failure**: Secure if either entropy source is uncompromised
 - **Post-quantum**: ML-KEM-1024 key exchange resists quantum attacks
-- **Important distinction**: This provides computational security, not information-theoretic security
+- **Important distinction**: This provides computational security (OTP-inspired), not information-theoretic security
 
 **Protocol-Level Anonymity**:
 - **Session rotation**: Sessions become cryptographically unlinkable
@@ -290,7 +290,7 @@ ZKS Protocol achieves **256-bit post-quantum security** through defense-in-depth
 ```
 zks/
 ├── zks_sdk        # High-level SDK (start here!)
-├── zks_crypt      # Wasif-Vernam cipher, drand integration
+├── zks_crypt      # Wasif-Vernam cipher (OTP-inspired), drand integration
 ├── zks_pqcrypto   # ML-KEM-768, ML-DSA-65
 ├── zks_proto      # Handshake protocol, URL parsing
 ├── zks_wire       # Swarm networking, NAT traversal
@@ -302,7 +302,7 @@ zks/
 | Crate | Description | Key Features |
 |-------|-------------|--------------|
 | `zks_sdk` | High-level developer API | Connection builders, prefabs |
-| `zks_crypt` | Core cryptographic operations | Wasif-Vernam, scrambling, drand |
+| `zks_crypt` | Core cryptographic operations | Wasif-Vernam (OTP-inspired), scrambling, drand |
 | `zks_pqcrypto` | Post-quantum primitives | ML-KEM, ML-DSA, Zeroizing |
 | `zks_proto` | Protocol implementation | 3-message handshake, messages |
 | `zks_wire` | Network layer | STUN, NAT traversal, swarm |
