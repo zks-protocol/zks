@@ -70,6 +70,8 @@ test_*.log
 # Log files
 *.log
 logs/
+**/yarn-error.log
+**/errors.txt
 
 # =================================
 # Documentation Build
@@ -104,6 +106,17 @@ tarpaulin-report.html
 # Benchmark artifacts
 criterion/
 
+# Profiling data
+perf.data
+perf.data.old
+*.perf
+flamegraph.svg
+inferno/
+
+# Valgrind outputs
+*.valgrind
+vgcore.*
+
 # =================================
 # Security-Sensitive Files
 # =================================
@@ -117,6 +130,19 @@ secrets/
 .env
 .env.*
 !.env.example
+
+# ZKS-specific key files (already covered above but explicit)
+*.zkskey
+*.zksenc
+
+# Configuration files with secrets
+config.toml
+config.json
+*.config
+
+# Rust-specific security files
+*.rs.bk
+*.rs~
 
 # =================================
 # Miscellaneous
@@ -142,6 +168,64 @@ cryptoverif*/
 proverif*/
 build_error.txt
 *.zip
+
+# =================================
+# ZKS Protocol Specific Files
+# =================================
+
+# Test files generated during development
+**/decrypted_message.txt
+**/decrypted_message*.txt
+**/encrypted_message*.zksenc
+**/test_key*.zkskey
+**/test_hardware.zkskey
+**/test_message.txt
+**/test_output.txt
+**/test_*.txt
+
+# Nym-develop directory (external integration)
+/nym-develop/
+**/nym-develop/
+
+# Uniffi generated bindings
+**/uniffi/
+*.udl
+
+# Turmoil test artifacts (if used)
+**/turmoil/
+*.turmoil
+
+# Build artifacts from scripts
+build-android-aar.*
+ANDROID_AAR_STATUS.md
+**/build.mjs
+**/build-node.mjs
+**/build-*.mjs
+
+# Critical issues and roadmaps (sensitive documents)
+"Critical Issues.md"
+ZKS_MCP_SERVER_ROADMAP.md
+
+# AWS configuration files
+AWS*
+
+# Package manager files (handled by existing patterns)
+# package-lock.json and yarn.lock are already covered
+
+# =================================
+# WASM Build Artifacts (Extended)
+# =================================
+
+# Additional WASM build outputs
+**/wasm/*/pkg/
+**/wasm/*/internal-dev*/
+**/wasm/*/internal-dev-node*/
+**/wasm/*/go-mix-conn/
+
+# TypeScript build outputs
+**/ts-packages/*/dist/
+**/ts-packages/*/build/
+**/ts-packages/*/lib/
 
 # =================================
 # Android & Bindings (Ignored)
