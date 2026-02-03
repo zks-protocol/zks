@@ -38,13 +38,28 @@ pub fn ct_eq_fixed<const N: usize>(a: &[u8; N], b: &[u8; N]) -> bool {
 }
 
 /// Constant-time selection between two values
-/// 
+///
 /// Returns `a` if `choice` is `true`, `b` if `choice` is `false`.
 /// The execution time is independent of the choice value.
-/// 
-/// ⚠️ LIMITATION: This function is only constant-time for types that can be
-/// safely transmuted to/from bytes (like u8, u16, u32, u64, i8, i16, i32, i64).
-/// For complex types, use the subtle crate's ConditionallySelectable trait.
+///
+/// # ⚠️ SECURITY LIMITATION (m3 Fix)
+///
+/// This function is only constant-time for primitive types (u8, u16, u32, u64, i8, i16, i32, i64).
+///
+/// **For unsupported type sizes, this function falls back to non-constant-time selection.**
+/// This could leak information about `choice` through timing side-channels.
+///
+/// **Recommendations:**
+/// 1. Only use this function with supported primitive types
+/// 2. For complex types, use the `subtle` crate's `ConditionallySelectable` trait
+/// 3. In debug builds, unsupported types will trigger a panic to catch misuse
+/// 4. In release builds, a warning is logged (if tracing is enabled) and non-CT selection is used
+///
+/// # Supported Types
+/// - 1-byte: u8, i8
+/// - 2-byte: u16, i16
+/// - 4-byte: u32, i32, f32
+/// - 8-byte: u64, i64, f64
 #[allow(unsafe_code)] // Required for transmute operations in constant-time selection
 pub fn ct_select<T: Copy>(choice: bool, a: T, b: T) -> T {
     // Convert boolean to mask: 0xFF if true, 0x00 if false

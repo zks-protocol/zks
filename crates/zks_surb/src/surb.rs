@@ -22,14 +22,14 @@ impl Zeroize for SurbId {
 }
 
 impl SurbId {
-    /// Generate a new random SURB ID using TRUE entropy (drand + OsRng)
+    /// Generate a new random SURB ID using high-entropy randomness (drand + OsRng)
     /// 
     /// # Security
     /// Uses `TrueEntropy` which combines drand beacon + local CSPRNG via XOR
-    /// for information-theoretic security. Unbreakable if ANY source is uncompromised.
+    /// for 256-bit post-quantum computational security. Secure if ANY source is uncompromised.
     pub fn new(length: usize) -> Self {
-        // SECURITY: Use TrueEntropy for information-theoretic security
-        // Combines drand (BLS verified) + OsRng via XOR - unbreakable if either is secure
+        // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security
+        // Combines drand (BLS verified) + OsRng via XOR - secure if either is uncompromised
         use zks_crypt::true_entropy::get_sync_entropy;
         let entropy = get_sync_entropy(length);
         Self(entropy.to_vec())
@@ -142,7 +142,27 @@ impl ZksSurb {
     }
     
     /// Generate a route header for Faisal Swarm
+    ///
+    /// # ⚠️ SECURITY WARNING: MOCK IMPLEMENTATION (M5 Fix)
+    ///
+    /// **THIS IS A PLACEHOLDER IMPLEMENTATION FOR TESTING ONLY.**
+    ///
+    /// This function generates MOCK peer IDs and localhost addresses, which means:
+    /// - NO REAL ANONYMOUS ROUTING is provided
+    /// - All SURBs point to localhost (no actual P2P routing)
+    /// - Peer IDs are deterministic and trivially linkable
+    ///
+    /// **TODO: Production Implementation Required**
+    /// 1. Integrate with Faisal Swarm peer discovery
+    /// 2. Use real libp2p Multiaddrs from active network nodes
+    /// 3. Select route hops based on diversity and bandwidth criteria
+    /// 4. Add integration tests with actual P2P routing
+    ///
+    /// For Tor-style anonymity, see: Dingledine et al., "Tor: Second-Generation Onion Router"
     fn generate_route_header(config: &SurbConfig) -> Result<Vec<u8>> {
+        // TODO(M5): Replace mock implementation with real Faisal Swarm peer discovery
+        // See: https://github.com/libp2p/specs for peer discovery specifications
+        
         // Create a serializable route data structure
         #[derive(Serialize, Deserialize)]
         struct RouteHop {
@@ -157,8 +177,8 @@ impl ZksSurb {
         let mut route_hops = Vec::new();
         
         for i in 0..config.route_length {
-            // Generate mock peer IDs for each hop (in production, these would be real peers)
-            // For now, we'll use a simple mock peer ID format
+            // ⚠️ MOCK: Generate mock peer IDs for each hop
+            // In production, these MUST be real peers from Faisal Swarm discovery
             let peer_id_bytes = format!("peer_{:0>44}", i).as_bytes().to_vec();
             
             let role = match i {
@@ -167,7 +187,8 @@ impl ZksSurb {
                 _ => HopRole::Middle,
             };
             
-            // Mock multiaddr - in production this would be a real libp2p Multiaddr
+            // ⚠️ MOCK: localhost addresses provide NO anonymity
+            // In production, use real libp2p Multiaddrs from active nodes
             let multiaddr_bytes = format!("/ip4/127.0.0.1/tcp/{}", 4000 + i).as_bytes().to_vec();
             
             route_hops.push(RouteHop {

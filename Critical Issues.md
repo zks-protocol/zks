@@ -40,6 +40,19 @@
 **Status:** Low priority  
 **Notes:** Zeroizing wrapper handles cleanup. Clone needed for state export.
 
+### 16. SHA-256 vs SHA3-256 (ml_kem.rs, wasif_vernam.rs)
+**Status:** Design decision (documented)  
+**Rationale:** 
+- Both SHA-256 and SHA3-256 provide 256-bit security per NIST standards
+- SHA-256 chosen for: wider library support, crypto-lib availability, performance parity
+- Frontiers paper recommends SHA3-256 for "additional domain separation in case of SHA-2 weakness"
+- Current implementation is NIST-compliant; SHA3-256 migration optional for defense-in-depth
+
+### 17. Nonce XOR Construction (wasif_vernam.rs) ✅ Fixed Feb 2026
+**Status:** Implemented per Frontiers paper Section 3.10
+**Change:** `nonce_i = base_iv ⊕ (0^32 ‖ be64(counter))` now used
+**Method:** `set_base_iv()` allows deriving IV from handshake transcript
+
 ---
 
 ## Test Results

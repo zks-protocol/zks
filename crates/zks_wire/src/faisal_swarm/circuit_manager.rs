@@ -3,7 +3,7 @@
 //! Manages the lifecycle of Faisal Swarm circuits using libp2p relay.
 
 use super::*;
-use libp2p::{PeerId, Multiaddr, Stream};
+use libp2p::{PeerId, Multiaddr};
 use crate::signaling::{SignalingClient, PeerInfo};
 use crate::p2p::NativeSwarmBehaviour;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -131,7 +131,7 @@ impl FaisalSwarmManager {
     ) -> Result<Vec<SwarmHop>> {
         use rand::seq::SliceRandom;
         
-        // SECURITY: Use TrueEntropy for information-theoretic security in path selection
+        // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security in path selection
         use zks_crypt::true_entropy::TrueEntropyRng;
         let mut rng = TrueEntropyRng;
         let mut selected = available_peers.to_vec();
@@ -381,18 +381,6 @@ impl FaisalSwarmManager {
             .map_err(|e| SwarmError::Serialization(format!("Failed to serialize EXTEND payload: {}", e)))
     }
     
-    /// Extract shared secret from EXTENDED response
-    #[allow(dead_code)]
-    fn extract_shared_secret_from_extended(&self, cell: &FaisalSwarmCell) -> Result<[u8; 32]> {
-        if cell.payload.len() < 32 {
-            return Err(SwarmError::Protocol("EXTENDED payload too short".to_string()));
-        }
-        
-        let mut secret = [0u8; 32];
-        secret.copy_from_slice(&cell.payload[..32]);
-        Ok(secret)
-    }
-    
     /// Derive Wasif-Vernam keys from shared secret
     fn derive_vernam_keys(&self, shared_secret: &[u8]) -> Result<([u8; 32], [u8; 32])> {
         use hkdf::Hkdf;
@@ -496,7 +484,7 @@ impl FaisalSwarmManager {
         Ok(encrypted)
     }
     
-    /// Decrypt cell from specific hop
+    /// Decrypt cell from specific hop (reserved for relay node implementation)
     #[allow(dead_code)]
     fn decrypt_cell_from_hop(&self, encrypted: &[u8], hop_idx: usize, circuit: &FaisalSwarmCircuit) -> Result<FaisalSwarmCell> {
         // Decrypt with Wasif-Vernam for this hop using the circuit's SwarmLayer
@@ -527,7 +515,7 @@ impl FaisalSwarmManager {
         Ok(encrypted)
     }
     
-    /// Decrypt data from specific hop using SwarmLayer Wasif-Vernam cipher
+    /// Decrypt data from specific hop using SwarmLayer Wasif-Vernam cipher (reserved for relay node implementation)
     #[allow(dead_code)]
     fn decrypt_data_from_hop(&self, encrypted: &[u8], hop_idx: usize, circuit: &FaisalSwarmCircuit) -> Result<Vec<u8>> {
         if hop_idx >= circuit.layers.len() {
@@ -544,49 +532,6 @@ impl FaisalSwarmManager {
         info!("Data decrypted with Wasif-Vernam cipher for hop {}: {} → {} bytes", hop_idx, encrypted.len(), decrypted.len());
         
         Ok(decrypted)
-    }
-    
-    /// Send cell over libp2p stream
-    #[allow(dead_code)]
-    async fn send_cell_over_stream(&self, cell_data: &[u8], stream: &mut Stream) -> Result<()> {
-        use futures::io::AsyncWriteExt;
-        
-        // Send length prefix + cell data
-        let length = cell_data.len() as u32;
-        stream.write_all(&length.to_be_bytes()).await
-            .map_err(|e| SwarmError::Network(format!("Failed to write cell length: {}", e)))?;
-        
-        stream.write_all(cell_data).await
-            .map_err(|e| SwarmError::Network(format!("Failed to write cell data: {}", e)))?;
-        
-        stream.flush().await
-            .map_err(|e| SwarmError::Network(format!("Failed to flush stream: {}", e)))?;
-        
-        Ok(())
-    }
-    
-    /// Receive cell from libp2p stream
-    #[allow(dead_code)]
-    async fn receive_cell_from_stream(&self, stream: &mut Stream) -> Result<Vec<u8>> {
-        use futures::io::AsyncReadExt;
-        
-        // Read length prefix
-        let mut length_bytes = [0u8; 4];
-        stream.read_exact(&mut length_bytes).await
-            .map_err(|e| SwarmError::Network(format!("Failed to read cell length: {}", e)))?;
-        
-        let length = u32::from_be_bytes(length_bytes) as usize;
-        
-        if length > 65536 { // Max cell size
-            return Err(SwarmError::Protocol("Cell too large".to_string()));
-        }
-        
-        // Read cell data
-        let mut cell_data = vec![0u8; length];
-        stream.read_exact(&mut cell_data).await
-            .map_err(|e| SwarmError::Network(format!("Failed to read cell data: {}", e)))?;
-        
-        Ok(cell_data)
     }
     
     /// Get circuit info

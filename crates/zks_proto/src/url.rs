@@ -413,8 +413,8 @@ mod tests {
     
     #[test]
     fn test_valid_hostnames() {
-        // Create a dummy ML-DSA-65 public key (1952 bytes required)
-        let dummy_key = vec![0u8; 1952];
+        // Create a dummy ML-DSA-87 public key (2592 bytes required)
+        let dummy_key = vec![0u8; 2592];
         use base64::{Engine, engine::general_purpose::STANDARD};
         let key_b64 = STANDARD.encode(&dummy_key);
         

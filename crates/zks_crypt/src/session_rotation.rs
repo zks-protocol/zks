@@ -3,6 +3,21 @@
 //! This module implements automatic session rotation to achieve cryptographic
 //! unlinkability and improved forward secrecy.
 //!
+//! ## SECURITY PROPERTIES & LIMITATIONS (m3 Fix)
+//!
+//! **Forward Secrecy Granularity**: Session rotation provides forward secrecy at
+//! ~10 minute intervals (configurable). This means:
+//! - If a key is compromised, messages within the current 10-minute window may be decrypted
+//! - Messages from previous sessions (before the last rotation) remain protected
+//! - This is comparable to Tor's circuit rotation, but weaker than Signal's per-message forward secrecy
+//!
+//! **Comparison to Signal Double Ratchet**:
+//! Signal performs a DH ratchet step on every message, providing immediate forward secrecy.
+//! This module provides session-level (10-minute) forward secrecy for efficiency.
+//!
+//! For per-message forward secrecy, use the `RecursiveChain` module in combination
+//! with session rotation.
+//!
 //! ## How It Works
 //!
 //! Each session has a unique shared secret. When a session rotates:
@@ -10,15 +25,15 @@
 //! 2. New drand starting round (can reuse historical rounds!)
 //! 3. All previous session state is cryptographically unlinked
 //!
-//! ## Hybrid TRUE OTP with Session Rotation
+//! ## Hybrid High-Entropy XOR with Session Rotation
 //!
 //! Since each session has a different secret, the same drand rounds produce
 //! different keystreams. This means:
 //! - Session 1 uses rounds 1M-2M with secret_1
 //! - Session 2 uses rounds 1M-2M with secret_2 (DIFFERENT keystream!)
 //!
-//! Note: drand produces ~92KB/day of TRUE entropy. For large data,
-//! use Hybrid OTP mode (DEK TRUE, content ChaCha20).
+//! Note: drand produces ~92KB/day of entropy. For large data,
+//! use Hybrid mode (DEK with high-entropy, content with ChaCha20).
 
 use std::time::{Duration, Instant};
 use tracing::{info, warn};
@@ -302,7 +317,7 @@ mod tests {
         let key2 = session.derive_message_key(1);
         
         // Different message numbers should produce different keys
-        assert_ne!(key1.as_ref(), key2.as_ref());
+        assert_ne!(AsRef::<[u8]>::as_ref(&*key1), AsRef::<[u8]>::as_ref(&*key2));
     }
     
     #[test]

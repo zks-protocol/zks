@@ -22,9 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-01-12
 
 ### Added
-- **Wasif-Vernam Cipher**: Information-theoretic secure encryption
+- **Wasif-Vernam Cipher**: Multi-layer post-quantum encryption
   - HKDF mode for computational security
-  - True Vernam mode for perfect secrecy (≤32 bytes)
+  - High-entropy XOR mode with drand beacon
 - **Post-Quantum Cryptography**
   - ML-KEM-768 key encapsulation
   - ML-DSA-65 digital signatures

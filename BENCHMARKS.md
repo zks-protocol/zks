@@ -36,9 +36,9 @@ Performance benchmarks for ZKS Protocol cryptographic operations, measured using
 
 ---
 
-## TRUE Vernam (Information-Theoretic Security)
+## High-Entropy XOR Mode (256-bit Computational)
 
-For messages ≤32 bytes, providing **mathematically unbreakable** encryption:
+For messages ≤32 bytes, providing **256-bit post-quantum computational security**:
 
 | Message Size | Latency | Throughput |
 |-------------|---------|------------|
@@ -97,7 +97,7 @@ For messages ≤32 bytes, providing **mathematically unbreakable** encryption:
 
 | System | Encryption | Throughput (1KB) | Security Model |
 |--------|------------|------------------|----------------|
-| **ZKS (Wasif-Vernam)** | ChaCha20-Poly1305 | 187 MiB/s | Information-Theoretic (≤32B) |
+| **ZKS (Wasif-Vernam)** | ChaCha20-Poly1305 | 187 MiB/s | 256-bit Post-Quantum |
 | Tor | AES-128-CTR | ~300 MiB/s | Computational |
 | OpenSSL ChaCha20 | ChaCha20 | ~500 MiB/s | Computational |
 | AES-NI | AES-256-GCM | ~3 GiB/s | Computational |

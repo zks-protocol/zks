@@ -257,7 +257,7 @@ impl StunClient {
         // Magic cookie: 0x2112A442
         request.extend_from_slice(&[0x21, 0x12, 0xA4, 0x42]);
         
-        // Transaction ID: 12 TRUE random bytes (drand + OsRng) for information-theoretic security
+        // Transaction ID: 12 high-entropy random bytes (drand + OsRng) for 256-bit post-quantum security
         use zks_crypt::true_entropy::get_sync_entropy;
         let entropy = get_sync_entropy(12);
         let mut transaction_id = [0u8; 12];

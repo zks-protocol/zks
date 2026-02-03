@@ -332,7 +332,7 @@ mod tests {
         assert!(!nat.has_port_mapping());
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_nat_type_discovery() {
         let mut nat = NatTraversal::new();
         // This may fail in test environment if STUN servers are unreachable

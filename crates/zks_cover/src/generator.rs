@@ -171,6 +171,8 @@ impl CoverGenerator {
             let key = self.derive_encryption_key().await?;
             let mut cipher = WasifVernam::new(key)
                 .map_err(|e| CoverError::EncryptionError(format!("Failed to create cipher: {:?}", e)))?;
+            // SECURITY: Must derive base_iv before encryption to prevent nonce issues
+            cipher.derive_base_iv(&key, true);
             cipher.encrypt(payload)
                 .map_err(|e| CoverError::EncryptionError(format!("Encryption failed: {:?}", e)))
         } else {
@@ -299,7 +301,7 @@ mod tests {
         assert!(generator.config().use_post_quantum());
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_single_cover_generation() {
         let config = CoverConfig::default();
         let generator = CoverGenerator::new(config).unwrap();
@@ -310,7 +312,7 @@ mod tests {
         assert!(matches!(cover.cover_type, CoverType::Regular | CoverType::Loop | CoverType::Drop));
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_batch_cover_generation() {
         let config = CoverConfig::default();
         let generator = CoverGenerator::new(config).unwrap();
@@ -323,7 +325,7 @@ mod tests {
         }
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_scenario_generation() {
         let config = CoverConfig::default();
         let generator = CoverGenerator::new(config).unwrap();
@@ -338,7 +340,7 @@ mod tests {
         assert_eq!(high_covers.len(), 5);
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_cover_validation() {
         let config = CoverConfig::default();
         let generator = CoverGenerator::new(config).unwrap();

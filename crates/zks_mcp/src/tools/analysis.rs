@@ -526,7 +526,7 @@ impl AnalysisTools {
             }
             "advanced" => {
                 explanation.insert("description".to_string(), 
-                    "The Wasif-Vernam cipher implements a hybrid approach combining post-quantum key exchange with information-theoretic security. It uses ML-KEM-768 for initial key establishment, then derives encryption keys using HKDF. The Vernam component XORs plaintext with cryptographically secure random data. Anti-replay protection uses sequence numbers and timestamps. Entropy mixing combines multiple entropy sources using XOR operations. The cipher provides forward secrecy and resistance to both quantum and classical attacks.".to_string());
+                    "The Wasif-Vernam cipher implements a hybrid approach combining post-quantum key exchange with 256-bit computational security. It uses ML-KEM-768 for initial key establishment, then derives encryption keys using HKDF. The high-entropy XOR layer combines drand beacon randomness with CSPRNG via XOR for defense-in-depth. Anti-replay protection uses sequence numbers and timestamps. Entropy mixing combines multiple entropy sources using XOR operations. The cipher provides forward secrecy and resistance to both quantum and classical attacks. NOTE: This is computational security (not information-theoretic) as key exchange occurs over network.".to_string());
             }
             _ => {}
         }
@@ -576,7 +576,7 @@ impl AnalysisTools {
             }
             "advanced" => {
                 explanation.insert("description".to_string(), 
-                    "Entropy XOR combination is based on the principle that XORing multiple independent random sources produces output that is at least as random as the best input source. The operation is: result = source1 XOR source2 XOR ... XOR sourceN. This technique is information-theoretically secure if at least one source is truly random. The method reduces bias, increases entropy, and provides resistance against compromised sources. In ZKS, entropy XOR is used to combine system entropy, user-provided entropy, and network-derived entropy for key generation and encryption operations.".to_string());
+                    "Entropy XOR combination is based on the principle that XORing multiple independent random sources produces output that is at least as random as the best input source. The operation is: result = source1 XOR source2 XOR ... XOR sourceN. This provides 256-bit computational security if at least one source provides cryptographic randomness (defense-in-depth). The method reduces bias, increases entropy, and provides resistance against compromised sources. In ZKS, entropy XOR is used to combine drand beacon entropy, system CSPRNG, and peer contributions for key generation and encryption operations. NOTE: Per Shannon 1949, true information-theoretic security would require the combined entropy to equal message length with no reuse.".to_string());
             }
             _ => {}
         }
@@ -623,9 +623,9 @@ impl AnalysisTools {
     fn get_security_level(&self, operation: &str) -> String {
         match operation {
             "ml-kem-768" | "ml-dsa-65" => "NIST Level 3 (192-bit security)".to_string(),
-            "wasif-vernam" => "Information-theoretic + Post-quantum".to_string(),
+            "wasif-vernam" => "256-bit post-quantum computational + high-entropy XOR layer".to_string(),
             "handshake" => "Post-quantum authenticated key exchange".to_string(),
-            "entropy-xor" => "Information-theoretic (if sources independent)".to_string(),
+            "entropy-xor" => "256-bit computational (defense-in-depth if sources independent)".to_string(),
             "recursive-chain" => "Depends on underlying hash function".to_string(),
             _ => "Unknown".to_string(),
         }
@@ -673,7 +673,7 @@ impl AnalysisTools {
             }
             "wasif-vernam" => {
                 info.insert("type".to_string(), "Stream Cipher".to_string());
-                info.insert("security_level".to_string(), "Information-theoretic".to_string());
+                info.insert("security_level".to_string(), "256-bit post-quantum computational".to_string());
                 info.insert("key_size".to_string(), "Variable".to_string());
                 info.insert("performance".to_string(), "Very Fast".to_string());
             }

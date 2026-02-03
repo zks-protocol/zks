@@ -1,11 +1,28 @@
-//! Hybrid TRUE OTP: 256-bit Post-Quantum Computational Security for Any File Size
-//! 
-//! SECURITY PROOF:
-//! - DEK wrapped with computational entropy (drand ⊕ CSPRNG)
-//! - Content encrypted with ChaCha20 (keyed by DEK)
-//! - Adversary must break 256-bit computational entropy → O(2^256) effort
-//! 
-//! RESEARCH BASIS: Defense-in-depth entropy combination, Post-quantum cryptography
+//! Hybrid Computational Encryption: 256-bit Post-Quantum Computational Security for Any File Size
+//!
+//! # SECURITY MODEL CLARIFICATION
+//!
+//! **IMPORTANT**: Despite the legacy "OTP" naming, this module provides COMPUTATIONAL security,
+//! NOT information-theoretic (Shannon) security. Per Shannon 1949, perfect secrecy requires:
+//! 1. Key entropy ≥ message entropy
+//! 2. Keys used exactly once
+//! 3. Keys generated from truly random physical sources
+//!
+//! This module does NOT meet these criteria because:
+//! - drand produces ~92KB/day (insufficient for arbitrary message sizes)
+//! - ChaCha20 expansion is used for messages >32 bytes (stream cipher, not OTP)
+//! - Entropy is computationally secure (BLS signatures), not physically random
+//!
+//! # Security Properties
+//!
+//! - **256-bit post-quantum computational security** (under standard model assumptions)
+//! - **DEK wrapped with computational entropy** (drand ⊕ CSPRNG)
+//! - **Content encrypted with ChaCha20-Poly1305** (authenticated encryption)
+//! - **Adversary effort**: O(2^256) to break, assuming ML-KEM + ChaCha20 + BLS are secure
+//!
+//! # Research Basis
+//!
+//! Defense-in-depth entropy combination, Post-quantum cryptography (NIST FIPS 203/204)
 
 use chacha20poly1305::{ChaCha20Poly1305, aead::{Aead, KeyInit}};
 use zeroize::Zeroizing;
@@ -171,16 +188,13 @@ pub enum HybridOtpError {
 
 /// Hybrid TRUE OTP with synchronized entropy support
 pub struct HybridOtp {
-    #[allow(dead_code)]
-    entropy_source: Arc<dyn crate::entropy_provider::EntropyProvider>,
     used_otps: std::sync::Mutex<std::collections::HashSet<[u8; 32]>>,
 }
 
 impl HybridOtp {
-    /// Create a new HybridOtp instance with the specified entropy provider
-    pub fn new(entropy_source: Arc<dyn crate::entropy_provider::EntropyProvider>) -> Self {
+    /// Create a new HybridOtp instance
+    pub fn new(_entropy_source: Arc<dyn crate::entropy_provider::EntropyProvider>) -> Self {
         Self { 
-            entropy_source,
             used_otps: std::sync::Mutex::new(std::collections::HashSet::new()),
         }
     }

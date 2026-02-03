@@ -121,7 +121,7 @@ impl CellHeader {
         payload_len: u16,
         mean_delay_ms: u16,
     ) -> Self {
-        // SECURITY: Use TrueEntropy for information-theoretic security in delay generation
+        // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security in delay generation
         // Prevents timing correlation attacks that could break anonymity
         use zks_crypt::true_entropy::TrueEntropyRng;
         use rand::Rng;

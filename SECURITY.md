@@ -46,7 +46,7 @@ We follow responsible disclosure:
 ZKS Protocol implements multiple layers of security:
 
 - **Post-Quantum Cryptography**: ML-KEM-768 for key exchange
-- **Information-Theoretic Security**: Wasif-Vernam cipher
+- **256-bit Post-Quantum Computational Security**: Wasif-Vernam cipher
 - **Memory Safety**: Written in Rust
 - **Anti-Replay Protection**: Bitmap-based nonce tracking
 - **Formal Verification**: Critical components verified with ProVerif

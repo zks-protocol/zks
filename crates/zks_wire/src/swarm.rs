@@ -34,7 +34,8 @@ pub struct ProviderRecord {
 pub struct KademliaDHT {
     /// Provider records stored locally
     providers: Arc<RwLock<HashMap<Vec<u8>, Vec<ProviderRecord>>>>,
-    /// Replication factor (k)
+    /// Replication factor (k) - reserved for future replication logic
+    #[allow(dead_code)]
     k_value: usize,
 }
 
@@ -83,11 +84,11 @@ impl KademliaDHT {
 pub struct PeerId([u8; 32]);
 
 impl PeerId {
-    /// Generate a new random peer ID using TRUE entropy (drand + OsRng)
+    /// Generate a new random peer ID using high-entropy randomness (drand + OsRng)
     /// 
     /// # Security
-    /// Uses TrueEntropy for information-theoretic security.
-    /// Unbreakable if ANY entropy source is uncompromised.
+    /// Uses TrueEntropy for 256-bit post-quantum computational security.
+    /// Secure if ANY entropy source is uncompromised.
     pub fn new() -> Self {
         use zks_crypt::true_entropy::get_sync_entropy;
         let entropy = get_sync_entropy(32);
@@ -795,14 +796,14 @@ impl Swarm {
 mod tests {
     use super::*;
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_swarm_creation() {
         let swarm = Swarm::new("test-network".to_string());
         assert_eq!(swarm.config.network_name, "test-network");
         assert!(swarm.peer_count().await == 0);
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_peer_management() {
         let swarm = Swarm::new("test-network".to_string());
         
@@ -827,7 +828,7 @@ mod tests {
         assert_eq!(swarm.peer_count().await, 0);
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_peer_id_generation() {
         let peer_id1 = PeerId::new();
         let peer_id2 = PeerId::new();
@@ -851,7 +852,7 @@ mod tests {
         assert_eq!(String::from_utf8(key3).unwrap(), "entropy_block_51");
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_entropy_block_announcement() {
         let swarm = Swarm::new("test-network".to_string());
         
@@ -878,7 +879,7 @@ mod tests {
         assert_eq!(providers[0].provider, peer_id);
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_multiple_entropy_block_announcement() {
         let swarm = Swarm::new("test-network".to_string());
         
@@ -908,7 +909,7 @@ mod tests {
         }
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_find_closest_entropy_provider() {
         let swarm = Swarm::new("test-network".to_string());
         
@@ -939,7 +940,7 @@ mod tests {
         assert!(no_provider.is_none());
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_entropy_cache_integration() {
         let mut swarm = Swarm::new("test-network".to_string());
         
@@ -948,9 +949,15 @@ mod tests {
         let cache = Arc::new(crate::entropy_cache::EntropyCache::new(cache_config));
         swarm.set_entropy_cache(cache.clone());
         
-        // Store a block in the cache
-        let test_data = vec![0u8; 1024]; // 1KB test data
-        cache.store_block(50_000_000, test_data.clone()).await.unwrap();
+        // Store a block in the cache with proper hash calculation
+        let rounds: Vec<zks_crypt::entropy_block::DrandRound> = (0..1000).map(|i| zks_crypt::entropy_block::DrandRound {
+            round: 50_000_000 + i,
+            randomness: [0u8; 32],
+            signature: vec![1, 2, 3, 4],
+            previous_signature: vec![0, 1, 2, 3],
+        }).collect();
+        let test_block = zks_crypt::entropy_block::EntropyBlock::with_rounds(50_000_000, rounds);
+        cache.store_block(test_block).await.unwrap();
         
         // Verify block is in cache
         assert!(cache.has_block(50_000_000).await);

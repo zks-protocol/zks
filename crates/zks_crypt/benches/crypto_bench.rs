@@ -28,7 +28,11 @@ fn benchmark_encrypt(c: &mut Criterion) {
         group.throughput(Throughput::Bytes(size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &data, |b, data| {
             b.iter_batched(
-                || WasifVernam::new(key).expect("Failed to create cipher"),
+                || {
+                    let mut cipher = WasifVernam::new(key).expect("Failed to create cipher");
+                    cipher.derive_base_iv(&key, true); // Required for encryption (security fix M3)
+                    cipher
+                },
                 |mut cipher| {
                     let encrypted = cipher.encrypt(black_box(data)).unwrap();
                     black_box(encrypted)
@@ -58,7 +62,8 @@ fn benchmark_true_vernam(c: &mut Criterion) {
             b.iter_batched(
                 || {
                     let mut cipher = WasifVernam::new(key).expect("Failed to create cipher");
-                    cipher.enable_synchronized_vernam(shared_seed);
+                    cipher.derive_base_iv(&key, true); // Required for encryption (security fix M3)
+                    cipher.enable_sequenced_vernam(shared_seed);
                     cipher
                 },
                 |mut cipher| {
@@ -84,14 +89,19 @@ fn benchmark_decrypt(c: &mut Criterion) {
         
         // Create cipher and encrypt data once
         let mut setup_cipher = WasifVernam::new(key).expect("Failed to create cipher");
+        setup_cipher.derive_base_iv(&key, true); // Required for encryption (security fix M3)
         let data = random_bytes(size);
         let encrypted = setup_cipher.encrypt(&data).unwrap();
         
         group.throughput(Throughput::Bytes(size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), &encrypted, |b, encrypted| {
             b.iter_batched(
-                || WasifVernam::new(key).expect("Failed to create cipher"),
-                |mut cipher| {
+                || {
+                    let mut cipher = WasifVernam::new(key).expect("Failed to create cipher");
+                    cipher.derive_base_iv(&key, true); // Required for decryption (security fix M3)
+                    cipher
+                },
+                |cipher| {
                     let decrypted = cipher.decrypt(black_box(encrypted)).unwrap();
                     black_box(decrypted)
                 },

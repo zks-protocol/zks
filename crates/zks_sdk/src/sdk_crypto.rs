@@ -28,17 +28,17 @@ pub fn derive_session_key(
     Ok(key)
 }
 
-/// Generate random bytes using TRUE entropy (drand + OsRng) for cryptographic operations
+/// Generate random bytes using high-entropy randomness (drand + OsRng) for cryptographic operations
 /// 
 /// # Security
 /// Uses TrueEntropy which combines drand beacon + local CSPRNG via XOR
-/// for information-theoretic security. Unbreakable if ANY source is uncompromised.
+/// for 256-bit post-quantum computational security. Secure if ANY source is uncompromised.
 pub fn generate_random_bytes(len: usize) -> Result<Vec<u8>> {
-    // SECURITY: Use TrueEntropy for information-theoretic security
-    // Combines drand (BLS verified) + OsRng via XOR - unbreakable if either is secure
+    // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security
+    // Combines drand (BLS verified) + OsRng via XOR - secure if either is uncompromised
     use zks_crypt::true_entropy::get_sync_entropy;
     let bytes = get_sync_entropy(len);
-    debug!("Generated {} TRUE random bytes (drand XOR OsRng)", len);
+    debug!("Generated {} high-entropy random bytes (drand XOR OsRng)", len);
     Ok(bytes.to_vec())
 }
 

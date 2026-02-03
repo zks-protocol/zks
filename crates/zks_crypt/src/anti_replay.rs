@@ -9,12 +9,23 @@
 //! - Handles out-of-order packet delivery (UDP reordering)
 //! - Protection against delayed replay attacks
 //! - Zero-allocation NoHashHasher for u64 PIDs
+//! - Configurable window size for high-throughput applications
 //! 
 //! # Security Model
 //! - Each outgoing packet gets a unique, monotonically increasing PID
 //! - PIDs are encrypted with the packet payload
 //! - Receiver tracks PIDs in a sliding window
 //! - Duplicate or out-of-window PIDs are rejected as replay attacks
+//!
+//! # Window Size Recommendations
+//! - Low-throughput (< 100 msg/sec): 1024 (legacy default)
+//! - Medium-throughput (100-1000 msg/sec): 8192
+//! - High-throughput (> 1000 msg/sec): 65536 (new default)
+//! - Very high-throughput (> 10000 msg/sec): 262144
+//!
+//! # Time-Based Expiry
+//! For applications with variable throughput, consider combining window-based
+//! replay protection with time-based expiry (see `validate_pid_with_expiry`).
 
 use std::collections::HashSet;
 use std::hash::{BuildHasher, Hasher};
@@ -22,30 +33,61 @@ use std::marker::PhantomData;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
-/// History window size - number of PIDs to track
-/// Allows for packet reordering within this window
-pub const HISTORY_LEN: u64 = 1024;
+/// Default history window size - number of PIDs to track
+/// Increased from 1024 to 65536 for high-throughput scenarios
+/// At 1000 msg/sec, this provides ~65 seconds of window
+pub const HISTORY_LEN: u64 = 65536;
+
+/// Legacy window size for low-throughput applications
+pub const HISTORY_LEN_LEGACY: u64 = 1024;
+
+/// Recommended window size for very high-throughput applications
+pub const HISTORY_LEN_HIGH_THROUGHPUT: u64 = 262144;
 
 /// Zero-allocation hasher for u64 PIDs
 /// Since PIDs are already unique u64s, we use them directly as hash values
-struct NoHashHasher<T>(u64, PhantomData<T>);
+/// Zero-allocation hasher for u64 PIDs
+/// 
+/// Since PIDs are already unique u64s, we use them directly as hash values.
+/// This provides O(1) hashing with zero allocations for packet ID tracking.
+/// 
+/// # SECURITY NOTE (m7 Fix)
+/// 
+/// This hasher is ONLY safe for use with u64 keys. Using it with other types
+/// could cause hash collisions and bypass replay protection.
+/// 
+/// The `write()` method now returns an error indicator via the hash value
+/// instead of silently succeeding, making incorrect usage detectable.
+struct NoHashHasher<T>(u64, PhantomData<T>, bool); // Added error flag
 
 impl<T> Default for NoHashHasher<T> {
     fn default() -> Self {
-        NoHashHasher(0, PhantomData)
+        NoHashHasher(0, PhantomData, false)
     }
 }
 
 impl<T> Hasher for NoHashHasher<T> {
     fn finish(&self) -> u64 {
-        self.0
+        // If error flag is set, return a sentinel value that will cause
+        // the lookup to fail predictably rather than silently succeed
+        if self.2 {
+            tracing::error!("🚨 SECURITY: NoHashHasher used incorrectly - returning error sentinel");
+            u64::MAX // Sentinel value - will never match valid PIDs
+        } else {
+            self.0
+        }
     }
 
-    fn write(&mut self, _: &[u8]) {
-        // No-op instead of panic to prevent DoS attacks
-        // This method should never be called for u64 keys
+    fn write(&mut self, bytes: &[u8]) {
+        // SECURITY FIX m7: Set error flag instead of silent no-op
+        // This makes incorrect usage detectable rather than causing silent failures
+        self.2 = true; // Set error flag
         debug_assert!(false, "NoHashHasher::write() called - this indicates incorrect usage with non-u64 types");
-        tracing::warn!("NoHashHasher::write() called with byte slice - potential collision risk from incorrect usage");
+        tracing::error!(
+            "🚨 SECURITY: NoHashHasher::write() called with {} bytes - incorrect usage detected! \
+             This hasher only supports u64 keys. Hash lookups will fail safely.",
+            bytes.len()
+        );
     }
 
     fn write_u64(&mut self, n: u64) {

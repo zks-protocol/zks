@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId, Throughput, black_box};
-use zks_crypt::true_vernam::SynchronizedVernamBuffer;
+use zks_crypt::high_entropy_cipher::SynchronizedVernamBuffer;
 
 fn benchmark_synchronized_vernam(c: &mut Criterion) {
     let mut group = c.benchmark_group("SynchronizedVernam");

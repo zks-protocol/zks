@@ -10,7 +10,7 @@
 //! ## Features
 //! 
 //! - **Post-quantum secure**: Uses ML-KEM-768 for key exchange
-//! - **Wasif-Vernam encryption**: Information-theoretic secure encryption
+//! - **Wasif-Vernam encryption**: 256-bit post-quantum computational security with high-entropy XOR layer
 //! - **Poisson timing**: Realistic traffic patterns
 //! - **Faisal Swarm integration**: Works with existing ZKS routing
 //! 
@@ -44,6 +44,8 @@ pub mod config;
 pub mod error;
 /// Core cover traffic generator
 pub mod generator;
+/// Mixing delay for global adversary resistance (BEATS NYM - PQ secure)
+pub mod mixing_delay;
 /// Poisson timing scheduler for cover traffic
 pub mod scheduler;
 /// Faisal Swarm transport integration
@@ -54,6 +56,7 @@ pub mod types;
 pub use config::{CoverConfig, CoverConfigBuilder};
 pub use error::{CoverError, Result};
 pub use generator::CoverGenerator;
+pub use mixing_delay::{MixingDelay, MixingDelayConfig, MixingDelayStats};
 pub use scheduler::CoverScheduler;
 pub use transport::{CoverTransport, CoverTransportBuilder};
 pub use types::{CoverMessage, CoverType};

@@ -348,7 +348,7 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires running signaling server
     async fn test_signaling_client() {
-        let mut _client = SignalingClient::connect("localhost:8080", "test-peer".to_string()).await.unwrap();
+        let mut client = SignalingClient::connect("localhost:8080", "test-peer".to_string()).await.unwrap();
         
         let capabilities = PeerCapabilities {
             supports_p2p: true,

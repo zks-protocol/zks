@@ -5,7 +5,7 @@
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
-    use crate::true_vernam::SynchronizedVernamBuffer;
+    use crate::high_entropy_cipher::SynchronizedVernamBuffer;
     use crate::drand::DrandEntropy;
     use crate::entropy_provider::{DirectDrandProvider, EntropyProvider};
 
@@ -57,6 +57,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Requires external drand network - run with --ignored"]
     async fn test_entropy_provider_fetch_round() {
         // Create a drand client
         let drand_client = Arc::new(DrandEntropy::new());

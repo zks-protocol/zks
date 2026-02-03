@@ -147,9 +147,9 @@ mod wasm_impl {
     /// ML-DSA-87 signature size (4627 bytes)
     pub const SIGNATURE_SIZE: usize = 4627;
     
-    /// Generate a new ML-DSA-87 keypair (WASM implementation - POST-QUANTUM + TRUE ENTROPY)
+    /// Generate a new ML-DSA-87 keypair (WASM implementation - POST-QUANTUM + HIGH ENTROPY)
     pub fn generate_keypair() -> Result<(Vec<u8>, Zeroizing<Vec<u8>>)> {
-        // SECURITY: Use TrueEntropy for information-theoretic security
+        // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security
         let mut rng = TrueEntropyRng;
         let signing_key = SigningKey::random(&mut rng);
         let verifying_key = signing_key.verifying_key();
@@ -258,7 +258,6 @@ impl std::fmt::Debug for MlDsaKeypair {
 
 impl MlDsaKeypair {
     /// Create a new keypair from raw bytes
-    #[must_use]
     pub fn from_bytes(verifying_key: Vec<u8>, signing_key: Vec<u8>) -> Result<Self> {
         if verifying_key.len() != PUBLIC_KEY_SIZE {
             return Err(PqcError::InvalidKey(format!(
@@ -312,7 +311,6 @@ impl MlDsa {
     ///
     /// # Errors
     /// Returns error if key generation fails
-    #[must_use]
     pub fn generate_keypair() -> Result<MlDsaKeypair> {
         let (verifying_key, signing_key) = generate_keypair()?;
         
@@ -330,7 +328,6 @@ impl MlDsa {
     ///
     /// # Errors
     /// Returns error if signing fails or key is invalid
-    #[must_use]
     pub fn sign(message: impl AsRef<[u8]>, signing_key: &[u8]) -> Result<Vec<u8>> {
         sign(message, signing_key)
     }
@@ -347,7 +344,6 @@ impl MlDsa {
     ///
     /// # Errors
     /// Returns error if verification fails or inputs are invalid
-    #[must_use]
     pub fn verify(message: &[u8], signature: &[u8], verifying_key: &[u8]) -> Result<()> {
         verify(message, signature, verifying_key)
     }
@@ -364,7 +360,6 @@ impl MlDsa {
     ///
     /// # Errors
     /// Returns error if any signature is invalid or inputs are malformed
-    #[must_use]
     pub fn batch_verify(
         messages: &[impl AsRef<[u8]>],
         signatures: &[&[u8]],

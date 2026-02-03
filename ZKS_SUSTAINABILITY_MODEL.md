@@ -105,7 +105,7 @@ But sustainable things survive. This document outlines how ZKS remains funded **
 ```
 "I don't run a node, but I want ZKS to exist."
 "This is the most important privacy project."
-"TRUE OTP for free? Take my money."
+"Post-quantum encryption for free? Take my money."
 ```
 
 #### Transparency:

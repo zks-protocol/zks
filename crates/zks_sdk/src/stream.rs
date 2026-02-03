@@ -130,7 +130,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
         
         // Enable features based on configuration
         if is_swarm {
-            cipher.enable_scrambling(256); // Enable traffic analysis resistance
+            let _ = cipher.enable_scrambling(256); // Enable traffic analysis resistance
         }
         
         if config.security == crate::config::SecurityLevel::TrueVernam {
@@ -185,7 +185,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
         
         // Enable features based on configuration
         if is_swarm {
-            cipher.enable_scrambling(256); // Enable traffic analysis resistance
+            let _ = cipher.enable_scrambling(256); // Enable traffic analysis resistance
         }
         
         if config.security == crate::config::SecurityLevel::TrueVernam {

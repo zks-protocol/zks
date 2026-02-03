@@ -45,7 +45,7 @@ use sha2::Sha256;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use zeroize::Zeroizing;
 use ring::rand::SecureRandom;
 use crate::constant_time::{ct_is_zero, ct_eq, ct_lt_u64, ct_gt_u64, ct_lt_usize, ct_eq_usize};
@@ -184,15 +184,33 @@ fn validate_drand_entropy(response: &DrandResponse, randomness_bytes: &[u8]) -> 
                 Ok(true) => {
                     info!("✅ BLS signature verification PASSED for drand round {} (alternate scheme: {:?})", response.round, alt_scheme);
                 },
-                _ => {
-                    warn!("⚠️ BLS signature verification did not pass for round {} - verify chain configuration", response.round);
+                Ok(false) => {
+                    // SECURITY FIX m4: Make BLS verification failure a hard error
+                    // An attacker controlling the network could inject malicious entropy
+                    // if we accept unverified drand responses
+                    error!("🚨 SECURITY: BLS signature verification FAILED for round {} - rejecting unverified entropy", response.round);
+                    return Err(DrandError::ParseError(format!(
+                        "BLS signature verification failed for round {} - possible attack or misconfigured chain",
+                        response.round
+                    )));
+                },
+                Err(e) => {
+                    // SECURITY FIX m4: Verification errors are also hard failures
+                    error!("🚨 SECURITY: BLS verification error for round {}: {}", response.round, e);
+                    return Err(DrandError::ParseError(format!(
+                        "BLS signature verification error for round {}: {}",
+                        response.round, e
+                    )));
                 }
             }
         },
         Err(e) => {
-            // Log warning but don't fail - allow fallback to OS random if verification fails
-            warn!("⚠️ BLS verification error: {}", e);
-            debug!("Signature length: {}, attempting verification anyway", sig_bytes.len());
+            // SECURITY FIX m4: Make BLS verification errors fatal
+            // Do NOT fall back to unverified entropy - this would allow MITM attacks
+            error!("🚨 SECURITY: BLS verification error for round {}: {}", response.round, e);
+            return Err(DrandError::ParseError(format!(
+                "BLS signature verification error: {}. Rejecting unverified entropy.", e
+            )));
         }
     }
     
@@ -1254,6 +1272,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore = "Requires external drand network - run with --ignored"]
     async fn test_drand_fetch() {
         let drand = DrandEntropy::new();
         let entropy = drand.get_entropy().await;
@@ -1264,6 +1283,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Requires external drand network - run with --ignored"]
     async fn test_drand_caching() {
         let drand = DrandEntropy::new();
         
@@ -1280,6 +1300,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Requires external drand network - run with --ignored"]
     async fn test_mixed_entropy_uniqueness() {
         let drand = DrandEntropy::new();
         

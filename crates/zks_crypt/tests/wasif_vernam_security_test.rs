@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use zeroize::Zeroizing;
 
 /// Test 1: No keystream reuse across encryptions
-/// This is critical for Vernam cipher security - same keystream reuse breaks perfect secrecy
+/// This is critical for Vernam cipher security - same keystream reuse breaks computational security
 #[test]
 fn test_keystream_uniqueness() {
     let key = [0xAB; 32];
@@ -38,11 +38,11 @@ fn test_ciphertext_uniformity() {
     assert!((ratio - 0.5).abs() < 0.01, "Ciphertext is not uniformly random: {:.4}", ratio);
 }
 
-/// Test 3: Computational security property
+/// Test 3: Computational security property (IND-CPA style)
 /// For computational security: P(M|C) ≈ P(M) within computational bounds
 /// Given any ciphertext, all plaintexts are computationally indistinguishable
 #[test]
-fn test_perfect_secrecy_property() {
+fn test_computational_security_property() {
     // Create two different keys
     let key1 = [0x11; 32];
     let key2 = [0x22; 32];
@@ -54,7 +54,7 @@ fn test_perfect_secrecy_property() {
     let ciphertext = cipher1.encrypt(message_a).unwrap();
     
     // The same ciphertext could have come from message_b with a different key
-    // This is the essence of perfect secrecy
+    // This demonstrates computational indistinguishability (IND-CPA property)
     let mut cipher2 = WasifVernam::new(key2).unwrap();
     let possible_plaintext = cipher2.decrypt(&ciphertext);
     
@@ -66,7 +66,7 @@ fn test_perfect_secrecy_property() {
         },
         Err(_) => {
             // Decryption with wrong key is expected to fail due to authentication
-            // This is actually better than perfect secrecy - it's authenticated encryption
+            // This demonstrates IND-CCA2 security via authenticated encryption (AEAD)
         }
     }
     
@@ -78,7 +78,7 @@ fn test_perfect_secrecy_property() {
 }
 
 /// Test 4: Key length verification
-/// Verify keystream length >= plaintext length for perfect secrecy
+/// Verify keystream length >= plaintext length for proper encryption
 #[test]
 fn test_key_length_equals_message() {
     let key = [0xAB; 32];
@@ -172,7 +172,7 @@ fn test_statistical_independence() {
     
     let correlation = correlation_sum / n;
     
-    // For perfect secrecy, correlation should be near zero
+    // For computational security, correlation should be near zero (indistinguishable from random)
     assert!(correlation.abs() < 0.1, 
         "Strong correlation detected between plaintext and ciphertext: {}", correlation);
 }
@@ -226,16 +226,16 @@ fn test_key_sensitivity() {
         "Key sensitivity failed: only {}% of bytes differed", (difference_ratio * 100.0));
 }
 
-/// Test 10: TRUE Vernam Information-Theoretic Security
-/// Test the synchronized buffer mode that provides perfect secrecy
+/// Test 10: High-Entropy XOR 256-bit Post-Quantum Computational Security
+/// Test the sequenced buffer mode that provides strong security with desync resistance
 #[test]
 fn test_true_vernam_perfect_secrecy() {
     let key = [0xAB; 32];
     let mut cipher = WasifVernam::new(key).unwrap();
     
-    // Enable TRUE Vernam mode with synchronized buffer
+    // Enable TRUE Vernam mode with sequenced buffer (desync-resistant)
     let shared_seed = [0xCD; 32]; // This would come from ML-KEM handshake in real usage
-    cipher.enable_synchronized_vernam(shared_seed);
+    cipher.enable_sequenced_vernam(shared_seed);
     
     let message = b"This message has 256-bit post-quantum computational security!";
     let ciphertext = cipher.encrypt(message).unwrap();

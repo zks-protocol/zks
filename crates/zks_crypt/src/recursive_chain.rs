@@ -8,6 +8,42 @@
 //! - Contribution mixing: Both parties' entropy contributes to each key
 //! - Generation tracking: Prevents desynchronization attacks
 //! 
+//! # LIMITATIONS (m5 Fix)
+//!
+//! **No Break-in Recovery**: Unlike Signal's full Double Ratchet, this module
+//! implements ONLY the symmetric-key ratchet (KDF chain). It does NOT include
+//! the asymmetric (DH/ML-KEM) ratchet that provides break-in recovery.
+//!
+//! Per Signal Double Ratchet specification:
+//! > "The DH ratchet provides 'break-in recovery': even if an attacker obtains
+//! > the current state, they cannot decrypt messages sent after the next DH
+//! > ratchet step."
+//!
+//! With this implementation:
+//! - ✅ Forward secrecy: Past messages protected if current key compromised
+//! - ❌ Break-in recovery: Future messages NOT protected if current key compromised
+//!   (attacker can derive all future keys from compromised state)
+//!
+//! ## Recommended Mitigations (M1 Fix)
+//!
+//! To achieve break-in recovery comparable to Signal, combine this module with:
+//!
+//! 1. **`session_rotation` module**: Perform ML-KEM re-handshake every 10 minutes
+//!    (provides session-level break-in recovery)
+//!
+//! 2. **`hybrid_ratchet` module**: Perform ML-KEM ratchet step every N messages
+//!    (provides message-level break-in recovery with configurable granularity)
+//!
+//! 3. **Full Double Ratchet implementation**: For per-message break-in recovery,
+//!    implement the asymmetric ratchet as specified in Signal's Double Ratchet Algorithm.
+//!
+//! For peer-reviewed security proofs, see:
+//! - Signal Double Ratchet: https://signal.org/docs/specifications/doubleratchet/
+//! - Triple Ratchet (2025-078): Adds post-quantum ratchet layer
+//!
+//! For full break-in recovery, combine this with periodic ML-KEM re-handshakes
+//! via the `session_rotation` module.
+//! 
 //! # Key Derivation
 //! ```text
 //! C_n = KDF(A_n XOR B_n)           -- Chain key

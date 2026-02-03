@@ -1,29 +1,29 @@
-//! Faisal Swarm - P2P Onion Routing with Information-Theoretic Security
+//! Faisal Swarm - P2P Onion Routing with 256-bit Post-Quantum Security
 //! 
 //! # Overview
 //! 
 //! Faisal Swarm is a novel anonymity network topology combining:
 //! - Multi-hop circuit construction (for traffic analysis resistance)
-//! - Wasif-Vernam encryption at each layer (for information-theoretic security)
+//! - Wasif-Vernam encryption at each layer (for 256-bit post-quantum computational security)
 //! - P2P swarm architecture (for decentralization)
 //! 
 //! Unlike traditional onion routing (e.g., Tor) which uses AES encryption,
-//! Faisal Swarm uses the Wasif-Vernam cipher, providing provable security
-//! even against quantum computers with unlimited computational power.
+//! Faisal Swarm uses the Wasif-Vernam cipher, providing post-quantum security
+//! against quantum computers.
 //! 
 //! # Architecture
 //! 
 //! ```text
 //! Client → Guard Peer → Middle Peer → Exit Peer → Destination
 //!          ↓ Vernam      ↓ Vernam       ↓ Vernam
-//!        (Information-theoretically secure at each hop)
+//!        (256-bit post-quantum computational security at each hop)
 //! ```
 //! 
 //! # Citation
 //! 
 //! If you use Faisal Swarm in academic work, please cite:
 //! ```text
-//! Faisal Swarm: A P2P Onion Routing Protocol with Information-Theoretic Security
+//! Faisal Swarm: A P2P Onion Routing Protocol with Post-Quantum Security
 //! Author: Faisal
 //! Year: 2026
 //! ```
@@ -112,7 +112,7 @@ pub struct SwarmCapabilities {
 /// Wasif-Vernam encryption layer for one hop
 /// 
 /// Each hop in a Faisal Swarm circuit has its own Wasif-Vernam cipher,
-/// providing information-theoretic security at every layer.
+/// providing 256-bit post-quantum computational security at every layer.
 pub struct SwarmLayer {
     /// Peer ID of this hop
     pub peer_id: PeerId,
@@ -152,9 +152,13 @@ impl SwarmLayer {
         let mut backward_cipher = zks_crypt::wasif_vernam::WasifVernam::new(backward_key)
             .map_err(|e| SwarmError::Encryption(format!("Failed to create backward cipher: {:?}", e)))?;
         
-        // Enable synchronized Vernam mode for information-theoretic security
-        forward_cipher.enable_synchronized_vernam(forward_key);
-        backward_cipher.enable_synchronized_vernam(backward_key);
+        // Required: derive base_iv for both ciphers (security fix M3)
+        forward_cipher.derive_base_iv(&forward_key, true);
+        backward_cipher.derive_base_iv(&backward_key, true);
+        
+        // Enable sequenced Vernam mode for 256-bit post-quantum computational security with desync resistance
+        forward_cipher.enable_sequenced_vernam(forward_key);
+        backward_cipher.enable_sequenced_vernam(backward_key);
         
         Ok(Self {
             peer_id,
@@ -220,7 +224,7 @@ impl FaisalSwarmCircuit {
     /// Encrypt data with all Wasif-Vernam layers (onion encryption)
     /// 
     /// This is the core of Faisal Swarm: each layer uses Wasif-Vernam
-    /// instead of AES, providing information-theoretic security.
+    /// instead of AES, providing 256-bit post-quantum computational security.
     pub fn encrypt_onion(&mut self, plaintext: &[u8]) -> Result<Vec<u8>> {
         let mut encrypted = plaintext.to_vec();
         

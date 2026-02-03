@@ -1,31 +1,57 @@
-//! True Vernam Buffer: 256-bit Post-Quantum Computational Secure Random Source
+//! High-Entropy Computational Cipher: 256-bit Post-Quantum Computational Security
+//!
+//! # ⚠️ NAMING CLARIFICATION (F1 Fix)
+//!
+//! Despite the legacy "Vernam" naming, this module provides COMPUTATIONAL security,
+//! NOT information-theoretic (Shannon OTP) security. The naming is retained for
+//! backward compatibility but should not be interpreted as implementing a true OTP.
+//!
+//! ## Why This Is NOT a One-Time Pad
+//!
+//! Per Shannon 1949, a true OTP requires:
+//! 1. **Key entropy ≥ message entropy**: drand produces ~92KB/day, insufficient for arbitrary messages
+//! 2. **Keys from truly random physical sources**: drand uses BLS signatures (computational)
+//! 3. **Keys used exactly once**: ChaCha20 expansion reuses the 32-byte seed for longer messages
+//!
+//! ## What This Module Actually Provides
+//!
+//! This module implements a 256-bit post-quantum computationally secure keystream generator
+//! using continuously fetched entropy from distributed randomness beacons (drand).
+//!
+//! ## SECURITY MODEL CLARIFICATION
+//!
+//! **IMPORTANT**: This is NOT information-theoretic (Shannon) security. Per Shannon's 1949
+//! theorem, perfect secrecy requires key entropy ≥ message entropy with no key reuse.
+//! This module provides COMPUTATIONAL security:
+//! - drand entropy is derived from BLS threshold signatures (computationally secure)
+//! - ChaCha20 expansion for messages >32 bytes (stream cipher, not OTP)
+//! - Security reduces to hardness of ML-KEM + ChaCha20 + BLS
 //! 
-//! This module implements a 256-bit post-quantum computationally secure random byte generator
-//! using continuously fetched entropy from distributed randomness beacons.
+//! ## High-Entropy XOR Layer via Drand
 //! 
-//! ## TRUE OTP via Drand
-//! 
-//! **Security Note**: drand produces ~92 KB/day of TRUE random entropy.
-//! For small messages and key wrapping, this provides TRUE OTP security.
-//! For large data, use Hybrid OTP (DEK TRUE, content ChaCha20).
+//! **Note**: drand produces ~92 KB/day of high-quality random entropy.
+//! For small messages (≤32 bytes), we use drand directly for unpredictability.
+//! For larger data, use Hybrid mode (DEK wrapped with entropy, content with ChaCha20).
 //! 
 //! Security Properties:
-//! - Information-theoretic security for **keys and small messages**
-//! - Uses pure XOR with drand randomness (no computational assumptions)
-//! - For larger data, use Hybrid OTP mode (security chain approach)
-//! - Bytes are consumed once and never reused (true one-time pad property)
+//! - 256-bit post-quantum computational security (NOT information-theoretic)
+//! - High-entropy XOR layer with drand randomness + ChaCha20-Poly1305 authentication
+//! - Bytes are consumed once per position (one-time usage property within computational bounds)
 //! 
-//! ## TRUE OTP Keystream Design
+//! ## Keystream Design
 //! 
 //! For deterministic keystream generation (required for both parties to get
 //! identical keystream), we use **drand rounds directly** because:
 //! - drand rounds are globally deterministic (same round = same 32 bytes)
 //! - For N bytes, we fetch ceil(N/32) consecutive drand rounds
-//! drand + CSPRNG is used for **shared seed derivation** (TrueEntropy).
+//! drand + CSPRNG is used for **shared seed derivation**.
 //! 
 //! If drand is unavailable, the system falls back to ChaCha20 (256-bit computational).
 //!
-//! ## Sequenced Vernam Buffer (Desync-Resistant)
+//! ## SequencedVernamBuffer (REQUIRED - Desync-Resistant)
+//!
+//! **CRITICAL**: The `SequencedVernamBuffer` is the ONLY recommended mode for production.
+//! The legacy `SynchronizedVernamBuffer` is DEPRECATED due to desync vulnerabilities.
 //!
 //! The `SequencedVernamBuffer` solves the critical synchronization problem where
 //! lost or reordered messages could cause permanent desync. Key features:
@@ -34,6 +60,12 @@
 //! - **Out-of-order tolerance**: Messages can arrive in any order and still decrypt
 //! - **Window-based replay protection**: Configurable window for sequence number tracking
 //! - **Automatic recovery**: No need for resync protocol on message loss
+//!
+//! ## DEPRECATED: SynchronizedVernamBuffer
+//!
+//! ⚠️ WARNING: `SynchronizedVernamBuffer` is DEPRECATED and will be removed.
+//! It causes silent decryption failures when messages are lost or reordered.
+//! Use `SequencedVernamBuffer` for all new code.
 
 use std::collections::VecDeque;
 use std::collections::HashMap;
@@ -53,16 +85,40 @@ const MIN_BUFFER_SIZE: usize = 1024 * 256; // 256KB (increased from 64KB)
 /// Target buffer size to maintain
 const TARGET_BUFFER_SIZE: usize = 1024 * 1024; // 1MB
 
-/// How many bytes to fetch per request
-#[allow(dead_code)]
-const FETCH_CHUNK_SIZE: usize = 1024 * 32; // 32KB per request
 
-/// Minimum entropy quality threshold (0.0 to 1.0)
-#[allow(dead_code)]
-const MIN_ENTROPY_QUALITY: f64 = 0.95;
 
 /// Validates that the provided bytes have sufficient entropy quality
-/// Returns true if the entropy appears to be truly random
+/// 
+/// # NIST SP 800-90B Compliance
+/// 
+/// This function implements simplified health tests inspired by NIST SP 800-90B:
+/// - **Section 4.4.1**: Repetition Count Test (all zeros/ones detection)
+/// - **Section 6.3.2**: Chi-square Independence Test (byte uniformity)
+/// - **Section 3.1**: Shannon Entropy estimation
+/// 
+/// # SECURITY LIMITATIONS
+/// 
+/// Per NIST SP 800-90B Section 5:
+/// > "Statistical tests can indicate that a source is clearly broken, but cannot 
+/// > prove that a source is random."
+/// 
+/// These tests are **defense-in-depth only** and CANNOT detect:
+/// - Encrypted data (passes all tests but is not random)
+/// - Compressed data (high entropy, not random)
+/// - Pseudorandom sequences with period longer than sample size
+/// - Cryptographically weak but statistically uniform outputs
+/// 
+/// For drand entropy, primary assurance comes from BLS signature verification
+/// (see drand.rs). For local CSPRNG, we trust the OS implementation.
+/// 
+/// # Tests Performed
+/// 1. **Repetition Count**: Empty/degenerate data check (all zeros, all ones)
+/// 2. **Chi-square Test**: Byte uniformity (for samples >= 256 bytes)
+/// 3. **Shannon Entropy**: Calculation threshold (>7.5 bits per byte)
+/// 4. **Adaptive Proportion**: Repeat ratio check (<5% consecutive repeats)
+/// 
+/// # Returns
+/// `true` if the entropy passes basic quality checks (defense-in-depth)
 fn validate_entropy_quality(bytes: &[u8]) -> bool {
     if bytes.is_empty() {
         debug!("Entropy validation failed: empty bytes");
@@ -286,14 +342,14 @@ impl Default for TrueVernamBuffer {
     }
 }
 
-/// Hybrid Entropy Fetcher: Combines peer + worker entropy for TRUE trustless security
+/// Hybrid Entropy Fetcher: Combines peer + worker entropy for distributed trust security
 ///
 /// Trust Model:
-/// - With peers: Combined entropy is trustless (even if worker is compromised)
+/// - With peers: Combined entropy is distributed trust (compromise requires multiple sources)
 /// - Without peers: Falls back to worker only (trust Cloudflare)
 ///
-/// Information-Theoretic Formula: combined_entropy = local_random XOR worker_entropy XOR peer1 XOR peer2 XOR ...
-/// This provides TRUE unbreakable security as long as at least ONE entropy source remains uncompromised.
+/// Security Formula: combined_entropy = local_random XOR worker_entropy XOR peer1 XOR peer2 XOR ...
+/// This provides 256-bit computational security as long as at least ONE entropy source remains uncompromised.
 pub struct TrueVernamFetcher {
     vernam_url: String,
     buffer: Arc<Mutex<TrueVernamBuffer>>,
@@ -355,8 +411,9 @@ impl TrueVernamFetcher {
     /// Security: Even if worker is compromised, local + swarm entropy protects you.
     /// Even if your device is compromised, worker + swarm entropy protects you.
     /// 
-    /// INFORMATION-THEORETIC SECURITY: For messages ≤32 bytes, uses pure XOR combination
-    /// to achieve TRUE unbreakable encryption (not just computationally secure).
+    /// 256-BIT POST-QUANTUM COMPUTATIONAL SECURITY: Uses XOR combination of
+    /// multiple entropy sources for defense-in-depth. Key exchange over network
+    /// limits overall security to computational (not information-theoretic).
     /// For larger messages, falls back to SHA256-based mixing for practical key expansion.
     /// 
     /// OPTIMIZATION: When swarm_seed is set (trustless mode), we skip Worker calls
@@ -596,20 +653,20 @@ mod tests {
     }
 }
 
-/// Synchronized Vernam Buffer: TRUE Information-Theoretic OTP Implementation
+/// Synchronized Vernam Buffer: 256-bit Post-Quantum Computational Security
 /// 
-/// This provides TRUE one-time pad security by using synchronized drand entropy
+/// This provides strong XOR encryption by using synchronized drand entropy
 /// as the keystream source. Both parties fetch identical drand rounds to generate
 /// identical keystreams for 256-bit post-quantum computational security.
 /// 
 /// Security Model:
-/// - Both parties fetch the same drand rounds (TRUE random entropy)
+/// - Both parties fetch the same drand rounds (high-quality random entropy)
 /// - For ≤32 bytes: Use drand entropy directly (256-bit post-quantum computational)
 /// - For >32 bytes: Use ChaCha20 expansion (computational, 256-bit secure)
-/// - No key transmission required - both parties generate identical keystreams
+/// - Key exchange over network limits overall security to computational
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Synchronized deterministic keystream generator for TRUE OTP
+/// Synchronized deterministic keystream generator for high-entropy XOR encryption
 /// 
 /// ⚠️ CRITICAL SECURITY REQUIREMENTS:// 
 /// 1. SYNCHRONIZATION RISK: Both parties MUST consume keystream in EXACT same order.
@@ -630,10 +687,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 ///    - Consider position counters in both directions (send/receive)
 /// 
 /// 4. SECURITY PROPERTIES:
-///    - ≤32 bytes: 256-bit post-quantum computational security (drand entropy)
-///    - >32 bytes: Computational security (ChaCha20 expansion, 256-bit)
-///    - No key transmission required - both parties generate identical keystreams
-///    - Quantum-resistant: Uses ML-KEM shared secret + drand distributed randomness
+///    - 256-bit post-quantum computational security (key exchange over network)
+///    - Uses ML-KEM shared secret + drand distributed randomness
+///    - Key exchange limits security class to computational (not information-theoretic)
 pub struct SynchronizedVernamBuffer {
     /// Shared seed for ChaCha20 expansion (for messages >32 bytes)
     shared_seed: [u8; 32],
@@ -701,11 +757,11 @@ impl SynchronizedVernamBuffer {
             shared_seed[i] = mlkem_secret[i] ^ drand_entropy[i] ^ peer_contributions[i];
         }
         
-        debug!("🔑 Created 256-bit post-quantum computational shared seed (secure if any source is random)");
+        debug!("🔑 Created 256-bit post-quantum computational shared seed (distributed trust - secure if any source is uncompromised)");
         shared_seed
     }
     
-    /// Generate TRUE information-theoretic keystream
+    /// Generate high-entropy keystream for XOR encryption
     /// 
     /// This fetches drand rounds using the entropy provider.
     /// Both parties must fetch the same rounds to generate identical keystreams.
@@ -750,10 +806,10 @@ impl SynchronizedVernamBuffer {
         
         // Log for large keystreams
         if length > 2 {
-            info!("🔑 Generated TRUE OTP keystream: {} bytes from {} drand rounds (32x efficient)", 
+            info!("🔑 Generated high-entropy keystream: {} bytes from {} drand rounds (32x efficient)", 
                    length, rounds_needed);
         } else {
-            debug!("🔑 Generated TRUE OTP keystream: {} bytes from drand round {} (Entropy Provider)", 
+            debug!("🔑 Generated high-entropy keystream: {} bytes from drand round {} (Entropy Provider)", 
                    length, base_round);
         }
         Ok(keystream)
@@ -1065,11 +1121,9 @@ use std::sync::RwLock;
 /// Window size for sequence number tracking (allows this many out-of-order messages)
 const SEQUENCE_WINDOW_SIZE: usize = 4096;
 
-/// Maximum allowed sequence number gap (prevents memory exhaustion attacks)
-#[allow(dead_code)]
-const MAX_SEQUENCE_GAP: u64 = 1_000_000;
 
-/// Sequenced Vernam Buffer: Desync-Resistant TRUE OTP Implementation
+
+/// Sequenced Vernam Buffer: Desync-Resistant High-Entropy XOR Implementation
 /// 
 /// This implementation solves the fundamental synchronization problem with OTP systems
 /// by using sequence numbers to derive keystream positions deterministically.
@@ -1078,8 +1132,8 @@ const MAX_SEQUENCE_GAP: u64 = 1_000_000;
 /// - **Desync-resistant**: Lost or reordered messages don't break the system
 /// - **Replay protection**: Sliding window prevents replay attacks
 /// - **Position isolation**: Each sequence number maps to a unique keystream position
-/// - **Information-theoretic security**: For ≤32 bytes with drand entropy
-/// - **Computational security**: ChaCha20 fallback for larger messages (256-bit)
+/// - **256-bit post-quantum computational security**: Key exchange over network limits security class
+/// - **ChaCha20 fallback**: For larger messages (256-bit computational)
 /// 
 /// ## Message Format
 /// Each message envelope includes:
@@ -1123,6 +1177,7 @@ impl SequenceWindow {
     }
     
     /// Check if a sequence number is valid (not replayed, within window)
+    #[allow(dead_code)]
     fn is_valid(&self, seq: u64) -> bool {
         if seq < self.base {
             // Below window - definitely a replay
@@ -1292,7 +1347,8 @@ impl SequencedVernamBuffer {
     /// The keystream position is deterministically derived from the sequence number,
     /// ensuring both sender and receiver generate identical keystreams.
     pub fn generate_for_sequence_sync(&self, seq: u64, length: usize) -> Vec<u8> {
-        let registry = self.position_registry.read().unwrap();
+        let registry = self.position_registry.read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let position = registry.get_position(seq);
         drop(registry);
         
@@ -1301,7 +1357,8 @@ impl SequencedVernamBuffer {
     
     /// Generate keystream at a specific position (async version with TRUE OTP support)
     pub async fn generate_for_sequence(&self, seq: u64, length: usize) -> Vec<u8> {
-        let registry = self.position_registry.read().unwrap();
+        let registry = self.position_registry.read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let position = registry.get_position(seq);
         drop(registry);
         
@@ -1315,7 +1372,8 @@ impl SequencedVernamBuffer {
     pub fn consume_for_sequence_sync(&self, seq: u64, length: usize) -> Option<Vec<u8>> {
         // Validate and mark sequence as received
         {
-            let mut window = self.recv_window.write().unwrap();
+            let mut window = self.recv_window.write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if !window.mark_received(seq) {
                 return None; // Replay attack or invalid sequence
             }
@@ -1332,7 +1390,8 @@ impl SequencedVernamBuffer {
     pub async fn consume_for_sequence(&self, seq: u64, length: usize) -> Option<Vec<u8>> {
         // Validate and mark sequence as received
         {
-            let mut window = self.recv_window.write().unwrap();
+            let mut window = self.recv_window.write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if !window.mark_received(seq) {
                 return None; // Replay attack or invalid sequence
             }
@@ -1461,8 +1520,8 @@ impl SequencedVernamBuffer {
     pub fn reset(&self) {
         self.send_sequence.store(0, Ordering::SeqCst);
         self.recv_sequence_high.store(0, Ordering::SeqCst);
-        *self.recv_window.write().unwrap() = SequenceWindow::new();
-        self.position_registry.write().unwrap().cleanup(0);
+        *self.recv_window.write().unwrap_or_else(|poisoned| poisoned.into_inner()) = SequenceWindow::new();
+        self.position_registry.write().unwrap_or_else(|poisoned| poisoned.into_inner()).cleanup(0);
         warn!("🚨 SequencedVernamBuffer reset - new session started");
     }
     

@@ -9,8 +9,6 @@ use tokio::sync::RwLock;
 use tracing::{info, debug};
 
 #[cfg(not(target_arch = "wasm32"))]
-use crate::p2p::NativeP2PTransport;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::signaling::SignalingClient;
 
 #[cfg(target_arch = "wasm32")]
@@ -46,11 +44,6 @@ pub struct SwarmController {
     platform: Platform,
     signaling_client: Arc<RwLock<Option<SignalingClient>>>,
     
-    /// Native P2P transport (desktop/mobile only, currently unused but kept for future transport selection)
-    #[cfg(not(target_arch = "wasm32"))]
-    #[allow(dead_code)]
-    native_transport: Arc<RwLock<Option<NativeP2PTransport>>>,
-    
     /// Faisal Swarm manager for onion routing circuits
     faisal_swarm_manager: Arc<RwLock<Option<FaisalSwarmManager>>>,
     
@@ -67,9 +60,6 @@ impl SwarmController {
         Ok(Self {
             platform,
             signaling_client: Arc::new(RwLock::new(None)),
-            
-            #[cfg(not(target_arch = "wasm32"))]
-            native_transport: Arc::new(RwLock::new(None)),
             
             // Faisal Swarm manager for onion routing circuits
             faisal_swarm_manager: Arc::new(RwLock::new(None)),

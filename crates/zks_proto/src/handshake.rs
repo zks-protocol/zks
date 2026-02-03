@@ -10,8 +10,9 @@ use serde::{Serialize, Deserialize};
 use sha2::{Sha256, Digest};
 use subtle::ConstantTimeEq;
 use hkdf::Hkdf;
+use zeroize::{Zeroize, Zeroizing};
 use zks_pqcrypto::ml_kem::{MlKem, MlKemKeypair};
-use zks_pqcrypto::ml_dsa::{MlDsa, MlDsaKeypair};
+use zks_pqcrypto::ml_dsa::{MlDsa, MlDsaKeypair, PUBLIC_KEY_SIZE as ML_DSA_PUBLIC_KEY_SIZE};
 
 use crate::{ProtoError, Result};
 
@@ -122,7 +123,8 @@ pub struct Handshake {
     /// Remote nonce
     remote_nonce: Option<[u8; 32]>,
     /// Shared secret (computed after handshake)
-    shared_secret: Option<[u8; 32]>,
+    /// SECURITY FIX m8: Wrapped in Zeroizing<> to ensure automatic cleanup on drop
+    shared_secret: Option<Zeroizing<[u8; 32]>>,
     /// ML-DSA signing keypair (for responder signature)
     signing_keypair: Option<MlDsaKeypair>,
     /// Trusted responder ML-DSA public key (for initiator verification)
@@ -134,16 +136,17 @@ impl Handshake {
     /// 
     /// # Arguments
     /// * `room_id` - The room identifier for session context
-    /// * `trusted_responder_public_key` - The trusted ML-DSA public key of the responder (must be 1312 bytes)
+    /// * `trusted_responder_public_key` - The trusted ML-DSA public key of the responder (must be 2592 bytes for ML-DSA-87)
     /// 
     /// # Security Note
     /// The `trusted_responder_public_key` must be obtained through a secure, out-of-band channel.
     /// This key is used to verify the responder's identity during the handshake.
     /// Never use a public key received during the handshake itself for verification.
     pub fn new_initiator(room_id: String, trusted_responder_public_key: Vec<u8>) -> Result<Self> {
-        if trusted_responder_public_key.len() != 1952 {
+        if trusted_responder_public_key.len() != ML_DSA_PUBLIC_KEY_SIZE {
             return Err(ProtoError::handshake(format!(
-                "Invalid trusted responder public key size: expected 1952 bytes, got {}",
+                "Invalid trusted responder public key size: expected {} bytes (ML-DSA-87), got {}",
+                ML_DSA_PUBLIC_KEY_SIZE,
                 trusted_responder_public_key.len()
             )));
         }
@@ -205,8 +208,9 @@ impl Handshake {
     }
     
     /// Get shared secret after handshake completion
+    /// Returns a copy of the shared secret (the original remains protected by Zeroizing)
     pub fn shared_secret(&self) -> Option<[u8; 32]> {
-        self.shared_secret
+        self.shared_secret.as_ref().map(|s| **s)
     }
     
     /// Set the ML-DSA signing keypair for the responder
@@ -234,13 +238,13 @@ impl Handshake {
         Ok(public_key)
     }
     
-    /// Generate random nonce using TRUE entropy (drand + OsRng)
+    /// Generate random nonce using high-entropy randomness (drand + OsRng)
     /// 
     /// # Security
     /// Uses TrueEntropy which combines drand beacon + local CSPRNG via XOR
-    /// for information-theoretic security. Unbreakable if ANY source is uncompromised.
+    /// for 256-bit post-quantum computational security. Secure if ANY source is uncompromised.
     fn generate_nonce(&mut self) -> Result<[u8; 32]> {
-        // SECURITY: Use TrueEntropy for information-theoretic security
+        // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security
         use zks_crypt::true_entropy::get_sync_entropy_32;
         let entropy = get_sync_entropy_32();
         let nonce = *entropy;  // Copy the 32 bytes
@@ -362,11 +366,11 @@ impl Handshake {
         let ciphertext = encapsulation.ciphertext.clone();
         self.ciphertext = Some(ciphertext.clone());
         
-        // Store the shared secret from encapsulation
+        // Store the shared secret from encapsulation (wrapped in Zeroizing for secure cleanup)
         if encapsulation.shared_secret.len() == 32 {
             let mut secret_array = [0u8; 32];
             secret_array.copy_from_slice(&encapsulation.shared_secret);
-            self.shared_secret = Some(secret_array);
+            self.shared_secret = Some(Zeroizing::new(secret_array));
         } else {
             return Err(ProtoError::handshake("Invalid shared secret length from encapsulation"));
         }
@@ -375,12 +379,54 @@ impl Handshake {
         let signing_keypair = self.signing_keypair.as_ref()
             .ok_or_else(|| ProtoError::handshake("No signing keypair set. Call set_signing_keypair() first."))?;
         
-        // Create message to sign: room_id + ephemeral_key + ciphertext + timestamp
+        // SECURITY FIX M2: Compute full transcript hash for SIGMA-style binding
+        // This prevents unknown key share attacks where Mallory forwards messages
+        // between Alice and Bob while impersonating one party.
+        // Per SIGMA protocol (Krawczyk): signature must cover session identifier
+        // derived from the full handshake transcript.
+        //
+        // FORMAL SECURITY NOTE (M2 Fix):
+        // This adapts SIGMA (designed for DH) to ML-KEM. The security reduction relies on:
+        // 1. ML-KEM-1024 IND-CCA2 security (NIST FIPS 203)
+        // 2. ML-DSA-87 EUF-CMA security (NIST FIPS 204)
+        // 3. Transcript binding via SHA-256 collision resistance
+        //
+        // For formal proofs of KEM-based handshakes, see:
+        // - KEMTLS (Schwabe et al., CCS 2020): https://eprint.iacr.org/2020/534
+        // - Post-Quantum TLS (Crockett et al.): https://eprint.iacr.org/2019/858
+        //
+        // The shared secret commitment (below) prevents unknown key share attacks
+        // per the SIGMA-I variant.
+        let mut transcript_hasher = Sha256::new();
+        // Include initiator's contribution (from HandshakeInit)
+        if let Some(remote_key) = &self.remote_ephemeral_public_key {
+            transcript_hasher.update(remote_key);
+        }
+        if let Some(remote_nonce) = &self.remote_nonce {
+            transcript_hasher.update(remote_nonce);
+        }
+        // Include responder's contribution
+        transcript_hasher.update(&ephemeral_key);
+        transcript_hasher.update(&ciphertext);
+        transcript_hasher.update(&nonce);
+        // Include the room ID as context binding
+        transcript_hasher.update(self.room_id.as_bytes());
+        let transcript_hash = transcript_hasher.finalize();
+        
+        // Create message to sign: transcript_hash + timestamp + ML-KEM shared secret commitment
+        // SECURITY: Using transcript hash instead of individual fields prevents
+        // attackers from substituting portions of the handshake
         let mut message = Vec::new();
-        message.extend_from_slice(self.room_id.as_bytes());
-        message.extend_from_slice(&ephemeral_key);
-        message.extend_from_slice(&ciphertext);
+        message.extend_from_slice(b"ZKS_HANDSHAKE_V1_RESPONDER"); // Domain separator
+        message.extend_from_slice(&transcript_hash);
         message.extend_from_slice(&timestamp.to_le_bytes());
+        // Commit to the shared secret (prevents unknown key share attacks)
+        if let Some(ss) = &self.shared_secret {
+            let mut ss_commitment = Sha256::new();
+            ss_commitment.update(b"shared_secret_commitment");
+            ss_commitment.update(&ss[..]);
+            message.extend_from_slice(&ss_commitment.finalize());
+        }
         
         // Sign the message
         let signature = MlDsa::sign(&message, signing_keypair.signing_key())
@@ -391,7 +437,7 @@ impl Handshake {
         
         // Derive shared secret for responder (now we have all keys and nonces)
         let shared_secret = self.derive_shared_secret();
-        self.shared_secret = Some(shared_secret);
+        self.shared_secret = Some(Zeroizing::new(shared_secret));
         
         let response = HandshakeResponse {
             version: self.version,
@@ -442,11 +488,11 @@ impl Handshake {
             let shared_secret = MlKem::decapsulate(&response.ciphertext, local_keypair.secret_key())
                 .map_err(|e| ProtoError::handshake(&format!("Failed to decapsulate: {}", e)))?;
             
-            // Convert Zeroizing<Vec<u8>> to [u8; 32]
+            // Convert Zeroizing<Vec<u8>> to Zeroizing<[u8; 32]>
             if shared_secret.len() == 32 {
                 let mut secret_array = [0u8; 32];
                 secret_array.copy_from_slice(&shared_secret);
-                self.shared_secret = Some(secret_array);
+                self.shared_secret = Some(Zeroizing::new(secret_array));
             } else {
                 return Err(ProtoError::handshake("Invalid shared secret length"));
             }
@@ -461,7 +507,7 @@ impl Handshake {
         Ok(())
     }
     
-    /// Verify response signature using ML-DSA
+    /// Verify response signature using ML-DSA with SIGMA-style transcript binding
     fn verify_response_signature(&self, response: &HandshakeResponse) -> Result<()> {
         // Get the trusted responder public key
         let trusted_public_key = self.trusted_responder_public_key.as_ref()
@@ -475,12 +521,36 @@ impl Handshake {
             ));
         }
         
-        // Create message that was signed: room_id + ephemeral_key + ciphertext + timestamp
+        // SECURITY FIX M2: Reconstruct transcript hash for verification
+        // MUST match create_response() transcript hash construction exactly
+        let mut transcript_hasher = Sha256::new();
+        // Initiator's contribution (our local values)
+        if let Some(local_keypair) = &self.local_ephemeral_keypair {
+            transcript_hasher.update(&local_keypair.public_key);
+        }
+        if let Some(local_nonce) = &self.local_nonce {
+            transcript_hasher.update(local_nonce);
+        }
+        // Responder's contribution (from response)
+        transcript_hasher.update(&response.ephemeral_key);
+        transcript_hasher.update(&response.ciphertext);
+        transcript_hasher.update(&response.nonce);
+        // Room ID context binding
+        transcript_hasher.update(response.room_id.as_bytes());
+        let transcript_hash = transcript_hasher.finalize();
+        
+        // Reconstruct the signed message with transcript hash
         let mut message = Vec::new();
-        message.extend_from_slice(response.room_id.as_bytes());
-        message.extend_from_slice(&response.ephemeral_key);
-        message.extend_from_slice(&response.ciphertext);
+        message.extend_from_slice(b"ZKS_HANDSHAKE_V1_RESPONDER"); // Domain separator
+        message.extend_from_slice(&transcript_hash);
         message.extend_from_slice(&response.timestamp.to_le_bytes());
+        // Reconstruct shared secret commitment
+        if let Some(ss) = &self.shared_secret {
+            let mut ss_commitment = Sha256::new();
+            ss_commitment.update(b"shared_secret_commitment");
+            ss_commitment.update(&ss[..]);
+            message.extend_from_slice(&ss_commitment.finalize());
+        }
         
         // Verify the signature using the trusted public key
         MlDsa::verify(&message, &response.signature, trusted_public_key)
@@ -494,8 +564,8 @@ impl Handshake {
         // For ML-KEM, the shared secret is already established through encapsulation/decapsulation
         // We just need to return it if available, or derive it from the key material
         
-        if let Some(shared_secret) = self.shared_secret {
-            return shared_secret;
+        if let Some(ref shared_secret) = self.shared_secret {
+            return **shared_secret;
         }
         
         // Fallback: derive from key material using HKDF if shared secret not available
@@ -574,9 +644,9 @@ impl Handshake {
             return Err(ProtoError::handshake("Invalid state for creating finish message"));
         }
         
-        // Derive shared secret
+        // Derive shared secret (wrapped in Zeroizing for secure cleanup)
         let shared_secret = self.derive_shared_secret();
-        self.shared_secret = Some(shared_secret);
+        self.shared_secret = Some(Zeroizing::new(shared_secret));
         
         // Create confirmation by hashing the shared secret with additional context
         // This prevents sending the raw secret over the wire
@@ -618,14 +688,14 @@ impl Handshake {
         self.validate_timestamp(finish.timestamp)?;
         
         // Get the shared secret that was derived when processing the response
-        let shared_secret = self.shared_secret.ok_or_else(|| {
+        let shared_secret = self.shared_secret.as_ref().ok_or_else(|| {
             ProtoError::handshake("Shared secret not available")
         })?;
         
         // Create expected confirmation by hashing the shared secret with the same context
         let mut hasher = Sha256::new();
         hasher.update(b"ZK_HANDSHAKE_CONFIRMATION");
-        hasher.update(&shared_secret);
+        hasher.update(&shared_secret[..]);
         let expected_confirmation_hash = hasher.finalize();
         let mut expected_confirmation = [0u8; 32];
         expected_confirmation.copy_from_slice(&expected_confirmation_hash);
@@ -707,5 +777,22 @@ mod tests {
         
         // Both should have the same shared secret
         assert_eq!(initiator.shared_secret(), responder.shared_secret());
+    }
+}
+
+// FIX m8: Zeroization - Ensure shared secret and nonces are zeroized on drop
+impl Drop for Handshake {
+    fn drop(&mut self) {
+        // Zeroize shared secret
+        if let Some(ref mut secret) = self.shared_secret {
+            secret.zeroize();
+        }
+        // Zeroize nonces
+        if let Some(ref mut nonce) = self.local_nonce {
+            nonce.zeroize();
+        }
+        if let Some(ref mut nonce) = self.remote_nonce {
+            nonce.zeroize();
+        }
     }
 }

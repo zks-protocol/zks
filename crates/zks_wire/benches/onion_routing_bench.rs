@@ -9,8 +9,10 @@ struct MockCircuitLayer {
 
 impl MockCircuitLayer {
     fn new(key: [u8; 32]) -> Self {
+        let mut cipher = WasifVernam::new(key).unwrap();
+        cipher.derive_base_iv(&key, true); // Required for encryption (security fix M3)
         Self {
-            cipher: Arc::new(RwLock::new(WasifVernam::new(key).unwrap())),
+            cipher: Arc::new(RwLock::new(cipher)),
         }
     }
     

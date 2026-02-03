@@ -21,11 +21,11 @@ use crate::{WireError, Result};
 pub struct RelayId([u8; 16]);
 
 impl RelayId {
-    /// Generate a new random relay ID using TRUE entropy (drand + OsRng)
+    /// Generate a new random relay ID using high-entropy randomness (drand + OsRng)
     /// 
     /// # Security
-    /// Uses TrueEntropy for information-theoretic security.
-    /// Unbreakable if ANY entropy source is uncompromised.
+    /// Uses TrueEntropy for 256-bit post-quantum computational security.
+    /// Secure if ANY entropy source is uncompromised.
     pub fn new() -> Self {
         use zks_crypt::true_entropy::get_sync_entropy;
         let entropy = get_sync_entropy(16);
@@ -298,9 +298,9 @@ impl RelayServer {
         Ok(())
     }
     
-    /// Generate a relay address for a client using TRUE entropy (drand + OsRng)
+    /// Generate a relay address for a client using high-entropy randomness (drand + OsRng)
     fn generate_relay_address(&self, _client_addr: SocketAddr) -> Result<SocketAddr> {
-        // SECURITY: Use TrueEntropy for information-theoretic security
+        // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security
         use zks_crypt::true_entropy::get_sync_entropy;
         let entropy = get_sync_entropy(2);
         let port_bytes = [entropy[0], entropy[1]];
@@ -422,7 +422,7 @@ impl RelayClient {
 mod tests {
     use super::*;
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_relay_id_generation() {
         let id1 = RelayId::new();
         let id2 = RelayId::new();

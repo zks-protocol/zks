@@ -27,7 +27,7 @@
 
 ## 🌟 Why ZKS?
 
-ZKS Protocol is the **first post-quantum secure networking SDK** with built-in **anonymity through onion routing**. Built with 100% safe Rust, it provides unbreakable encryption for the quantum computing era.
+ZKS Protocol is the **first post-quantum secure networking SDK** with built-in **anonymity through onion routing**. Built with 100% safe Rust, it provides 256-bit post-quantum encryption for the quantum computing era.
 
 | Protocol | Description | Security Model |
 |----------|-------------|----------------|
@@ -325,7 +325,7 @@ cargo run --example file_transfer
 | Application | Protocol | Description |
 |-------------|----------|-------------|
 | **Encrypted Messenger** | `zks://` | Quantum-proof end-to-end chat |
-| **Secure File Sharing** | `zk://` | Unbreakable file transfer |
+| **Secure File Sharing** | `zk://` | 256-bit post-quantum file transfer |
 | **Anonymous APIs** | `zks://` | Hide client IP addresses |
 | **VPN Replacement** | `zks://` | Better than VPN + Tor combined |
 | **Whistleblowing Platform** | `zks://` | Source protection |

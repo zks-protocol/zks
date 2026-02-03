@@ -39,6 +39,8 @@ blst = "0.3"
 thiserror = "1.0"
 group = "0.13"
 async-trait = "0.1"
+# Reed-Solomon erasure coding for k-of-n recovery
+reed-solomon-simd = "3"
 
 [dev-dependencies]
 tokio-test = "0.4"
@@ -56,4 +58,16 @@ harness = false
 
 [[bench]]
 name = "wasif_vernam_bench"
+harness = false
+
+[[bench]]
+name = "erasure_ratchet_bench"
+harness = false
+
+[[bench]]
+name = "hybrid_ratchet_bench"
+harness = false
+
+[[bench]]
+name = "session_rotation_bench"
 harness = false

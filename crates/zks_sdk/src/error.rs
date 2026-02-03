@@ -68,4 +68,12 @@ pub enum SdkError {
     /// Invalid input
     #[error("Invalid input: {0}")]
     InvalidInput(String),
+    
+    /// File too large
+    #[error("File too large: {0} bytes")]
+    FileTooLarge(u64),
+    
+    /// Hybrid OTP error (legacy name - uses hybrid_computational)
+    #[error("Hybrid computational encryption error: {0}")]
+    HybridOtpError(#[from] zks_crypt::hybrid_computational::HybridOtpError),
 }

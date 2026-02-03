@@ -27,7 +27,7 @@
 
 ## 🌟 Why ZKS?
 
-ZKS Protocol is a **post-quantum secure networking protocol** built with 100% safe Rust. It provides defense-in-depth encryption with multiple layers of security, including an offline mode that achieves **true Information-Theoretic Security** via physical key exchange.
+ZKS Protocol is a **post-quantum secure networking protocol** built with 100% safe Rust. It provides defense-in-depth encryption with multiple layers of security, including **256-bit post-quantum computational security**.
 
 | Protocol | Description | Security Model |
 |----------|-------------|----------------|
@@ -98,10 +98,10 @@ ZKS Protocol is a **post-quantum secure networking protocol** built with 100% sa
 
 ZKS Protocol's security is **proven by mathematics**, not assumptions:
 
-### Shannon's Perfect Secrecy (1949)
+### Security Proof (Defense-in-Depth)
 
 ```
-Hybrid OTP-Inspired Encryption (Network Mode):
+Hybrid Encryption (Network Mode):
   DEK ← CSPRNG(32 bytes)              // Data Encryption Key
   entropy ← drand ⊕ local_CSPRNG      // Computational security (256-bit)
   wrapped_DEK ← DEK ⊕ entropy         // Defense-in-depth
@@ -388,7 +388,7 @@ cargo run --example file_transfer
 | Application | Protocol | Description |
 |-------------|----------|-------------|
 | **Encrypted Messenger** | `zks://` | Quantum-proof end-to-end chat |
-| **Secure File Sharing** | `zk://` | Unbreakable file transfer |
+| **Secure File Sharing** | `zk://` | 256-bit post-quantum file transfer |
 | **Anonymous APIs** | `zks://` | Hide client IP addresses |
 | **VPN Replacement** | `zks://` | Better than VPN + Tor combined |
 | **Whistleblowing Platform** | `zks://` | Source protection |
@@ -484,7 +484,7 @@ See [SECURITY.md](SECURITY.md) for our full security policy.
 
 ## 📊 Performance
 
-ZKS Protocol provides competitive performance while maintaining information-theoretic security:
+ZKS Protocol provides competitive performance while maintaining 256-bit post-quantum computational security:
 
 | Operation | Latency | Throughput |
 |-----------|---------|------------|

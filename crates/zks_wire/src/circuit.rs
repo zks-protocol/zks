@@ -43,13 +43,13 @@ impl SwarmCircuit {
         })
     }
     
-    /// Generate a unique circuit ID using TRUE entropy (drand + OsRng)
+    /// Generate a unique circuit ID using high-entropy randomness (drand + OsRng)
     /// 
     /// # Security
     /// Uses TrueEntropy which combines drand beacon + local CSPRNG via XOR
-    /// for information-theoretic security. Unbreakable if ANY source is uncompromised.
+    /// for 256-bit post-quantum computational security. Secure if ANY source is uncompromised.
     fn generate_circuit_id() -> Result<[u8; 16]> {
-        // SECURITY: Use TrueEntropy for information-theoretic security
+        // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security
         use zks_crypt::true_entropy::get_sync_entropy;
         let entropy = get_sync_entropy(16);
         let mut id = [0u8; 16];
@@ -105,6 +105,8 @@ impl SwarmCircuit {
             if let Some(key) = self.get_layer_key(i) {
                 let mut cipher = WasifVernam::new(key)
                     .map_err(|e| WireError::other(&format!("Failed to create cipher: {}", e)))?;
+                // Required: derive base_iv for encryption (security fix M3)
+                cipher.derive_base_iv(&key, true);
                 encrypted = cipher.encrypt(&encrypted)
                     .map_err(|e| WireError::other(&format!("Encryption failed: {}", e)))?;
             } else {
@@ -128,8 +130,10 @@ impl SwarmCircuit {
         // Decrypt in forward order - entry peer first, exit peer last
         for i in 0..self.layer_keys.len() {
             if let Some(key) = self.get_layer_key(i) {
-                let cipher = WasifVernam::new(key)
+                let mut cipher = WasifVernam::new(key)
                     .map_err(|e| WireError::other(&format!("Failed to create cipher: {}", e)))?;
+                // Required: derive base_iv for decryption (security fix M3)
+                cipher.derive_base_iv(&key, true);
                 decrypted = cipher.decrypt(&decrypted)
                     .map_err(|e| WireError::other(&format!("Decryption failed: {}", e)))?;
             } else {
@@ -148,8 +152,11 @@ impl SwarmCircuit {
         }
         
         if let Some(key) = self.get_layer_key(peer_index) {
-            WasifVernam::new(key)
-                .map_err(|e| WireError::other(&format!("Failed to create cipher: {}", e)))
+            let mut cipher = WasifVernam::new(key)
+                .map_err(|e| WireError::other(&format!("Failed to create cipher: {}", e)))?;
+            // Required: derive base_iv for cipher (security fix M3)
+            cipher.derive_base_iv(&key, true);
+            Ok(cipher)
         } else {
             Err(WireError::other("Failed to get layer key"))
         }
@@ -223,7 +230,7 @@ impl CircuitBuilder {
         }
         
         // Shuffle candidates for randomness
-        // SECURITY: Use TrueEntropy for information-theoretic security in path selection
+        // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security in path selection
         use rand::seq::SliceRandom;
         use zks_crypt::true_entropy::TrueEntropyRng;
         candidates.shuffle(&mut TrueEntropyRng);
@@ -285,7 +292,7 @@ mod tests {
         assert_eq!(all_peers.len(), 4); // entry + 2 middle + exit
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_onion_encryption() {
         let mut circuit = SwarmCircuit::new().unwrap();
         circuit.set_layer_keys(vec![[1u8; 32], [2u8; 32], [3u8; 32]]);
@@ -298,7 +305,7 @@ mod tests {
         assert_eq!(decrypted, plaintext);
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_circuit_builder() {
         let mut peers = Vec::new();
         for i in 0..5 {

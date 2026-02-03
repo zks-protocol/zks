@@ -463,18 +463,15 @@ mod tests {
     use zks_crypt::entropy_block::{EntropyBlock, DrandRound};
 
     fn create_test_block(start_round: u64) -> EntropyBlock {
-        let rounds = (0..1000).map(|i| DrandRound {
+        let rounds: Vec<DrandRound> = (0..1000).map(|i| DrandRound {
             round: start_round + i,
             randomness: [0u8; 32],
             signature: vec![1, 2, 3, 4],
+            previous_signature: vec![0, 1, 2, 3],
         }).collect();
 
-        EntropyBlock {
-            start_round,
-            end_round: start_round + 999,
-            rounds,
-            block_hash: [0u8; 32],
-        }
+        // Use with_rounds to ensure proper hash calculation
+        EntropyBlock::with_rounds(start_round, rounds)
     }
 
     #[tokio::test]

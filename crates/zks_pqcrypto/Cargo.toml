@@ -29,6 +29,9 @@ rand_chacha = "0.3" # ChaCha RNG for deterministic generation (compatible with r
 getrandom = { version = "0.2", features = ["js"] }   # OS random number generator with WASM support
 ring = "0.17"       # Secondary CSPRNG for defense-in-depth
 
+# Incremental ML-KEM-1024 for bandwidth-efficient Katana RKEM ratcheting
+libcrux-ml-kem = { version = "0.0.6", default-features = false, features = ["incremental", "mlkem1024", "rand"] }
+
 # Error handling
 thiserror = "1.0"   # Ergonomic error handling
 
@@ -57,6 +60,9 @@ ml-dsa = { version = "0.1.0-rc.3", default-features = false, features = ["rand_c
 tokio = { version = "1.0", features = ["full"] }
 criterion = "0.5"   # Benchmarking
 
+# ML-KEM-1024 with incremental API for bandwidth-efficient ratcheting (TEST)
+libcrux-ml-kem = { version = "0.0.6", default-features = false, features = ["incremental", "mlkem1024"] }
+
 [features]
 default = []
 async = ["tokio"]   # Enable async support
@@ -64,3 +70,11 @@ async = ["tokio"]   # Enable async support
 [lib]
 name = "zks_pqcrypto"
 path = "src/lib.rs"
+
+[[bench]]
+name = "incremental_mlkem_bench"
+harness = false
+
+[[bench]]
+name = "comparative_bench"
+harness = false

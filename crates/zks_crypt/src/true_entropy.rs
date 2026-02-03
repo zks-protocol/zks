@@ -1,11 +1,33 @@
 //! Distributed Entropy API: Post-Quantum Security for ZKS Protocol
-//! 
+//!
 //! This module provides a unified API for accessing cryptographically secure entropy
 //! combining drand beacon (32 bytes, 18+ operators) + local CSPRNG.
-//! 
+//!
 //! ## Security Model
-//! 
+//!
 //! **256-bit Post-Quantum Computational Security** (NOT information-theoretic)
+//!
+//! ## XOR Entropy Composition Security Justification (F3 Fix)
+//!
+//! The protocol XORs drand entropy with local CSPRNG entropy. This is secure because:
+//!
+//! **Theorem (XOR Composition)**: If X is a random variable uniform on {0,1}^n and Y is
+//! any independent random variable on {0,1}^n, then X ⊕ Y is uniform on {0,1}^n.
+//!
+//! **Proof Sketch**: For any fixed y, the map x ↦ x ⊕ y is a bijection. If X is uniform,
+//! then for any z, P(X ⊕ Y = z) = P(X = z ⊕ Y) = 2^(-n) (by uniformity of X).
+//!
+//! **Application to ZKS**: If EITHER drand OR local CSPRNG produces uniform random bytes,
+//! the XOR combination is uniform. An adversary must compromise BOTH sources to predict output.
+//!
+//! **Trust Assumptions**:
+//! - drand: Threshold BLS with 18+ independent operators (t-of-n security)
+//! - CSPRNG: OS-provided (getrandom) or ring::SystemRandom
+//!
+//! **LIMITATION**: This assumes independence between sources. If drand and CSPRNG share
+//! common entropy (e.g., both seeded from system clock at same instant), security may degrade.
+//! In practice, drand uses distributed entropy from 18+ independent operators, providing
+//! strong independence from any local system state.
 //! 
 //! When using `get_entropy()`, the resulting bytes are:
 //! - **Cryptographically secure** (256-bit post-quantum)

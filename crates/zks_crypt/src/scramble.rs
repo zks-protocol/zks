@@ -21,6 +21,25 @@
 /// Larger data should be chunked
 pub const MAX_SCRAMBLE_SIZE: usize = 65536;
 
+/// Errors for ciphertext scrambling operations
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScrambleError {
+    /// Size exceeds maximum scramble size
+    SizeExceeded(usize),
+}
+
+impl std::fmt::Display for ScrambleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ScrambleError::SizeExceeded(size) => {
+                write!(f, "Size {} exceeds maximum scramble size {}", size, MAX_SCRAMBLE_SIZE)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ScrambleError {}
+
 /// Ciphertext scrambler using Fisher-Yates derived permutation
 pub struct CiphertextScrambler {
     /// Forward permutation: original_pos -> scrambled_pos
@@ -38,10 +57,12 @@ impl CiphertextScrambler {
     /// * `entropy` - 32 bytes of shared entropy (e.g., from session key)
     /// * `size` - Size of data to scramble (must be <= MAX_SCRAMBLE_SIZE)
     /// 
-    /// # Panics
-    /// Panics if size > MAX_SCRAMBLE_SIZE
-    pub fn from_entropy(entropy: &[u8; 32], size: usize) -> Self {
-        assert!(size <= MAX_SCRAMBLE_SIZE, "Size exceeds maximum scramble size");
+    /// # Errors
+    /// Returns `ScrambleError::SizeExceeded` if size > MAX_SCRAMBLE_SIZE
+    pub fn from_entropy(entropy: &[u8; 32], size: usize) -> Result<Self, ScrambleError> {
+        if size > MAX_SCRAMBLE_SIZE {
+            return Err(ScrambleError::SizeExceeded(size));
+        }
         
         // Generate forward permutation using Fisher-Yates shuffle
         // seeded by SHA256 chain of entropy
@@ -53,11 +74,11 @@ impl CiphertextScrambler {
             reverse_map[scrambled_pos as usize] = original_pos as u16;
         }
         
-        Self {
+        Ok(Self {
             forward_map,
             reverse_map,
             size,
-        }
+        })
     }
     
     /// Generate a permutation using deterministic Fisher-Yates shuffle
@@ -187,21 +208,23 @@ impl CiphertextScrambler {
 }
 
 /// Convenience function: scramble data with entropy
-pub fn scramble_with_entropy(data: &mut [u8], entropy: &[u8; 32]) {
+pub fn scramble_with_entropy(data: &mut [u8], entropy: &[u8; 32]) -> Result<(), ScrambleError> {
     if data.is_empty() {
-        return;
+        return Ok(());
     }
-    let scrambler = CiphertextScrambler::from_entropy(entropy, data.len());
+    let scrambler = CiphertextScrambler::from_entropy(entropy, data.len())?;
     scrambler.scramble(data);
+    Ok(())
 }
 
 /// Convenience function: unscramble data with entropy
-pub fn unscramble_with_entropy(data: &mut [u8], entropy: &[u8; 32]) {
+pub fn unscramble_with_entropy(data: &mut [u8], entropy: &[u8; 32]) -> Result<(), ScrambleError> {
     if data.is_empty() {
-        return;
+        return Ok(());
     }
-    let scrambler = CiphertextScrambler::from_entropy(entropy, data.len());
+    let scrambler = CiphertextScrambler::from_entropy(entropy, data.len())?;
     scrambler.unscramble(data);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -213,7 +236,7 @@ mod tests {
         let entropy = [0x42u8; 32];
         let original = b"Hello, World! This is a test message for scrambling.";
         
-        let scrambler = CiphertextScrambler::from_entropy(&entropy, original.len());
+        let scrambler = CiphertextScrambler::from_entropy(&entropy, original.len()).unwrap();
         
         let mut data = original.to_vec();
         scrambler.scramble(&mut data);
@@ -232,8 +255,8 @@ mod tests {
         let entropy = [0xABu8; 32];
         let data = b"Test data for deterministic scrambling";
         
-        let scrambler1 = CiphertextScrambler::from_entropy(&entropy, data.len());
-        let scrambler2 = CiphertextScrambler::from_entropy(&entropy, data.len());
+        let scrambler1 = CiphertextScrambler::from_entropy(&entropy, data.len()).unwrap();
+        let scrambler2 = CiphertextScrambler::from_entropy(&entropy, data.len()).unwrap();
         
         let result1 = scrambler1.scramble_copy(data);
         let result2 = scrambler2.scramble_copy(data);
@@ -248,8 +271,8 @@ mod tests {
         let entropy2 = [0x22u8; 32];
         let data = b"Test data for different entropy scrambling test";
         
-        let scrambler1 = CiphertextScrambler::from_entropy(&entropy1, data.len());
-        let scrambler2 = CiphertextScrambler::from_entropy(&entropy2, data.len());
+        let scrambler1 = CiphertextScrambler::from_entropy(&entropy1, data.len()).unwrap();
+        let scrambler2 = CiphertextScrambler::from_entropy(&entropy2, data.len()).unwrap();
         
         let result1 = scrambler1.scramble_copy(data);
         let result2 = scrambler2.scramble_copy(data);
@@ -264,10 +287,10 @@ mod tests {
         let original = b"Convenience test";
         
         let mut data = original.to_vec();
-        scramble_with_entropy(&mut data, &entropy);
+        scramble_with_entropy(&mut data, &entropy).unwrap();
         assert_ne!(&data[..], &original[..]);
         
-        unscramble_with_entropy(&mut data, &entropy);
+        unscramble_with_entropy(&mut data, &entropy).unwrap();
         assert_eq!(&data[..], &original[..]);
     }
 
@@ -276,7 +299,7 @@ mod tests {
         let entropy = [0xFFu8; 32];
         let mut data = vec![0x42u8];
         
-        scramble_with_entropy(&mut data, &entropy);
+        scramble_with_entropy(&mut data, &entropy).unwrap();
         assert_eq!(data, vec![0x42u8]); // Single byte can't be scrambled
     }
 

@@ -83,3 +83,7 @@ path = "src/bin/seeder.rs"
 [[bench]]
 name = "onion_routing_bench"
 harness = false
+
+[[bench]]
+name = "e2e_latency_bench"
+harness = false

@@ -166,10 +166,10 @@ impl CryptoTools {
                 let mut cipher = WasifVernam::new(cipher_key)
                     .map_err(|e| McpError::internal_error(format!("Failed to create cipher: {}", e), None))?;
                 
-                // Enable synchronized Vernam mode for information-theoretic security
+                // Enable sequenced Vernam mode for 256-bit post-quantum computational security with desync resistance
                 let shared_seed: [u8; 32] = public_key_bytes[..32].try_into()
                     .map_err(|_| McpError::internal_error("Failed to create shared seed", None))?;
-                cipher.enable_synchronized_vernam(shared_seed);
+                cipher.enable_sequenced_vernam(shared_seed);
                 
                 let ciphertext = cipher.encrypt(&plaintext_bytes)
                     .map_err(|e| McpError::internal_error(format!("Encryption failed: {}", e), None))?;
@@ -177,7 +177,7 @@ impl CryptoTools {
                 Ok(CallToolResult::success(vec![Content::text(serde_json::json!({
                     "ciphertext": general_purpose::STANDARD.encode(&ciphertext),
                     "algorithm": "True Vernam",
-                    "security_level": "Information-Theoretic"
+                    "security_level": "256-bit Post-Quantum Computational"
                 }).to_string())]))
             }
             _ => Err(McpError::invalid_params("Unknown security level. Supported: 'post-quantum' or 'true-vernam'", None))
@@ -236,10 +236,10 @@ impl CryptoTools {
             let mut cipher = WasifVernam::new(cipher_key)
                 .map_err(|e| McpError::internal_error(format!("Failed to create cipher: {}", e), None))?;
             
-            // Enable synchronized Vernam mode for information-theoretic security
+            // Enable sequenced Vernam mode for 256-bit post-quantum computational security with desync resistance
             let shared_seed: [u8; 32] = private_key_bytes[..32].try_into()
                 .map_err(|_| McpError::internal_error("Failed to create shared seed", None))?;
-            cipher.enable_synchronized_vernam(shared_seed);
+            cipher.enable_sequenced_vernam(shared_seed);
             
             let plaintext = cipher.decrypt(&ciphertext_bytes)
                 .map_err(|e| McpError::internal_error(format!("Decryption failed: {}", e), None))?;
@@ -248,7 +248,7 @@ impl CryptoTools {
                 "plaintext": String::from_utf8_lossy(&plaintext),
                 "plaintext_base64": general_purpose::STANDARD.encode(&plaintext),
                 "algorithm": "True Vernam",
-                "security_level": "Information-Theoretic"
+                "security_level": "256-bit Post-Quantum Computational"
             }).to_string())]))
         }
     }

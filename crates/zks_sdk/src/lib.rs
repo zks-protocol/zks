@@ -95,11 +95,16 @@ mod tests {
         use zks_crypt::wasif_vernam::WasifVernam;
         
         let key = [0u8; 32];
-        let mut cipher = WasifVernam::new(key).unwrap();
+        let mut sender = WasifVernam::new(key).unwrap();
+        sender.derive_base_iv(&key, true); // Required for encryption
+        
+        let mut receiver = WasifVernam::new(key).unwrap();
+        receiver.derive_base_iv(&key, true); // Same as sender for anti-replay
+        
         let plaintext = b"Hello, quantum world!";
         
-        let encrypted = cipher.encrypt(plaintext).unwrap();
-        let decrypted = cipher.decrypt(&encrypted).unwrap();
+        let encrypted = sender.encrypt(plaintext).unwrap();
+        let decrypted = receiver.decrypt(&encrypted).unwrap();
         
         assert_eq!(plaintext.to_vec(), decrypted);
     }

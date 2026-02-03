@@ -336,7 +336,7 @@ mod tests {
         assert_eq!(config.max_retries, 3);
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_dht_lookup_manager_creation() {
         let swarm = Arc::new(Swarm::new("test-network".to_string()));
         let cache = Arc::new(EntropyCache::new(Default::default()));
@@ -347,7 +347,7 @@ mod tests {
         assert!(manager.get_active_lookups().await.is_empty());
     }
     
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_select_best_provider() {
         let providers = vec![
             ProviderRecord {

@@ -104,18 +104,47 @@ proverif swarm_routing.pv
 ### CryptoVerif Commands
 ```bash
 # Verify computational secrecy + authentication (channel model)
-cryptoverif zks_handshake.cv
+cryptoverif -lib default.cvl zks_handshake.cv
 
-# Verify ML-KEM IND-CCA2 secrecy (oracle model with pq.ocvl)
+# Verify ML-KEM IND-CCA2 secrecy (oracle model with pq.cvl)
+cryptoverif -lib pq.cvl zks_handshake_kem.cv
 cryptoverif -lib pq.ocvl zks_handshake_kem.ocv
 ```
 
-### Expected Results
+## Latest Verification Results (February 2026)
 
-| Model | Expected Output |
-|:---|:---|
-| `zks_handshake.cv` | `RESULT Proved secrecy of keyA/keyB` + `RESULT Proved inj-event(endInit) ==> inj-event(beginResp)` |
-| `zks_handshake_kem.ocv` | `RESULT Proved secrecy of keyA/keyB` |
+### ProVerif Results
+
+| Model | Query | Result |
+|:------|:------|:-------|
+| `zks_protocol.pv` | Responder Authentication (inj-event) | ✅ TRUE |
+| `zks_protocol.pv` | Session Key Secrecy | ✅ TRUE |
+| `anti_replay.pv` | Message Authenticity | ✅ TRUE |
+| `anti_replay.pv` | Replay Detection | ✅ DETECTED |
+| `forward_secrecy.pv` | Forward Secrecy (phase-based) | ✅ TRUE |
+| `swarm_routing.pv` | Sender Anonymity | ✅ TRUE |
+| `swarm_routing.pv` | Receiver Anonymity | ✅ TRUE |
+| `swarm_routing.pv` | Message Secrecy | ✅ TRUE |
+
+### CryptoVerif Results
+
+| Model | Query | Result | Probability Bound |
+|:------|:------|:-------|:------------------|
+| `zks_handshake.cv` | secrecy of keyA | ✅ Proved | O(N²/|nonce| + Pprf) |
+| `zks_handshake.cv` | secrecy of keyB | ✅ Proved | O(N²/|nonce| + Pprf) |
+| `zks_handshake.cv` | Authentication | ✅ Proved | O(N²/|nonce| + Psign) |
+| `zks_handshake_kem.ocv` | secrecy of keyA | ✅ Proved | O(N²/|nonce| + Pprf + Psign) |
+| `zks_handshake_kem.ocv` | secrecy of keyB | ✅ Proved | O(N²/|nonce| + Pprf + Psign) |
+
+### Known Limitations (Dolev-Yao Model)
+
+The following queries cannot be proven in the symbolic model but do not represent vulnerabilities:
+
+1. **Alice-to-Bob Authentication**: Attacker can inject fake public key in Message 1, but cannot complete handshake without the corresponding secret key.
+
+2. **Message Injection in Onion Routing**: Expected in Dolev-Yao model - attacker controls network.
+
+These limitations are identical to TLS 1.3 server-only authentication and are mitigated by key confirmation.
 
 > **Note**: KEM authentication cannot be proven under IND-CCA2 ([documented limitation](https://github.com/Inria-Prosecco/pqxdh-analysis)).
 

@@ -11,7 +11,7 @@ pub enum SecurityLevel {
     /// Post-quantum encryption (ML-KEM + ChaCha20-Poly1305)
     PostQuantum,
     
-    /// Information-theoretic security (ML-KEM + drand + swarm entropy)
+    /// Maximum security (ML-KEM + drand + swarm entropy, 256-bit post-quantum computational)
     TrueVernam,
 }
 

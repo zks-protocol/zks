@@ -1,8 +1,8 @@
-# ZKS Hybrid TRUE OTP: Security Proofs
+# ZKS Hybrid Encryption: Security Proofs
 
 ## Executive Summary
 
-The ZKS Protocol Hybrid TRUE OTP provides **256-bit post-quantum computational security** for files of any size through a cryptographic chain where the key is protected by computational entropy (drand ⊕ CSPRNG).
+The ZKS Protocol Hybrid Encryption provides **256-bit post-quantum computational security** for files of any size through a cryptographic chain where the key is protected by computational entropy (drand ⊕ CSPRNG).
 
 ---
 
@@ -94,7 +94,7 @@ The computational layer (ChaCha20) **cannot be attacked** because its key (DEK) 
 │  Byte 0:       Version (0x01)                               │
 │  Byte 1:       Mode (0x03 = Hybrid OTP)                     │
 │  Bytes 2-33:   OTP (32 bytes, for standalone decrypt)       │
-│  Bytes 34-65:  Wrapped DEK (32 bytes, TRUE OTP protected)   │
+│  Bytes 34-65:  Wrapped DEK (32 bytes, computational entropy protected)   │
 │  Bytes 66-77:  Nonce (12 bytes)                             │
 │  Bytes 78+:    ChaCha20-Poly1305 Ciphertext                 │
 └─────────────────────────────────────────────────────────────┘
@@ -105,7 +105,7 @@ The computational layer (ChaCha20) **cannot be attacked** because its key (DEK) 
 ## 7. OTP Reuse Prevention
 
 ```rust
-// CRITICAL: Prevent OTP reuse (would break TRUE OTP)
+// CRITICAL: Prevent entropy reuse (would weaken security)
 pub struct HybridOtp {
     used_otps: Mutex<HashSet<[u8; 32]>>,
 }

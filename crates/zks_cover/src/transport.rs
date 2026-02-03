@@ -153,6 +153,7 @@ impl CoverTransportBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use zks_wire::faisal_swarm::CellCommand;
     
     #[test]
     fn test_transport_builder() {

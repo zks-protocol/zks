@@ -1,7 +1,7 @@
 //! Faisal Swarm Encryption Module
 //! 
 //! Handles Wasif-Vernam encryption/decryption for Faisal Swarm cells.
-//! Provides information-theoretic security at each hop.
+//! Provides 256-bit post-quantum computational security at each hop.
 
 use super::*;
 use zks_crypt::wasif_vernam::WasifVernam;
@@ -13,7 +13,7 @@ use sha2::{Sha256, Digest};
 /// Faisal Swarm encryption manager
 /// 
 /// Manages Wasif-Vernam encryption for Faisal Swarm cells.
-/// Each hop has its own Wasif-Vernam cipher for information-theoretic security.
+/// Each hop has its own Wasif-Vernam cipher for 256-bit post-quantum computational security.
 pub struct FaisalSwarmEncryption {
     /// Wasif-Vernam ciphers for each hop
     vernam_ciphers: Vec<WasifVernam>,
@@ -37,8 +37,11 @@ impl FaisalSwarmEncryption {
             // Generate unique key for each hop
             let key = Self::generate_vernam_key(i)?;
             
-            let cipher = WasifVernam::new(key)
+            let mut cipher = WasifVernam::new(key)
                 .map_err(|e| super::SwarmError::Encryption(format!("Cipher creation failed: {:?}", e)))?;
+            
+            // Required: derive base_iv for encryption (security fix M3)
+            cipher.derive_base_iv(&key, true);
             
             vernam_ciphers.push(cipher);
             anti_replay.push(zks_crypt::anti_replay::BitmapAntiReplay::new());
@@ -60,7 +63,7 @@ impl FaisalSwarmEncryption {
         hasher.update(&[0x01]);  // Key purpose: 0x01 = encrypt
         hasher.update(hop_index.to_be_bytes());
         
-        // Generate a TRUE random nonce (drand + OsRng) for information-theoretic security
+        // Generate a high-entropy random nonce (drand + OsRng) for 256-bit post-quantum security
         let entropy = get_sync_entropy(16);
         let mut random_nonce = [0u8; 16];
         random_nonce.copy_from_slice(&entropy);
@@ -72,7 +75,7 @@ impl FaisalSwarmEncryption {
     /// Encrypt cell with Wasif-Vernam (onion encryption)
     /// 
     /// This is the core of Faisal Swarm: each layer is encrypted with
-    /// Wasif-Vernam instead of AES, providing information-theoretic security.
+    /// Wasif-Vernam instead of AES, providing 256-bit post-quantum computational security.
     #[must_use]
     pub fn encrypt_cell(&mut self, cell: &super::cells::FaisalSwarmCell, hop_index: usize) -> Result<Vec<u8>> {
         if hop_index >= self.vernam_ciphers.len() {
@@ -272,7 +275,7 @@ mod tests {
     
     #[test]
     fn test_encryption_manager_creation() {
-        let encryption = FaisalSwarmEncryption::new(3);
+        let encryption = FaisalSwarmEncryption::new(3).unwrap();
         assert_eq!(encryption.vernam_ciphers.len(), 3);
         assert_eq!(encryption.anti_replay.len(), 3);
         assert_eq!(encryption.counters.len(), 3);
@@ -280,7 +283,7 @@ mod tests {
     
     #[test]
     fn test_single_layer_encryption() {
-        let mut encryption = FaisalSwarmEncryption::new(3);
+        let mut encryption = FaisalSwarmEncryption::new(3).unwrap();
         
         // Create a test cell
         let cell = super::super::cells::FaisalSwarmCell::new(0x12345678, 
@@ -300,7 +303,7 @@ mod tests {
     
     #[test]
     fn test_onion_encryption() {
-        let mut encryption = FaisalSwarmEncryption::new(3);
+        let mut encryption = FaisalSwarmEncryption::new(3).unwrap();
         
         let original_data = vec![0x42; 100];
         
@@ -334,7 +337,7 @@ mod tests {
         assert!(result3.is_ok(), "Different counter should succeed");
         
         // Verify our encryption layer also detects replay
-        let mut encryption = FaisalSwarmEncryption::new(1);
+        let mut encryption = FaisalSwarmEncryption::new(1).unwrap();
         
         let data = vec![0x42; 50];
         

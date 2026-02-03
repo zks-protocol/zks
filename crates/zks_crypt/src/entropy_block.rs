@@ -115,6 +115,15 @@ impl EntropyBlock {
 
     /// Calculate the block hash based on all rounds
     fn update_block_hash(&mut self) {
+        self.block_hash = self.calculate_hash();
+    }
+
+    /// Calculate the block hash without modifying the block
+    /// 
+    /// # Security
+    /// This computes SHA-256 over all block contents for integrity verification.
+    /// The hash covers: start_round, end_round, and all round hashes.
+    pub fn calculate_hash(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
         hasher.update(self.start_round.to_be_bytes());
         hasher.update(self.end_round.to_be_bytes());
@@ -124,7 +133,29 @@ impl EntropyBlock {
             hasher.update(&round_hash);
         }
         
-        self.block_hash = hasher.finalize().into();
+        hasher.finalize().into()
+    }
+
+    /// Create a block with properly calculated hash
+    /// 
+    /// # Security  
+    /// This is the RECOMMENDED way to create blocks as it ensures
+    /// the block_hash is properly computed.
+    pub fn with_rounds(start_round: u64, rounds: Vec<DrandRound>) -> Self {
+        let end_round = if rounds.is_empty() {
+            start_round
+        } else {
+            start_round + rounds.len() as u64 - 1
+        };
+        
+        let mut block = Self {
+            start_round,
+            end_round,
+            rounds,
+            block_hash: [0u8; 32],
+        };
+        block.update_block_hash();
+        block
     }
 
     /// Verify the integrity of the entire block

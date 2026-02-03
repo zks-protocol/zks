@@ -34,6 +34,7 @@ getrandom = "0.2"
 hkdf = "0.12"
 hmac = "0.12"
 base64 = "0.22"  # For URL-embedded public key encoding
+zeroize = "1.7"  # FIX m8: Zeroization for sensitive data
 
 
 # ZK Protocol crates

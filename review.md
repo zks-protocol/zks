@@ -32,7 +32,7 @@ Your goal: **Find the vulnerabilities that justify a $500M bounty.**
 | Signatures | ML-DSA-65 | FIPS 204 | NIST Level 3 (EUF-CMA) | ⚠️ pqcrypto-dilithium |
 | AEAD | ChaCha20-Poly1305 | RFC 8439 | 256-bit | ✅ RustCrypto audited |
 | KDF | HKDF-SHA256 | RFC 5869 | 256-bit | ✅ RustCrypto audited |
-| XOR Cipher | Wasif-Vernam | Custom | Information-theoretic (≤32B) | ⚠️ Requires analysis |
+| XOR Cipher | Wasif-Vernam | Custom | 256-bit computational | ⚠️ Requires analysis |
 | Anti-Replay | WireGuard-style Bitmap | Custom | O(1) constant-time | ✅ Internal review |
 | Entropy | drand + OS + ML-KEM | BLS12-381 verified | TRUE random | ✅ BLS signature verified |
 

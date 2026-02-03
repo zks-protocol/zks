@@ -1,51 +1,55 @@
-# ZKS Protocol: TRUE One-Time Pad Anonymous Chat
+# ZKS Protocol: Post-Quantum Secure Anonymous Chat
 
-## 🔐 Revolutionary Security: Information-Theoretic Encryption for Everyone
+> ⚠️ **IMPORTANT SECURITY CLARIFICATION**: This document previously made incorrect claims about "information-theoretic security" and "TRUE OTP". The ZKS Protocol provides **256-bit post-quantum computational security**, NOT information-theoretic security. True OTP requires physical key exchange - network-based systems cannot achieve Shannon secrecy.
 
-**ZKS Protocol enables the first practical TRUE One-Time Pad (OTP) anonymous chat** — encryption that is mathematically proven unbreakable by the laws of physics, not just computational assumptions.
+## 🔐 256-Bit Post-Quantum Computational Security
+
+**ZKS Protocol provides 256-bit post-quantum computational security** using NIST-standardized algorithms (ML-KEM-1024, ML-DSA-87) combined with defense-in-depth entropy mixing.
 
 ---
 
-## What Makes This Revolutionary?
+## What Makes ZKS Secure?
 
-### Traditional Encryption vs TRUE OTP
+### Security Model
 
-| Aspect | Traditional (AES, ChaCha20) | ZKS Wasif-Vernam (TRUE OTP) |
-|--------|----------------------------|------------------------------|
-| **Security basis** | Computational (math puzzles) | Information-theoretic (physics) |
-| **Can quantum computers break?** | ⚠️ Uncertain for AES | ❌ **Impossible** |
-| **Can infinite compute break?** | ✅ Eventually | ❌ **Impossible** |
-| **Proven secure?** | By complexity assumptions | **By Shannon's theorem (1949)** |
+| Aspect | ZKS Protocol |
+|--------|--------------|
+| **Security basis** | 256-bit computational (MLWE assumption) |
+| **Quantum resistant** | ✅ NIST Level 5 post-quantum |
+| **Defense-in-depth** | ✅ Multi-layer encryption |
+| **Forward secrecy** | ✅ Session rotation every 10 min |
 
 ### The Wasif-Vernam Cipher
 
-Named after **Wasif Jalal** (ZKS creator) and **Gilbert Vernam** (OTP inventor), this cipher achieves:
+A four-layer computational encryption scheme providing:
 
 ```
-Ciphertext = Message ⊕ TrueRandomKey
+Layer 1: ChaCha20-Poly1305 (authenticated encryption)
+Layer 2: High-entropy XOR (defense-in-depth)
+Layer 3: Ciphertext scrambling (traffic analysis resistance)
+Layer 4: Recursive key chains (forward secrecy)
 ```
 
-**Where TrueRandomKey comes from:**
-- 🌍 **drand** — Distributed randomness beacon (global, verified)
-- 🔬 **CURBy** — Quantum randomness from Bell tests
+**Entropy sources combined via XOR:**
+- 🌍 **drand** — Distributed randomness beacon (18+ operators)
 - 💻 **Local CSPRNG** — System entropy
 
-If **ANY** source remains uncompromised, the encryption is **perfectly secure**.
+If **EITHER** source remains uncompromised, the encryption maintains **256-bit computational security**.
 
 ---
 
 ## How It Works
 
-### Unlimited TRUE OTP for Chat
+### Entropy Grid Architecture
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                    drand Randomness Pool                        │
+│                 Hierarchical Entropy System                     │
 ├────────────────────────────────────────────────────────────────┤
-│  Genesis: May 2020                                              │
-│  New round: Every 30 seconds                                    │
-│  Total available: ~60+ million rounds = ~1.9 GB TRUE random    │
-│  Growth: ~33 MB per year (forever)                             │
+│  Level 1: Local cache (fastest)                                 │
+│  Level 2: Swarm peers (P2P distribution)                        │
+│  Level 3: IPFS storage (decentralized)                          │
+│  Level 4: Direct drand API (fallback)                           │
 └────────────────────────────────────────────────────────────────┘
 ```
 
@@ -53,37 +57,27 @@ If **ANY** source remains uncompromised, the encryption is **perfectly secure**.
 
 Each anonymous chat session:
 
-1. **ML-KEM handshake** → Unique shared secret (post-quantum)
-2. **Pick latest drand round** → Starting point
-3. **Generate keystream** → `drand ⊕ shared_secret`
-
-**Result:** Same drand round, different secrets = unique keystreams per session!
+1. **ML-KEM-1024 handshake** → Post-quantum shared secret (NIST Level 5)
+2. **Entropy mixing** → drand ⊕ CSPRNG for defense-in-depth
+3. **Session rotation** → Automatic every 10 minutes
 
 ---
 
-## Capacity
+## Security Level
 
 ### Per Message
 | Message Size | Security |
 |--------------|----------|
-| **ANY size** | 🔐 **TRUE OTP** |
-| Fallback (drand unavailable) | 🔒 ChaCha20 (256-bit) |
+| **ANY size** | 🔐 **256-bit post-quantum computational** |
+| Fallback (entropy unavailable) | 🔒 ChaCha20-Poly1305 (256-bit) |
 
-### Per Session (10 minutes default)
+### Session Management
 | Metric | Value |
 |--------|-------|
-| Available TRUE random | ~1.9 GB |
-| Messages | **~28 million** |
-| Rotation | **Automatic** every 10 min |
-
-### Session Rotation = Unlimited TRUE OTP
-| After Rotation | What Happens |
-|----------------|--------------|
-| New ML-KEM handshake | New shared secret |
-| Same drand rounds? | **✅ OK!** (different secret = different keystream) |
-| Pool exhausted? | **Never!** (rotation resets access to all ~1.9 GB) |
-
-**Result: TRUE OTP for ANY message size, UNLIMITED data!** 🎉
+| Key exchange | ML-KEM-1024 (NIST Level 5) |
+| Signatures | ML-DSA-87 (post-quantum) |
+| Session rotation | **Automatic** every 10 min |
+| Forward secrecy | ✅ Per-session key derivation |
 
 ---
 
@@ -106,11 +100,11 @@ Unlike some privacy networks that require tokens/fees:
 | Feature | Signal | Telegram | ZKS Chat |
 |---------|--------|----------|----------|
 | E2E Encryption | ✅ | ⚠️ Optional | ✅ |
-| Post-Quantum | ❌ | ❌ | ✅ ML-KEM |
-| TRUE OTP | ❌ | ❌ | ✅ **Yes** |
+| Post-Quantum | ❌ | ❌ | ✅ ML-KEM-1024 |
+| Defense-in-depth | ❌ | ❌ | ✅ 4-layer |
 | Anonymous routing | ❌ | ❌ | ✅ Faisal Swarm |
 | Metadata protection | ❌ | ❌ | ✅ |
-| Quantum-safe forever | ❌ | ❌ | ✅ |
+| Forward secrecy | ✅ | ❌ | ✅ |
 
 ---
 
@@ -119,40 +113,45 @@ Unlike some privacy networks that require tokens/fees:
 ### Entropy Sources
 
 ```rust
-TrueEntropy = CURBy(64) ⊕ drand(32) ⊕ CSPRNG(64)
+// Defense-in-depth: XOR combination ensures security if either source is uncompromised
+mixed_entropy = drand_beacon(32) ⊕ local_CSPRNG(32)
 ```
 
-### TRUE OTP Keystream
+### Wasif-Vernam Cipher
 
 ```rust
-// For messages ≤64 bytes
-keystream = drand_round[N] || drand_round[N+1]  // 64 bytes
-ciphertext = message ⊕ keystream
+// Four-layer encryption
+Layer 1: ChaCha20-Poly1305 authenticated encryption
+Layer 2: High-entropy XOR with mixed entropy
+Layer 3: Optional ciphertext scrambling
+Layer 4: Recursive key chains for forward secrecy
 ```
 
-### Fallback (>64 bytes)
+### Large File Handling
 
 ```rust
-// ChaCha20 expansion for larger messages
-keystream = ChaCha20(shared_seed, nonce)
-// Still 256-bit post-quantum secure
+// Hybrid Computational Encryption for files of any size
+DEK = CSPRNG(32 bytes)
+wrapped_DEK = DEK ⊕ mixed_entropy
+ciphertext = ChaCha20_Poly1305(DEK, plaintext)
+// 256-bit post-quantum computational security
 ```
 
 ---
 
 ## Security Properties
 
-### Information-Theoretic Security
-- ✅ **Shannon secrecy**: Ciphertext reveals zero information about plaintext
-- ✅ **Everlasting security**: Even future quantum computers cannot break past messages
-- ✅ **Defense-in-depth**: Multiple independent entropy sources
+### Computational Security (256-bit)
+- ✅ **Post-quantum**: Resistant to Shor's algorithm attacks
+- ✅ **Defense-in-depth**: Multiple entropy sources via XOR
+- ✅ **Forward secrecy**: Session rotation with new key derivation
 
 ### 🌪️ Entropy Swarm (P2P Randomness)
 For large files (GBs), ZKS uses a **torrent-like swarm** to fetch historical drand rounds:
-- **Distributed Load**: Peers share cached rounds, removing pressure from drand servers
-- **Max Speed**: Downloads happen in parallel from thousands of peers (Gbps+)
-- **Trustless**: BLS signatures verify every round locally (bad data is rejected instantly)
-- **Result**: 10 GB TRUE OTP transfer in minutes, not days.
+- **Distributed Load**: Peers share cached entropy rounds
+- **Max Speed**: Parallel downloads from swarm peers
+- **Trustless**: BLS signatures verify every drand round
+- **Result**: Fast entropy distribution for high-throughput encryption
 
 ### Anonymity
 - ✅ **Faisal Swarm topology**: No single point of traffic analysis
@@ -171,23 +170,25 @@ For large files (GBs), ZKS uses a **torrent-like swarm** to fetch historical dra
 - 🔐 Financial transactions
 - 👤 Human rights activists
 
-### Why TRUE OTP Matters
-> "The only encryption proven secure by mathematics itself. Not 'probably secure' or 'secure for now' — **provably unbreakable** by any adversary with any technology, forever."
+### Why Post-Quantum Security Matters
+> "256-bit computational security resistant to both classical and quantum attacks, built on NIST-standardized algorithms with defense-in-depth entropy mixing."
 
 ---
 
 ## Getting Started
 
 ```rust
-// Create TRUE OTP encrypted channel
-let entropy = TrueEntropy::global().get_entropy_64().await;
-let cipher = WasifVernam::new(shared_seed, starting_round);
+use zks_sdk::prelude::*;
 
-// Encrypt message (TRUE OTP for ≤64 bytes)
-let ciphertext = cipher.encrypt(b"Hello, secure world!");
+// Create post-quantum encrypted channel
+let cipher = WasifVernam::new(shared_key)?;
+cipher.derive_base_iv(&shared_key, true); // Required for encryption
+
+// Encrypt message (256-bit post-quantum computational security)
+let ciphertext = cipher.encrypt(b"Hello, secure world!")?;
 
 // Decrypt
-let plaintext = cipher.decrypt(&ciphertext);
+let plaintext = cipher.decrypt(&ciphertext)?;
 ```
 
 ---
@@ -196,7 +197,7 @@ let plaintext = cipher.decrypt(&ciphertext);
 
 ZKS Protocol is open source under **AGPL-3.0**.
 
-TRUE OTP for the people. God-level security for free. 🛡️
+256-bit post-quantum security for everyone. 🛡️
 
 ---
 

@@ -9,7 +9,7 @@ pub use crate::constant_time::{ct_eq, ct_eq_fixed, ct_compare, ct_copy, ct_swap,
 pub use crate::drand::{DrandEntropy, DrandConfig, DrandError, get_drand_entropy, get_unique_entropy};
 pub use crate::recursive_chain::RecursiveChain;
 pub use crate::scramble::CiphertextScrambler;
-pub use crate::true_vernam::{TrueVernamBuffer, TrueVernamFetcher};
+pub use crate::high_entropy_cipher::{TrueVernamBuffer, TrueVernamFetcher};
 pub use crate::wasif_vernam::{WasifVernam, ContinuousEntropyRefresher};
 
 // Re-export common dependencies for convenience
@@ -27,7 +27,7 @@ pub type AntiReplay = AntiReplayContainer;
 pub type Scrambler = CiphertextScrambler;
 /// Recursive key chain for forward secrecy
 pub type KeyChain = RecursiveChain;
-/// True Vernam buffer for information-theoretic security
+/// True Vernam buffer for 256-bit post-quantum computational security
 pub type VernamBuffer = TrueVernamBuffer;
 /// Entropy fetcher for random data generation
 pub type EntropyFetcher = TrueVernamFetcher;

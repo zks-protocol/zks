@@ -68,8 +68,21 @@ pub use storage::{SurbStorage, MemorySurbStorage, FileSurbStorage};
 pub mod defaults {
     use std::time::Duration;
     
-    /// Default SURB lifetime (1 hour)
-    pub const DEFAULT_SURB_LIFETIME: Duration = Duration::from_secs(3600);
+    /// Default SURB lifetime (24 hours)
+    /// 
+    /// SECURITY NOTE (m6 Fix): Extended from 1 hour to 24 hours for practical
+    /// anonymous correspondence. Mixminion SURBs supported lifetimes up to weeks.
+    /// 
+    /// Considerations:
+    /// - Longer lifetimes increase window for replay attacks if SURB ID tracking fails
+    /// - Shorter lifetimes may cause usability issues for asynchronous communication
+    /// - 24 hours balances security and usability for most use cases
+    /// 
+    /// Use `SurbConfigBuilder::lifetime()` to customize for your application.
+    pub const DEFAULT_SURB_LIFETIME: Duration = Duration::from_secs(86400); // 24 hours
+    
+    /// Legacy SURB lifetime (1 hour) - for high-security applications
+    pub const SURB_LIFETIME_HIGH_SECURITY: Duration = Duration::from_secs(3600);
     
     /// Default maximum reply size (1KB)
     pub const DEFAULT_MAX_REPLY_SIZE: usize = 1024;

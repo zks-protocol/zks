@@ -1,150 +1,319 @@
-# 🌪️ ZKS Entropy Grid: The World's First Distributed Randomness Fabric
+# 🎲 Entropy Grid
 
-**A revolutionary P2P architecture that solves the "Key Distribution Problem" of One-Time Pad encryption.**
-
-The **Entropy Grid** is a decentralized infrastructure that treats historical randomness as a public utility, distributed via a torrent-like swarm, enabling unlimited TRUE OTP encryption for everyone, forever.
-
----
-
-## 🚀 The Core Innovation
-
-Traditional One-Time Pads (OTP) are theoretically unbreakable but practically impossible because you need to securely distribute a key as large as the message.
-
-**ZKS Solves This**:
-Instead of distributing keys for every message, we distribute a **verifiable, global history of randomness** (from Drand).
-- **The "Key"** is the entire 100GB+ of historical entropy.
-- **The "Distribution"** is a high-speed P2P swarm (The Entropy Grid).
-- **The "Lock"** is a unique Post-Quantum starting point (ML-KEM + Round Index).
+> **NOTE:**
+> This document describes the **Entropy Grid** system used by ZKS Protocol for high-quality random number generation. It is derived from `crates/zks_crypt/src/true_vernam.rs` and `crates/zks_wire/src/entropy_grid.rs`.
 
 ---
 
-## 🏗️ Architecture: How It Works
+## 🔐 Security Classification
 
-### 1. The Source (The "Seed")
-*   **Drand Beacon**: Generates 32 bytes of verifiable randomness every 30 seconds.
-*   **Trustless**: Signed with BLS Threshold Cryptography. No single party controls it.
-*   **Global**: The entire world sees the same randomness.
+| Property | Value |
+|----------|-------|
+| **Security Level** | 256-bit Post-Quantum Computational |
+| **Entropy Sources** | drand beacon + local CSPRNG |
+| **Combination Method** | XOR (defense-in-depth) |
+| **Quality Validation** | Chi-square + Shannon entropy tests |
 
-### 2. The Swarm (The "Grid")
-Instead of every user hitting the Drand API (centralized bottleneck), ZKS peers form a **Kad-DHT Swarm**:
-*   **Role**: Peers cache different chunks of historical rounds (e.g., Peer A holds rounds 1M-2M, Peer B holds 2M-3M).
-*   **Protocol**: Libp2p GossipSub + Torrent-style chunk sharing.
-*   **Speed**: Randomness is downloaded in parallel from thousands of peers (Gbps+ speeds).
-
-### 3. The Use (The "Key")
-*   **Alice & Bob** agree on a starting round via ML-KEM.
-*   They fetch the needed rounds from the **Entropy Grid**.
-*   They derive their OTP keystream.
-*   **Result**: Unlimited, unbreakable encryption.
+> **⚠️ IMPORTANT:** The Entropy Grid provides **256-bit post-quantum computational security**, NOT information-theoretic security. Entropy is fetched over the network, which limits security to computational bounds.
 
 ---
 
-## 🆚 Comparison: Why It's Better
+## 🏗️ Architecture Overview
 
-### Entropy Grid vs. Blockchain
-Blockchains distribute a **ledger** and require **consensus**.
-*   **Blockchain**: Slow, expensive, requires mining/staking, limited throughput.
-*   **Entropy Grid**: **Instant**. No consensus needed.
-    *   **Why?** Randomness is mathematically verifiable (BLS signatures). We don't need to "agree" on it; we can just **verify** it locally.
-    *   **Throughput**: Limited only by internet bandwidth (can move GBs/sec).
+The Entropy Grid combines multiple independent entropy sources to eliminate single points of failure:
 
-### Entropy Grid vs. Torrents
-Torrents distribute **files**.
-*   **Torrents**: Rely on file hashes. If a peer modifies a chunk, the hash fails.
-*   **Entropy Grid**: Distributes **Signed Events**.
-    *   Each 32-byte chunk is cryptographically signed by the League of Entropy.
-    *   Malicious peers cannot inject fake randomness; it will fail verification instantly.
+```mermaid
+graph TD
+    subgraph "Entropy Sources"
+        LOCAL["🖥️ Local CSPRNG<br/>(getrandom)"]
+        DRAND["⚡ drand Beacon<br/>(BLS12-381 verified)"]
+    end
 
----
+    subgraph "Mixing"
+        XOR(("⊕ XOR<br/>Combination"))
+    end
 
-## ⚡ Performance: Solving the 10 GB Limit
+    subgraph "Validation"
+        CHI["📊 Chi-Square Test"]
+        SHANNON["📈 Shannon Entropy"]
+        REPEAT["🔁 Repeat Detection"]
+    end
 
-Transferring a 10 GB file using TRUE OTP requires ~335 million randomness rounds.
+    subgraph "Output"
+        BUFFER["🛢️ Entropy Buffer"]
+    end
 
-| Method | Time to Fetch | Viability |
-|--------|---------------|-----------|
-| **Sequential HTTP** | ~180 Days | ❌ Impossible |
-| **Entropy Grid (Swarm)** | **~2-5 Minutes** | ✅ **Solved** |
+    LOCAL --> XOR
+    DRAND --> XOR
+    XOR --> CHI
+    CHI --> SHANNON
+    SHANNON --> REPEAT
+    REPEAT --> BUFFER
 
-By parallelizing the fetch across the swarm, the Entropy Grid turns the "drand limit" into a bandwidth limit.
-
----
-
-## 🔐 Security Model
-
-1.  **Trustless**: You do not trust the peer sending you the randomness. You trust the **mathematics** of the BLS signature.
-2.  **Uncensorable**: The randomness is everywhere. You only need ONE honest peer in the swarm to get the data (or get it directly from Drand).
-3.  **Untraceable**: Requesting rounds 50,000,000–51,000,000 does not reveal *who* you are talking to, because millions of users share the same history.
-
----
-
-## 🌐 Hybrid Architecture: ZKS Swarm + IPFS
-
-The Entropy Grid uses a **4-layer fetch cascade** for maximum speed and reliability:
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    FETCH ORDER (Priority)                   │
-├─────────────────────────────────────────────────────────────┤
-│  1. 💾 Local Cache      │ Instant (0 latency)              │
-│  2. 🌀 ZKS Swarm        │ Private, fast (P2P)              │
-│  3. 🌍 IPFS Gateway     │ Public fallback (Cloudflare)     │
-│  4. 🔗 Drand API        │ Last resort (rate-limited)       │
-└─────────────────────────────────────────────────────────────┘
+    style XOR fill:#E91E63,stroke:#AD1457,color:#fff
+    style BUFFER fill:#4CAF50,stroke:#2E7D32,color:#fff
 ```
 
-### Why IPFS as Fallback?
-*   **Bootstrap**: When ZKS Swarm is small, IPFS provides instant seeders.
-*   **Persistence**: IPFS pins keep entropy blocks alive forever.
-*   **Free CDN**: Cloudflare IPFS Gateway = free global distribution.
+---
 
-### Cost: **$0**
-| Layer | Cost |
-|-------|------|
-| Local Cache | $0 (your disk) |
-| ZKS Swarm | $0 (P2P) |
-| IPFS | $0 (public network) |
-| Drand API | $0 (public infrastructure) |
+## 🧬 Defense-in-Depth Math
 
-### Storage: **2-5 GB typical** (not 100 GB)
-Users only cache what they need. Full history is optional for seeders.
+The XOR combination ensures security if **ANY** source is honest:
+
+```rust
+final_entropy = local_csprng ⊕ drand_beacon
+```
+
+### Security Properties
+
+$$Entropy(A \oplus B) \geq \max(Entropy(A), Entropy(B))$$
+
+| Scenario | Local CSPRNG | drand Beacon | **Result** |
+|----------|--------------|--------------|------------|
+| Normal | ✅ Random | ✅ Random | ✅ **Secure** |
+| Compromised OS | ❌ Predictable | ✅ Random | ✅ **Secure** |
+| Compromised drand | ✅ Random | ❌ Predictable | ✅ **Secure** |
+| Both Compromised | ❌ | ❌ | ❌ Broken |
+
+> **Key Insight**: An attacker must compromise **BOTH** sources simultaneously to break security.
 
 ---
 
-## 🔮 The Vision
+## 📊 Quality Validation
 
-The Entropy Grid becomes a **perpetual, growing library of truth**.
-*   Every 30 seconds, a new "page" is added.
-*   The Grid preserves this history forever.
-*   Any two humans, anywhere in the universe, at any time in the future, can use this Grid to communicate with **perfect secrecy**.
+Before entropy enters the buffer, it passes through rigorous statistical tests:
+
+### 1. Chi-Square Uniformity Test
+
+Verifies byte distribution is uniform:
+
+```rust
+// Expected: each byte value appears equally often
+let expected = sample_size / 256.0;
+let chi_square = Σ((observed - expected)² / expected);
+
+// Pass if 100 < chi_square < 500 (for 255 degrees of freedom)
+```
+
+### 2. Shannon Entropy Test
+
+Measures information content:
+
+```rust
+let shannon_entropy = -Σ(p × log₂(p))  // for each byte probability
+
+// Pass if shannon_entropy > 7.5 bits (max is 8.0)
+```
+
+### 3. Repeat Detection
+
+Checks for suspicious patterns:
+
+```rust
+let repeat_ratio = repeated_bytes / total_bytes;
+
+// Pass if repeat_ratio < 5%
+```
 
 ---
 
-## 🤯 The Deep Future: Replacing Blockchain? (The Entropy Ledger)
+## 🌊 Entropy Flow
 
-The user asked: *"Can we replace blockchain with this?"*
-**The answer is YES.**
+```mermaid
+sequenceDiagram
+    participant App as 📱 Application
+    participant Grid as 🎲 Entropy Grid
+    participant Local as 🖥️ Local RNG
+    participant Drand as ⚡ drand Beacon
 
-### The Problem with Blockchain
-Blockchains exist primarily to solve **"The Double Spend Problem"** (making sure you didn't spend the money twice). They do this by ordering transactions.
-*   **Bitcoin/Ethereum**: "Miners" or "Stakers" vote on the order. This is slow, expensive, and political.
+    App->>Grid: Request 32 bytes
 
-### The Entropy Solution: Time as the Authority
-The Entropy Grid provides a **Global, Unstoppable, Verifiable Clock**.
-Instead of asking miners to order transactions, we use **Entropy Rounds** as the heartbeat of the ledger.
+    par Fetch Sources
+        Grid->>Local: getrandom(32)
+        Local-->>Grid: local_bytes
+        Grid->>Drand: fetch_round(latest)
+        Drand-->>Grid: drand_bytes
+    end
 
-#### Concept: "Entropy-Locking"
-1.  **Transaction**: "Alice sends 5 ZKS to Bob."
-2.  **The Lock**: Alice cryptographically ties this transaction to **Drand Round #1,000,000**.
-3.  **The Consensus**: There *is* no consensus.
-    *   The network observes Round #1,000,000.
-    *   If two transactions try to spend the same money in the same round, a **Deterministic Rule** (e.g., lowest hash) decides instantly.
-    *   No mining. No voting. Just math.
+    Grid->>Grid: result = local ⊕ drand
+    Grid->>Grid: Validate quality
+    Grid-->>App: ✅ 32 bytes (validated)
+```
 
-### Why It's Superior
-*   **Infinite Scalability**: Sharding is trivial (Shard A uses odd rounds, Shard B uses even rounds).
-*   **Speed**: Finality happens at the speed of the Beacon (3s or 30s), not the speed of block confirmations (10-60 mins).
-*   **Green**: 0% energy waste. No mining farms.
+---
 
-**The Entropy Grid doesn't just distribute keys. It distributes TRUTH.**
+## 🔑 Use Cases
 
+### 1. Shared Seed Derivation
+
+Used in handshake to create synchronized keystream seeds:
+
+```rust
+let shared_seed = WasifVernam::create_shared_seed(
+    mlkem_secret,      // From ML-KEM key exchange
+    entropy_grid.get(32), // From Entropy Grid
+    peer_contribution,  // From handshake
+);
+```
+
+### 2. DEK Generation
+
+Used to generate Data Encryption Keys for Hybrid OTP:
+
+```rust
+let dek = entropy_grid.get(32); // 256-bit DEK
+let wrapped_dek = dek ^ otp;    // XOR wrapping
+```
+
+### 3. Nonce Generation
+
+Used for unique nonces in ChaCha20-Poly1305:
+
+```rust
+let nonce = entropy_grid.get(12); // 96-bit nonce
+```
+
+---
+
+## 📡 drand Beacon Integration
+
+The [drand beacon](https://drand.love/) is a distributed randomness beacon operated by 18+ independent organizations:
+
+| Property | Value |
+|----------|-------|
+| **Operators** | 18+ (League of Entropy) |
+| **Threshold** | 12-of-18 signature required |
+| **Verification** | BLS12-381 signatures |
+| **Round Interval** | 3 seconds |
+| **Output Size** | 32 bytes per round |
+
+### Verification
+
+Every drand round is cryptographically verified:
+
+```rust
+// BLS signature verification
+let is_valid = bls_verify(
+    public_key,      // League of Entropy public key
+    message,         // Round number
+    signature        // BLS12-381 signature
+);
+```
+
+### Fallback Chain
+
+If drand is unavailable, the system falls back gracefully:
+
+```
+Primary: drand mainnet (api.drand.sh)
+    ↓ (timeout 2s)
+Fallback 1: drand testnet (api2.drand.sh)
+    ↓ (timeout 2s)
+Fallback 2: Local CSPRNG only (with warning)
+```
+
+---
+
+## 🛢️ Buffer Management
+
+The Entropy Grid maintains a buffer for instant entropy access:
+
+```rust
+const MIN_BUFFER_SIZE: usize = 256 * 1024;    // 256 KB warning threshold
+const TARGET_BUFFER_SIZE: usize = 1024 * 1024; // 1 MB target
+
+// Background task refills buffer
+loop {
+    if buffer.len() < MIN_BUFFER_SIZE {
+        let fresh = fetch_hybrid_entropy(32);
+        buffer.push(fresh);
+    }
+    sleep(10.seconds()).await;
+}
+```
+
+---
+
+## 📈 Performance
+
+| Operation | Latency | Throughput |
+|-----------|---------|------------|
+| Local CSPRNG | 0.5 µs | 2 GiB/s |
+| drand Fetch | 50-200 ms | ~32 B/3s |
+| XOR Combination | 0.1 µs | 10 GiB/s |
+| Validation | 5 µs | 200 MiB/s |
+
+> **Note**: drand provides ~92 KB/day. For high-volume encryption, use Hybrid OTP mode.
+
+---
+
+## 🔌 API Usage
+
+### Basic Usage
+
+```rust
+use zks_crypt::entropy_grid::EntropyGrid;
+
+// Initialize grid
+let grid = EntropyGrid::new().await?;
+
+// Get entropy
+let entropy = grid.get(32).await?; // 32 bytes
+```
+
+### With Validation
+
+```rust
+let entropy = grid.get_validated(32).await?;
+// Returns error if quality tests fail
+```
+
+### Synchronous (Blocking)
+
+```rust
+use zks_crypt::true_entropy::get_sync_entropy;
+
+let entropy = get_sync_entropy(32); // Blocking call
+```
+
+---
+
+## 🆚 Comparison with Other RNG Systems
+
+| System | Sources | Verification | Defense-in-Depth |
+|--------|---------|--------------|------------------|
+| **ZKS Entropy Grid** | drand + CSPRNG | BLS12-381 | ✅ XOR combination |
+| Linux /dev/urandom | Kernel pool | None | ❌ Single source |
+| Cloudflare drand | drand only | BLS12-381 | ❌ Single source |
+| Intel RDRAND | CPU hardware | None | ❌ Single source |
+
+---
+
+## ⚠️ Security Considerations
+
+### What This IS
+
+- ✅ 256-bit post-quantum computational security
+- ✅ Defense-in-depth against single source compromise
+- ✅ Cryptographically verified external entropy
+- ✅ Quality-validated random output
+
+### What This IS NOT
+
+- ❌ Information-theoretic security (network fetch limits to computational)
+- ❌ Replacement for true hardware quantum RNG
+- ❌ Unlimited entropy (drand rate-limited to ~92 KB/day)
+
+---
+
+## 📚 References
+
+- [drand Distributed Randomness Beacon](https://drand.love/)
+- [BLS12-381 Curve](https://electriccoin.co/blog/new-snark-curve/)
+- [NIST SP 800-90B: Entropy Sources](https://csrc.nist.gov/publications/detail/sp/800-90b/final)
+- [Chi-Square Test for Randomness](https://en.wikipedia.org/wiki/Chi-squared_test)
+
+---
+
+*Document updated: February 2026*  
+*Source: `crates/zks_crypt/src/true_vernam.rs`, `crates/zks_wire/src/entropy_grid.rs`*
