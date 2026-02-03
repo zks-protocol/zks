@@ -58,8 +58,8 @@ ZKS Protocol is a **post-quantum secure networking protocol** built with 100% sa
 <td width="50%">
 
 ### 🔐 Post-Quantum Cryptography
-- **ML-KEM-768** (Kyber) — NIST Level 3 key exchange
-- **ML-DSA-65** (Dilithium) — Post-quantum signatures
+- **ML-KEM-1024** (Kyber) — NIST Level 5 key exchange
+- **ML-DSA-87** (Dilithium) — NIST Level 5 signatures
 - Resistant to quantum computer attacks
 
 </td>
@@ -182,7 +182,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let connection = ZksConnectionBuilder::new()
         .url("zks://hidden-service.example.com:8443")
         .min_hops(3)  // Route through 3+ relay nodes
-        .security(SecurityLevel::TrueVernam)
+        .security(SecurityLevel::PostQuantum)
         .build()
         .await?;
     
@@ -227,8 +227,8 @@ console.log("✅ Signature valid:", isValid);
 | Component | Algorithm | Security Level |
 |-----------|-----------|----------------|
 | Key Exchange | ML-KEM-1024 (Kyber) | NIST Level 5 (IND-CCA2) |
-| Signatures | ML-DSA-65 (Dilithium) | NIST Level 3 (EUF-CMA) |
-| Symmetric Encryption | Wasif-Vernam Cipher (OTP-inspired) | ChaCha20-Poly1305 + XOR layer |
+| Signatures | ML-DSA-87 (Dilithium) | NIST Level 5 (EUF-CMA) |
+| Symmetric Encryption | Wasif-Vernam Cipher | ChaCha20-Poly1305 + XOR layer |
 | Random Entropy | drand ⊕ CSPRNG | 256-bit computational |
 
 ### 🛡️ Hybrid Computational Security
@@ -290,13 +290,13 @@ ZKS Protocol achieves **256-bit post-quantum security** through defense-in-depth
 ```
 zks/
 ├── zks_sdk        # High-level SDK (start here!)
-├── zks_crypt      # Wasif-Vernam cipher (OTP-inspired), drand integration
-├── zks_pqcrypto   # ML-KEM-768, ML-DSA-65
+├── zks_crypt      # Wasif-Vernam cipher, drand integration
+├── zks_pqcrypto   # ML-KEM-1024, ML-DSA-87 (NIST Level 5)
 ├── zks_proto      # Handshake protocol, URL parsing
 ├── zks_wire       # Swarm networking, NAT traversal
 ├── zks_types      # Common type definitions
 ├── zks_wasm       # WebAssembly bindings
-├── zks_wire       # Swarm networking, NAT traversal
+├── zks_surb       # Single-Use Reply Blocks for anonymous replies
 ```
 
 | Crate | Description | Key Features |

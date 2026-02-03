@@ -56,7 +56,7 @@ The computational layer (ChaCha20) **cannot be attacked** because its key (DEK) 
 | Requirement | Implementation | Test |
 |-------------|----------------|------|
 | 256-bit entropy | drand ⊕ CSPRNG XOR | ✅ Chi²=288.88 |
-| Post-quantum secure | ML-KEM-1024 + ML-DSA-65 | ✅ |
+| Post-quantum secure | ML-KEM-1024 + ML-DSA-87 | ✅ |
 | Single use | `used_otps` HashSet | ✅ Reuse blocked |
 | Defense-in-depth | Dual entropy sources | ✅ Never transmitted |
 

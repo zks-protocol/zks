@@ -8,7 +8,7 @@ Cover traffic provides traffic analysis resistance by generating indistinguishab
 
 ## Features
 
-- **Post-quantum secure**: ML-KEM-768 key encapsulation
+- **Post-quantum secure**: ML-KEM-1024 key encapsulation (NIST Level 5)
 - **Wasif-Vernam encryption**: Each cover packet uniquely encrypted
 - **Poisson timing**: Realistic traffic patterns
 - **Faisal Swarm integration**: Ready for onion routing

@@ -75,8 +75,8 @@ Alice (Initiator)                          Bob (Responder)
 
 ## Cryptographic Primitives Modeled
 
-- **ML-KEM-768**: Post-quantum key encapsulation (NIST FIPS 203)
-- **ML-DSA-65**: Post-quantum digital signatures (NIST FIPS 204)  
+- **ML-KEM-1024**: Post-quantum key encapsulation (NIST FIPS 203, Level 5)
+- **ML-DSA-87**: Post-quantum digital signatures (NIST FIPS 204, Level 5)  
 - **HKDF-SHA256**: Key derivation function
 - **SHA-256**: Hash for key confirmation
 

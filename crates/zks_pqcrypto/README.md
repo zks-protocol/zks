@@ -6,15 +6,15 @@ Post-quantum cryptographic implementations for the ZKS Protocol.
 
 This crate provides NIST-standardized post-quantum cryptographic primitives:
 
-- **ML-KEM-768** (Kyber) - Key encapsulation mechanism (NIST Level 3)
-- **ML-DSA-65** (Dilithium) - Digital signatures (NIST Level 3)
+- **ML-KEM-1024** (Kyber) - Key encapsulation mechanism (NIST Level 5)
+- **ML-DSA-87** (Dilithium) - Digital signatures (NIST Level 5)
 
 ## Security Properties
 
 | Algorithm | Security Level | Property |
 |-----------|----------------|----------|
-| ML-KEM-768 | NIST Level 3 | IND-CCA2 |
-| ML-DSA-65 | NIST Level 3 | EUF-CMA |
+| ML-KEM-1024 | NIST Level 5 | IND-CCA2 |
+| ML-DSA-87 | NIST Level 5 | EUF-CMA |
 
 ## Features
 

@@ -8,7 +8,7 @@ SURBs enable anonymous bidirectional communication. A sender creates a SURB and 
 
 ## Features
 
-- **Post-quantum secure**: ML-KEM-768 key encapsulation
+- **Post-quantum secure**: ML-KEM-1024 key encapsulation (NIST Level 5)
 - **Anonymous replies**: Recipient can't identify sender
 - **Single-use**: Each SURB works exactly once
 - **Time-limited**: Configurable expiry
