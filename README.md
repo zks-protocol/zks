@@ -27,7 +27,7 @@
 
 ## 🌟 Why ZKS?
 
-ZKS Protocol is a **post-quantum secure networking protocol** built with 100% safe Rust. It provides defense-in-depth encryption with multiple layers of security, including **256-bit post-quantum computational security**.
+ZKS Protocol is a **post-quantum secure networking protocol** with a memory-safe architecture built on high-assurance foundations. It provides defense-in-depth encryption with multiple layers of security, including **256-bit post-quantum computational security**.
 
 | Protocol | Description | Security Model |
 |----------|-------------|----------------|
@@ -404,7 +404,7 @@ cargo run --example file_transfer
 - **Defense-in-depth**: DEK wrapped with drand ⊕ CSPRNG (256-bit computational)
 - **Forward secrecy**: Session keys are derived per-connection with recursive key chains
 - **Zero trust**: End-to-end encryption with mutual authentication
-- **Memory safety**: 100% safe Rust, no `unsafe` code in core crates
+- **Memory safety**: Memory-safe architecture, leveraging Rust's ownership model with minimal, audit-friendly `unsafe` code for cryptographic primitives.
 
 ### 🔐 256-bit Post-Quantum Security
 

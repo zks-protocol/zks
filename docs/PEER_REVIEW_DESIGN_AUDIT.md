@@ -342,7 +342,7 @@ Claims of "formally verified security" are overstated. The most novel components
 
 | Aspect | Status | Notes |
 |--------|--------|-------|
-| Memory Safety | ✅ EXCELLENT | 100% safe Rust, zeroize on secrets |
+| Memory Safety | ✅ EXCELLENT | Memory-safe design, zeroize on secrets, minimal audit-friendly unsafe usage for constant-time primitives |
 | Error Handling | ✅ GOOD | Proper Result types throughout |
 | Constant-time | ✅ EXCELLENT | subtle crate for all comparisons |
 | Documentation | ✅ COMPLETE | Inline docs, threat model, paper updated |
