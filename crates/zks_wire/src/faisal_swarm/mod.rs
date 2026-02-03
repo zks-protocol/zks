@@ -109,6 +109,19 @@ pub struct SwarmCapabilities {
     pub bandwidth_tier: u8,
 }
 
+/// By default, all peers participate as relays (symmetric P2P model).
+/// This provides plausible deniability: every participant relays traffic,
+/// so no individual can be blamed for any specific content.
+impl Default for SwarmCapabilities {
+    fn default() -> Self {
+        Self {
+            can_relay: true,  // Everyone relays by default (like I2P)
+            can_exit: false,  // Exit requires explicit opt-in
+            bandwidth_tier: 3, // Medium bandwidth tier
+        }
+    }
+}
+
 /// Wasif-Vernam encryption layer for one hop
 /// 
 /// Each hop in a Faisal Swarm circuit has its own Wasif-Vernam cipher,
