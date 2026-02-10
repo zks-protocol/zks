@@ -1,24 +1,24 @@
 //! # ZKS Cover Traffic
-//! 
+//!
 //! Post-quantum secure cover traffic generation for ZKS Protocol.
-//! 
+//!
 //! ## Overview
-//! 
+//!
 //! This crate generates cover traffic that is indistinguishable from real traffic,
 //! providing traffic analysis resistance while maintaining ZKS's superior cryptography.
-//! 
+//!
 //! ## Features
-//! 
+//!
 //! - **Post-quantum secure**: Uses ML-KEM-768 for key exchange
 //! - **Wasif-Vernam encryption**: 256-bit post-quantum computational security with high-entropy XOR layer
 //! - **Poisson timing**: Realistic traffic patterns
 //! - **Faisal Swarm integration**: Works with existing ZKS routing
-//! 
+//!
 //! ## Usage
-//! 
+//!
 //! ```rust,no_run
 //! use zks_cover::{CoverGenerator, CoverConfig};
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let config = CoverConfig::builder()
@@ -64,22 +64,19 @@ pub use types::{CoverMessage, CoverType};
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_cover_config_creation() {
-        let config = CoverConfig::builder()
-            .poisson_rate(1.0)
-            .build()
-            .unwrap();
-        
+        let config = CoverConfig::builder().poisson_rate(1.0).build().unwrap();
+
         assert_eq!(config.poisson_rate(), 1.0);
     }
-    
+
     #[tokio::test]
     async fn test_cover_generator_creation() {
         let config = CoverConfig::default();
         let _generator = CoverGenerator::new(config);
-        
+
         // Should be able to create generator
         assert!(true);
     }

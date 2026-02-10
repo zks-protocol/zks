@@ -1,15 +1,15 @@
 //! WebSocket-based signaling client for peer discovery and swarm coordination
-//! 
+//!
 //! This module provides a unified signaling mechanism that works in both
 //! native environments (Rust) and browsers (WASM) via WebSocket connections
 //! to Cloudflare Workers.
 
-use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
 use futures_util::{SinkExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
+use tracing::{debug, info};
 
 /// Information about a discovered peer
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,7 +110,8 @@ pub enum SignalingMessage {
 /// WebSocket-based signaling client
 #[derive(Clone)]
 pub struct SignalingClient {
-    ws_stream: Arc<Mutex<WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>,
+    ws_stream:
+        Arc<Mutex<WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>,
     peer_id: String,
     is_connected: Arc<Mutex<bool>>,
 }
@@ -119,27 +120,32 @@ impl SignalingClient {
     /// Connect to a signaling server
     pub async fn connect(url: &str, peer_id: String) -> Result<Self, SignalingError> {
         info!("Connecting to signaling server at {}", url);
-        
+
         let ws_url = if url.starts_with("ws://") || url.starts_with("wss://") {
             url.to_string()
         } else {
             format!("wss://{}/signaling", url.trim_end_matches('/'))
         };
-        
-        let (ws_stream, _) = connect_async(&ws_url).await
-            .map_err(|e| SignalingError::ConnectionFailed(format!("WebSocket connection failed: {}", e)))?;
-        
+
+        let (ws_stream, _) = connect_async(&ws_url).await.map_err(|e| {
+            SignalingError::ConnectionFailed(format!("WebSocket connection failed: {}", e))
+        })?;
+
         info!("Connected to signaling server");
-        
+
         Ok(Self {
             ws_stream: Arc::new(Mutex::new(ws_stream)),
             peer_id,
             is_connected: Arc::new(Mutex::new(true)),
         })
     }
-    
+
     /// Join a swarm room for peer discovery
-    pub async fn join_room(&self, room_id: &str, capabilities: PeerCapabilities) -> Result<(), SignalingError> {
+    pub async fn join_room(
+        &self,
+        room_id: &str,
+        capabilities: PeerCapabilities,
+    ) -> Result<(), SignalingError> {
         let peer_info = PeerInfo {
             peer_id: self.peer_id.clone(),
             public_key: vec![], // Will be populated with actual key
@@ -150,107 +156,122 @@ impl SignalingClient {
                 .as_secs(),
             addresses: vec![],
         };
-        
+
         let message = SignalingMessage::Join {
             room_id: room_id.to_string(),
             peer_info,
         };
-        
+
         self.send_message(message).await?;
         debug!("Joined room: {}", room_id);
         Ok(())
     }
-    
+
     /// Discover peers in a room
     pub async fn discover_peers(&self, room_id: &str) -> Result<Vec<PeerInfo>, SignalingError> {
         let message = SignalingMessage::Discover {
             room_id: room_id.to_string(),
         };
-        
+
         self.send_message(message).await?;
-        
+
         // Wait for response
         let response = self.receive_message().await?;
-        
+
         match response {
             SignalingMessage::Peers { peers } => {
                 debug!("Discovered {} peers in room {}", peers.len(), room_id);
                 Ok(peers)
             }
-            SignalingMessage::Error { code, message } => {
-                Err(SignalingError::ServerError(format!("{}: {}", code, message)))
-            }
+            SignalingMessage::Error { code, message } => Err(SignalingError::ServerError(format!(
+                "{}: {}",
+                code, message
+            ))),
             _ => Err(SignalingError::UnexpectedMessage("Expected Peers response")),
         }
     }
-    
+
     /// Request entropy from the swarm
     pub async fn get_swarm_entropy(&self, room_id: &str) -> Result<Vec<u8>, SignalingError> {
         let request_id = uuid::Uuid::new_v4().to_string();
-        
+
         let message = SignalingMessage::EntropyRequest {
             room_id: room_id.to_string(),
             request_id: request_id.clone(),
         };
-        
+
         self.send_message(message).await?;
-        
+
         // Wait for entropy response
         let response = self.receive_message().await?;
-        
+
         match response {
-            SignalingMessage::EntropyResponse { request_id: resp_id, entropy, .. } => {
+            SignalingMessage::EntropyResponse {
+                request_id: resp_id,
+                entropy,
+                ..
+            } => {
                 if resp_id != request_id {
                     return Err(SignalingError::UnexpectedMessage("Request ID mismatch"));
                 }
-                
+
                 if entropy.len() != 32 {
                     return Err(SignalingError::InvalidEntropy("Entropy must be 32 bytes"));
                 }
-                
+
                 Ok(entropy)
             }
-            SignalingMessage::Error { code, message } => {
-                Err(SignalingError::ServerError(format!("{}: {}", code, message)))
-            }
-            _ => Err(SignalingError::UnexpectedMessage("Expected EntropyResponse")),
+            SignalingMessage::Error { code, message } => Err(SignalingError::ServerError(format!(
+                "{}: {}",
+                code, message
+            ))),
+            _ => Err(SignalingError::UnexpectedMessage(
+                "Expected EntropyResponse",
+            )),
         }
     }
-    
+
     /// Leave a room
     pub async fn leave_room(&self, room_id: &str) -> Result<(), SignalingError> {
         let message = SignalingMessage::Leave {
             room_id: room_id.to_string(),
         };
-        
+
         self.send_message(message).await?;
         debug!("Left room: {}", room_id);
         Ok(())
     }
-    
+
     /// Send a signaling message
     async fn send_message(&self, message: SignalingMessage) -> Result<(), SignalingError> {
-        let json = serde_json::to_string(&message)
-            .map_err(|e| SignalingError::SerializationFailed(format!("Failed to serialize message: {}", e)))?;
-        
+        let json = serde_json::to_string(&message).map_err(|e| {
+            SignalingError::SerializationFailed(format!("Failed to serialize message: {}", e))
+        })?;
+
         let ws_message = Message::Text(json);
-        
+
         let mut stream = self.ws_stream.lock().await;
-        stream.send(ws_message).await
+        stream
+            .send(ws_message)
+            .await
             .map_err(|e| SignalingError::SendFailed(format!("Failed to send message: {}", e)))?;
-        
+
         Ok(())
     }
-    
+
     /// Receive a signaling message
     async fn receive_message(&self) -> Result<SignalingMessage, SignalingError> {
         let mut stream = self.ws_stream.lock().await;
-        
+
         loop {
             match stream.try_next().await {
                 Ok(Some(Message::Text(text))) => {
-                    let message: SignalingMessage = serde_json::from_str(&text)
-                        .map_err(|e| SignalingError::DeserializationFailed(format!("Failed to deserialize message: {}", e)))?;
+                    let message: SignalingMessage = serde_json::from_str(&text).map_err(|e| {
+                        SignalingError::DeserializationFailed(format!(
+                            "Failed to deserialize message: {}",
+                            e
+                        ))
+                    })?;
                     return Ok(message);
                 }
                 Ok(Some(Message::Binary(_))) => {
@@ -278,23 +299,27 @@ impl SignalingClient {
                     return Err(SignalingError::ConnectionClosed);
                 }
                 Err(e) => {
-                    return Err(SignalingError::ReceiveFailed(format!("WebSocket error: {}", e)));
+                    return Err(SignalingError::ReceiveFailed(format!(
+                        "WebSocket error: {}",
+                        e
+                    )));
                 }
             }
         }
     }
-    
+
     /// Check if connected
     pub async fn is_connected(&self) -> bool {
         *self.is_connected.lock().await
     }
-    
+
     /// Close the connection
     pub async fn close(&mut self) -> Result<(), SignalingError> {
         let message = Message::Close(None);
         let mut stream = self.ws_stream.lock().await;
-        stream.send(message).await
-            .map_err(|e| SignalingError::SendFailed(format!("Failed to send close message: {}", e)))?;
+        stream.send(message).await.map_err(|e| {
+            SignalingError::SendFailed(format!("Failed to send close message: {}", e))
+        })?;
         Ok(())
     }
 }
@@ -305,35 +330,35 @@ pub enum SignalingError {
     /// Failed to establish connection to signaling server
     #[error("Connection failed: {0}")]
     ConnectionFailed(String),
-    
+
     /// Connection to signaling server was closed
     #[error("Connection closed")]
     ConnectionClosed,
-    
+
     /// Failed to send message to signaling server
     #[error("Send failed: {0}")]
     SendFailed(String),
-    
+
     /// Failed to receive message from signaling server
     #[error("Receive failed: {0}")]
     ReceiveFailed(String),
-    
+
     /// Failed to serialize message for transmission
     #[error("Serialization failed: {0}")]
     SerializationFailed(String),
-    
+
     /// Failed to deserialize received message
     #[error("Deserialization failed: {0}")]
     DeserializationFailed(String),
-    
+
     /// Server returned an error response
     #[error("Server error: {0}")]
     ServerError(String),
-    
+
     /// Received unexpected message type
     #[error("Unexpected message: {0}")]
     UnexpectedMessage(&'static str),
-    
+
     /// Invalid entropy data received
     #[error("Invalid entropy: {0}")]
     InvalidEntropy(&'static str),
@@ -343,47 +368,73 @@ pub enum SignalingError {
 #[async_trait::async_trait]
 pub trait SignalingClientTrait: Send + Sync + Clone {
     /// Discover peers in a room
-    async fn discover_peers(&self, room_id: &str) -> Result<Vec<PeerInfo>, Box<dyn std::error::Error + Send + Sync>>;
-    
+    async fn discover_peers(
+        &self,
+        room_id: &str,
+    ) -> Result<Vec<PeerInfo>, Box<dyn std::error::Error + Send + Sync>>;
+
     /// Join a room with given capabilities
-    async fn join_room(&mut self, room_id: &str, capabilities: PeerCapabilities) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-    
+    async fn join_room(
+        &mut self,
+        room_id: &str,
+        capabilities: PeerCapabilities,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
     /// Leave a room
-    async fn leave_room(&mut self, room_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
-    
+    async fn leave_room(
+        &mut self,
+        room_id: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
     /// Get swarm entropy for a room
-    async fn get_swarm_entropy(&mut self, room_id: &str) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>>;
-    
+    async fn get_swarm_entropy(
+        &mut self,
+        room_id: &str,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>>;
+
     /// Close the signaling connection
     async fn close(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 }
 
 #[async_trait::async_trait]
 impl SignalingClientTrait for SignalingClient {
-    async fn discover_peers(&self, room_id: &str) -> Result<Vec<PeerInfo>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn discover_peers(
+        &self,
+        room_id: &str,
+    ) -> Result<Vec<PeerInfo>, Box<dyn std::error::Error + Send + Sync>> {
         SignalingClient::discover_peers(self, room_id)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
-    
-    async fn join_room(&mut self, room_id: &str, capabilities: PeerCapabilities) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
+    async fn join_room(
+        &mut self,
+        room_id: &str,
+        capabilities: PeerCapabilities,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         SignalingClient::join_room(self, room_id, capabilities)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
-    
-    async fn leave_room(&mut self, room_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
+    async fn leave_room(
+        &mut self,
+        room_id: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         SignalingClient::leave_room(self, room_id)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
-    
-    async fn get_swarm_entropy(&mut self, room_id: &str) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+
+    async fn get_swarm_entropy(
+        &mut self,
+        room_id: &str,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
         SignalingClient::get_swarm_entropy(self, room_id)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
-    
+
     async fn close(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         SignalingClient::close(self)
             .await
@@ -394,12 +445,14 @@ impl SignalingClientTrait for SignalingClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     #[ignore] // Requires running signaling server
     async fn test_signaling_client() {
-        let mut client = SignalingClient::connect("localhost:8080", "test-peer".to_string()).await.unwrap();
-        
+        let mut client = SignalingClient::connect("localhost:8080", "test-peer".to_string())
+            .await
+            .unwrap();
+
         let capabilities = PeerCapabilities {
             supports_p2p: true,
             supports_relay: true,
@@ -408,12 +461,12 @@ mod tests {
             supported_protocols: vec!["zks-v1".to_string()],
             max_hops: 3,
         };
-        
+
         client.join_room("test-room", capabilities).await.unwrap();
-        
+
         let peers = client.discover_peers("test-room").await.unwrap();
         println!("Discovered {} peers", peers.len());
-        
+
         client.leave_room("test-room").await.unwrap();
         client.close().await.unwrap();
     }

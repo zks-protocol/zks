@@ -37,20 +37,20 @@
 // Re-export sub-crates for unified access
 pub use zks_crypt as crypto;
 pub use zks_pqcrypto as pqcrypto;
-pub use zks_wire as wire;
 pub use zks_proto as proto;
 pub use zks_types as types;
+pub use zks_wire as wire;
 
 // SDK-specific modules
 pub mod builder;
 pub mod config;
 pub mod connection;
 pub mod error;
-pub mod prefabs;
-pub mod stream;
-pub mod sdk_crypto;
 pub mod identity;
 pub mod node;
+pub mod prefabs;
+pub mod sdk_crypto;
+pub mod stream;
 pub mod swarm;
 
 /// Prelude module for convenient imports
@@ -58,57 +58,57 @@ pub mod prelude {
     pub use crate::builder::ZkConnectionBuilder;
     pub use crate::config::SecurityLevel;
     pub use crate::error::Result;
-    
+
     // Re-export commonly used items from sub-crates
     pub use zks_crypt::wasif_vernam::WasifVernam;
     pub use zks_pqcrypto::prelude::*;
-    
+
     // Cover traffic and SURB exports
-    pub use zks_cover::{CoverGenerator, CoverConfig};
-    pub use zks_surb::{ZksSurb, ReplyRequest, SurbConfig};
+    pub use zks_cover::{CoverConfig, CoverGenerator};
+    pub use zks_surb::{ReplyRequest, SurbConfig, ZksSurb};
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_sdk_imports() {
         // Test that prelude imports work
         let _builder = prelude::ZkConnectionBuilder::new();
     }
-    
+
     #[tokio::test]
     async fn test_zk_connection_builder() {
         use crate::config::SecurityLevel;
-        use crate::prelude::{ZkConnectionBuilder, Result};
-        
+        use crate::prelude::{Result, ZkConnectionBuilder};
+
         let result: Result<_> = ZkConnectionBuilder::new()
             .url("zk://localhost:8080")
             .security(SecurityLevel::PostQuantum)
             .build()
             .await;
-        
+
         // We expect this to fail since there's no server running
         assert!(result.is_err());
     }
-    
+
     #[tokio::test]
     async fn test_encryption_roundtrip() {
         use zks_crypt::wasif_vernam::WasifVernam;
-        
+
         let key = [0u8; 32];
         let mut sender = WasifVernam::new(key).unwrap();
         sender.derive_base_iv(&key, true); // Required for encryption
-        
+
         let mut receiver = WasifVernam::new(key).unwrap();
         receiver.derive_base_iv(&key, true); // Same as sender for anti-replay
-        
+
         let plaintext = b"Hello, quantum world!";
-        
+
         let encrypted = sender.encrypt(plaintext).unwrap();
         let decrypted = receiver.decrypt(&encrypted).unwrap();
-        
+
         assert_eq!(plaintext.to_vec(), decrypted);
     }
 }

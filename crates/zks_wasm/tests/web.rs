@@ -1,8 +1,8 @@
 //! WASM tests for ZKS Protocol
 
-use wasm_bindgen_test::*;
-use zks_wasm::{ZksWasmUtils, quick_ml_dsa_keypair};
 use wasm_bindgen::JsValue;
+use wasm_bindgen_test::*;
+use zks_wasm::{quick_ml_dsa_keypair, ZksWasmUtils};
 
 wasm_bindgen_test_configure!(run_in_browser);
 
@@ -15,12 +15,14 @@ fn test_key_generation() {
 #[wasm_bindgen_test]
 fn test_ml_dsa_keypair_generation() {
     let keypair = quick_ml_dsa_keypair().unwrap();
-    
+
     // Convert JsValue to proper structure
     let keypair_obj = js_sys::Object::from(keypair);
-    let signing_key = js_sys::Reflect::get(&keypair_obj, &JsValue::from_str("signing_key")).unwrap();
-    let verifying_key = js_sys::Reflect::get(&keypair_obj, &JsValue::from_str("verifying_key")).unwrap();
-    
+    let signing_key =
+        js_sys::Reflect::get(&keypair_obj, &JsValue::from_str("signing_key")).unwrap();
+    let verifying_key =
+        js_sys::Reflect::get(&keypair_obj, &JsValue::from_str("verifying_key")).unwrap();
+
     assert!(signing_key.as_string().unwrap().len() > 0);
     assert!(verifying_key.as_string().unwrap().len() > 0);
 }
@@ -28,25 +30,27 @@ fn test_ml_dsa_keypair_generation() {
 #[wasm_bindgen_test]
 fn test_ml_dsa_sign_and_verify() {
     let message = b"Hello, WASM!";
-    
+
     // Generate keypair
     let keypair = quick_ml_dsa_keypair().unwrap();
     let keypair_obj = js_sys::Object::from(keypair);
-    let signing_key = js_sys::Reflect::get(&keypair_obj, &JsValue::from_str("signing_key")).unwrap();
-    let verifying_key = js_sys::Reflect::get(&keypair_obj, &JsValue::from_str("verifying_key")).unwrap();
-    
+    let signing_key =
+        js_sys::Reflect::get(&keypair_obj, &JsValue::from_str("signing_key")).unwrap();
+    let verifying_key =
+        js_sys::Reflect::get(&keypair_obj, &JsValue::from_str("verifying_key")).unwrap();
+
     // Convert hex strings to bytes
     let signing_key_hex = signing_key.as_string().unwrap();
     let signing_key_bytes = hex_to_bytes(&signing_key_hex);
-    
+
     // Sign message
     let signature = ZksWasmUtils::ml_dsa_sign(message, &signing_key_bytes).unwrap();
     assert!(signature.len() > 0);
-    
+
     // Convert verifying key to bytes
     let verifying_key_hex = verifying_key.as_string().unwrap();
     let verifying_key_bytes = hex_to_bytes(&verifying_key_hex);
-    
+
     // Verify signature
     ZksWasmUtils::ml_dsa_verify(message, &signature, &verifying_key_bytes).unwrap();
 }
@@ -55,20 +59,22 @@ fn test_ml_dsa_sign_and_verify() {
 fn test_ml_dsa_invalid_signature() {
     let message = b"Original message";
     let wrong_message = b"Wrong message";
-    
+
     let keypair = quick_ml_dsa_keypair().unwrap();
     let keypair_obj = js_sys::Object::from(keypair);
-    let signing_key = js_sys::Reflect::get(&keypair_obj, &JsValue::from_str("signing_key")).unwrap();
-    let verifying_key = js_sys::Reflect::get(&keypair_obj, &JsValue::from_str("verifying_key")).unwrap();
-    
+    let signing_key =
+        js_sys::Reflect::get(&keypair_obj, &JsValue::from_str("signing_key")).unwrap();
+    let verifying_key =
+        js_sys::Reflect::get(&keypair_obj, &JsValue::from_str("verifying_key")).unwrap();
+
     let signing_key_hex = signing_key.as_string().unwrap();
     let signing_key_bytes = hex_to_bytes(&signing_key_hex);
-    
+
     let signature = ZksWasmUtils::ml_dsa_sign(message, &signing_key_bytes).unwrap();
-    
+
     let verifying_key_hex = verifying_key.as_string().unwrap();
     let verifying_key_bytes = hex_to_bytes(&verifying_key_hex);
-    
+
     // This should fail
     let result = ZksWasmUtils::ml_dsa_verify(wrong_message, &signature, &verifying_key_bytes);
     assert!(result.is_err());

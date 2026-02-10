@@ -1,13 +1,13 @@
 //! Swarm circuit implementation for onion routing in ZK Protocol
-//! 
+//!
 //! Provides secure multi-hop routing through the swarm network with layered encryption.
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 use zeroize::Zeroizing;
 
-use crate::{WireError, Result};
-use crate::swarm::{PeerId, Peer};
+use crate::swarm::{Peer, PeerId};
+use crate::{Result, WireError};
 use zks_crypt::wasif_vernam::WasifVernam;
 
 /// Represents a circuit through the swarm for onion routing
@@ -20,7 +20,10 @@ pub struct SwarmCircuit {
     /// Exit peer (last hop)
     pub exit_peer: PeerId,
     /// Layer keys for encryption (one per hop) - private for security
-    #[serde(serialize_with = "serialize_layer_keys", deserialize_with = "deserialize_layer_keys")]
+    #[serde(
+        serialize_with = "serialize_layer_keys",
+        deserialize_with = "deserialize_layer_keys"
+    )]
     layer_keys: Vec<Zeroizing<[u8; 32]>>,
     /// Circuit ID for tracking
     pub circuit_id: [u8; 16],
@@ -28,7 +31,7 @@ pub struct SwarmCircuit {
 
 impl SwarmCircuit {
     /// Create a new empty circuit
-    /// 
+    ///
     /// # Errors
     /// Returns error if cryptographic random generation fails - this is a critical
     /// security requirement as predictable circuit IDs enable correlation attacks.
@@ -42,9 +45,9 @@ impl SwarmCircuit {
             circuit_id: Self::generate_circuit_id()?,
         })
     }
-    
+
     /// Generate a unique circuit ID using high-entropy randomness (drand + OsRng)
-    /// 
+    ///
     /// # Security
     /// Uses TrueEntropy which combines drand beacon + local CSPRNG via XOR
     /// for 256-bit post-quantum computational security. Secure if ANY source is uncompromised.
@@ -77,7 +80,7 @@ impl SwarmCircuit {
     pub fn add_layer_key(&mut self, key: [u8; 32]) {
         self.layer_keys.push(Zeroizing::new(key));
     }
-    
+
     /// Get all peers in the circuit (entry, middle, exit)
     pub fn all_peers(&self) -> Vec<PeerId> {
         let mut peers = vec![self.entry_peer];
@@ -85,21 +88,21 @@ impl SwarmCircuit {
         peers.push(self.exit_peer);
         peers
     }
-    
+
     /// Get the number of hops in the circuit
     pub fn hop_count(&self) -> usize {
         1 + self.middle_peers.len() + 1 // entry + middle + exit
     }
-    
+
     /// Onion encrypt data for transmission through the circuit
     /// Data is encrypted in reverse order (exit first, entry last)
     pub fn onion_encrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
         if self.layer_keys.is_empty() {
             return Err(WireError::other("No layer keys available for encryption"));
         }
-        
+
         let mut encrypted = data.to_vec();
-        
+
         // Encrypt in reverse order - exit peer first, entry peer last
         for i in (0..self.layer_keys.len()).rev() {
             if let Some(key) = self.get_layer_key(i) {
@@ -107,26 +110,31 @@ impl SwarmCircuit {
                     .map_err(|e| WireError::other(&format!("Failed to create cipher: {}", e)))?;
                 // Required: derive base_iv for encryption (security fix M3)
                 cipher.derive_base_iv(&key, true);
-                encrypted = cipher.encrypt(&encrypted)
+                encrypted = cipher
+                    .encrypt(&encrypted)
                     .map_err(|e| WireError::other(&format!("Encryption failed: {}", e)))?;
             } else {
                 return Err(WireError::other("Failed to get layer key"));
             }
         }
-        
-        debug!("Onion encrypted {} bytes through {} hops", data.len(), self.hop_count());
+
+        debug!(
+            "Onion encrypted {} bytes through {} hops",
+            data.len(),
+            self.hop_count()
+        );
         Ok(encrypted)
     }
-    
+
     /// Onion decrypt data received from the circuit
     /// Data is decrypted in forward order (entry first, exit last)
     pub fn onion_decrypt(&self, data: &[u8]) -> Result<Vec<u8>> {
         if self.layer_keys.is_empty() {
             return Err(WireError::other("No layer keys available for decryption"));
         }
-        
+
         let mut decrypted = data.to_vec();
-        
+
         // Decrypt in forward order - entry peer first, exit peer last
         for i in 0..self.layer_keys.len() {
             if let Some(key) = self.get_layer_key(i) {
@@ -134,23 +142,28 @@ impl SwarmCircuit {
                     .map_err(|e| WireError::other(&format!("Failed to create cipher: {}", e)))?;
                 // Required: derive base_iv for decryption (security fix M3)
                 cipher.derive_base_iv(&key, true);
-                decrypted = cipher.decrypt(&decrypted)
+                decrypted = cipher
+                    .decrypt(&decrypted)
                     .map_err(|e| WireError::other(&format!("Decryption failed: {}", e)))?;
             } else {
                 return Err(WireError::other("Failed to get layer key"));
             }
         }
-        
-        debug!("Onion decrypted {} bytes through {} hops", data.len(), self.hop_count());
+
+        debug!(
+            "Onion decrypted {} bytes through {} hops",
+            data.len(),
+            self.hop_count()
+        );
         Ok(decrypted)
     }
-    
+
     /// Create a single-hop cipher for a specific peer in the circuit
     pub fn get_peer_cipher(&self, peer_index: usize) -> Result<WasifVernam> {
         if peer_index >= self.layer_keys.len() {
             return Err(WireError::other("Peer index out of range"));
         }
-        
+
         if let Some(key) = self.get_layer_key(peer_index) {
             let mut cipher = WasifVernam::new(key)
                 .map_err(|e| WireError::other(&format!("Failed to create cipher: {}", e)))?;
@@ -182,68 +195,76 @@ impl CircuitBuilder {
     /// Create a new circuit builder
     pub fn new() -> Self {
         Self {
-            min_hops: 3,  // Default: entry + 1 middle + exit
-            max_hops: 8,  // Maximum 8 hops for performance
+            min_hops: 3, // Default: entry + 1 middle + exit
+            max_hops: 8, // Maximum 8 hops for performance
             preferred_peers: Vec::new(),
             exclude_peers: Vec::new(),
         }
     }
-    
+
     /// Set minimum number of hops
     pub fn min_hops(mut self, hops: u8) -> Self {
         self.min_hops = hops;
         self
     }
-    
+
     /// Set maximum number of hops
     pub fn max_hops(mut self, hops: u8) -> Self {
         self.max_hops = hops;
         self
     }
-    
+
     /// Add preferred peers to use if available
     pub fn preferred_peers(mut self, peers: Vec<PeerId>) -> Self {
         self.preferred_peers = peers;
         self
     }
-    
+
     /// Exclude specific peers from the circuit
     pub fn exclude_peers(mut self, peers: Vec<PeerId>) -> Self {
         self.exclude_peers = peers;
         self
     }
-    
+
     /// Build a circuit with the specified parameters
     pub async fn build(self, available_peers: &[Peer]) -> Result<SwarmCircuit> {
-        info!("Building circuit with {}-{} hops", self.min_hops, self.max_hops);
-        
+        info!(
+            "Building circuit with {}-{} hops",
+            self.min_hops, self.max_hops
+        );
+
         // Filter out excluded peers
-        let mut candidates: Vec<&Peer> = available_peers.iter()
+        let mut candidates: Vec<&Peer> = available_peers
+            .iter()
             .filter(|peer| !self.exclude_peers.contains(&peer.id))
             .collect();
-        
+
         if candidates.len() < self.min_hops as usize {
             return Err(WireError::other(&format!(
                 "Not enough peers available. Need {}, have {}",
-                self.min_hops, candidates.len()
+                self.min_hops,
+                candidates.len()
             )));
         }
-        
+
         // Shuffle candidates for randomness
         // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security in path selection
         use rand::seq::SliceRandom;
         use zks_crypt::true_entropy::TrueEntropyRng;
         candidates.shuffle(&mut TrueEntropyRng);
-        
+
         // Select peers for the circuit
         let mut circuit = SwarmCircuit::new()?;
-        let target_hops = std::cmp::max(self.min_hops as usize, std::cmp::min(candidates.len(), self.max_hops as usize));
-        
+        let target_hops = std::cmp::max(
+            self.min_hops as usize,
+            std::cmp::min(candidates.len(), self.max_hops as usize),
+        );
+
         // Select entry peer
         if let Some(entry_peer) = candidates.pop() {
             circuit.entry_peer = entry_peer.id;
         }
-        
+
         // Select middle peers
         let middle_count = target_hops.saturating_sub(2); // Subtract entry and exit
         for _ in 0..middle_count {
@@ -251,15 +272,20 @@ impl CircuitBuilder {
                 circuit.middle_peers.push(middle_peer.id);
             }
         }
-        
+
         // Select exit peer
         if let Some(exit_peer) = candidates.pop() {
             circuit.exit_peer = exit_peer.id;
         }
-        
-        info!("Built circuit with {} hops: entry={}, middle={:?}, exit={}", 
-               circuit.hop_count(), circuit.entry_peer, circuit.middle_peers, circuit.exit_peer);
-        
+
+        info!(
+            "Built circuit with {} hops: entry={}, middle={:?}, exit={}",
+            circuit.hop_count(),
+            circuit.entry_peer,
+            circuit.middle_peers,
+            circuit.exit_peer
+        );
+
         Ok(circuit)
     }
 }
@@ -274,37 +300,37 @@ impl Default for CircuitBuilder {
 mod tests {
     use super::*;
     use crate::swarm::PeerState;
-    
+
     #[test]
     fn test_circuit_creation() {
         let circuit = SwarmCircuit::new().unwrap();
         assert_eq!(circuit.hop_count(), 2); // entry + exit (no middle peers)
         assert!(!circuit.circuit_id.is_empty());
     }
-    
+
     #[test]
     fn test_circuit_all_peers() {
         let mut circuit = SwarmCircuit::new().unwrap();
         circuit.middle_peers.push(PeerId::new());
         circuit.middle_peers.push(PeerId::new());
-        
+
         let all_peers = circuit.all_peers();
         assert_eq!(all_peers.len(), 4); // entry + 2 middle + exit
     }
-    
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_onion_encryption() {
         let mut circuit = SwarmCircuit::new().unwrap();
         circuit.set_layer_keys(vec![[1u8; 32], [2u8; 32], [3u8; 32]]);
-        
+
         let plaintext = b"Hello, onion routing!";
         let encrypted = circuit.onion_encrypt(plaintext).unwrap();
         assert_ne!(encrypted, plaintext);
-        
+
         let decrypted = circuit.onion_decrypt(&encrypted).unwrap();
         assert_eq!(decrypted, plaintext);
     }
-    
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_circuit_builder() {
         let mut peers = Vec::new();
@@ -317,11 +343,9 @@ mod tests {
                 protocol_version: 1,
             });
         }
-        
-        let builder = CircuitBuilder::new()
-            .min_hops(3)
-            .max_hops(4);
-        
+
+        let builder = CircuitBuilder::new().min_hops(3).max_hops(4);
+
         let circuit = builder.build(&peers).await.unwrap();
         assert!(circuit.hop_count() >= 3);
         assert!(circuit.hop_count() <= 4);
@@ -329,7 +353,10 @@ mod tests {
 }
 
 // Custom serialization for layer keys
-fn serialize_layer_keys<S>(keys: &Vec<Zeroizing<[u8; 32]>>, serializer: S) -> std::result::Result<S::Ok, S::Error>
+fn serialize_layer_keys<S>(
+    keys: &Vec<Zeroizing<[u8; 32]>>,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
@@ -337,7 +364,9 @@ where
     raw_keys.serialize(serializer)
 }
 
-fn deserialize_layer_keys<'de, D>(deserializer: D) -> std::result::Result<Vec<Zeroizing<[u8; 32]>>, D::Error>
+fn deserialize_layer_keys<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Vec<Zeroizing<[u8; 32]>>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {

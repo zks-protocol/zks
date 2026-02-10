@@ -3,14 +3,14 @@
 //! This module implements a gossip-based protocol for distributing drand entropy blocks
 //! across the ZKS P2P swarm, enabling high-entropy encryption at low cost.
 
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
-use serde::{Serialize, Deserialize};
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 
-use zks_crypt::entropy_block::EntropyBlock;
 use crate::{PeerId, Result, WireError};
+use zks_crypt::entropy_block::EntropyBlock;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::p2p::NativeP2PTransport;
@@ -27,14 +27,14 @@ pub enum EntropyRequest {
     /// Request a specific entropy block by start round
     GetBlock {
         /// Starting round number of the block to retrieve
-        start_round: u64
+        start_round: u64,
     },
     /// Request multiple entropy blocks by range
     GetBlocks {
         /// Starting round number of the range
         start_round: u64,
         /// Ending round number of the range
-        end_round: u64
+        end_round: u64,
     },
     /// Request latest available entropy block
     GetLatest,
@@ -46,22 +46,22 @@ pub enum EntropyResponse {
     /// Entropy block data
     Block {
         /// The entropy block
-        block: EntropyBlock
+        block: EntropyBlock,
     },
     /// Multiple entropy blocks
     Blocks {
         /// List of entropy blocks
-        blocks: Vec<EntropyBlock>
+        blocks: Vec<EntropyBlock>,
     },
     /// Block not found
     NotFound {
         /// Starting round number of the requested block
-        start_round: u64
+        start_round: u64,
     },
     /// Error response
     Error {
         /// Error message describing what went wrong
-        message: String
+        message: String,
     },
 }
 
@@ -174,8 +174,9 @@ impl EntropyCache {
             access_count: 0,
         };
 
-        let mut blocks: tokio::sync::RwLockWriteGuard<HashMap<u64, CachedBlock>> = self.blocks.write().await;
-        
+        let mut blocks: tokio::sync::RwLockWriteGuard<HashMap<u64, CachedBlock>> =
+            self.blocks.write().await;
+
         // Check cache size limit
         if blocks.len() >= self.config.max_cached_blocks {
             // Remove oldest block
@@ -189,14 +190,19 @@ impl EntropyCache {
         }
 
         blocks.insert(start_round, cached_block);
-        info!("Stored entropy block {}-{} in cache", start_round, start_round + 1_000_000);
+        info!(
+            "Stored entropy block {}-{} in cache",
+            start_round,
+            start_round + 1_000_000
+        );
         Ok(())
     }
 
     /// Retrieve an entropy block from cache
     pub async fn get_block(&self, start_round: u64) -> Result<Option<EntropyBlock>> {
-        let mut blocks: tokio::sync::RwLockWriteGuard<HashMap<u64, CachedBlock>> = self.blocks.write().await;
-        
+        let mut blocks: tokio::sync::RwLockWriteGuard<HashMap<u64, CachedBlock>> =
+            self.blocks.write().await;
+
         if let Some(cached_block) = blocks.get_mut(&start_round) {
             // Check if block is expired
             let now = std::time::SystemTime::now()
@@ -219,8 +225,13 @@ impl EntropyCache {
     }
 
     /// Get multiple blocks by range
-    pub async fn get_blocks_range(&self, start_round: u64, end_round: u64) -> Result<Vec<EntropyBlock>> {
-        let blocks: tokio::sync::RwLockReadGuard<HashMap<u64, CachedBlock>> = self.blocks.read().await;
+    pub async fn get_blocks_range(
+        &self,
+        start_round: u64,
+        end_round: u64,
+    ) -> Result<Vec<EntropyBlock>> {
+        let blocks: tokio::sync::RwLockReadGuard<HashMap<u64, CachedBlock>> =
+            self.blocks.read().await;
         let mut result = Vec::new();
 
         for round in (start_round..=end_round).step_by(1_000_000) {
@@ -242,13 +253,15 @@ impl EntropyCache {
 
     /// Check if we have a specific block
     pub async fn has_block(&self, start_round: u64) -> bool {
-        let blocks: tokio::sync::RwLockReadGuard<'_, HashMap<u64, CachedBlock>> = self.blocks.read().await;
+        let blocks: tokio::sync::RwLockReadGuard<'_, HashMap<u64, CachedBlock>> =
+            self.blocks.read().await;
         blocks.contains_key(&start_round)
     }
 
     /// Get cache statistics
     pub async fn get_stats(&self) -> CacheStats {
-        let blocks: tokio::sync::RwLockReadGuard<'_, HashMap<u64, CachedBlock>> = self.blocks.read().await;
+        let blocks: tokio::sync::RwLockReadGuard<'_, HashMap<u64, CachedBlock>> =
+            self.blocks.read().await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -268,15 +281,18 @@ impl EntropyCache {
             total_blocks: blocks.len(),
             expired_blocks,
             total_accesses,
-            cache_hit_rate: if total_accesses > 0 { 
-                (total_accesses - expired_blocks as u64) as f64 / total_accesses as f64 
-            } else { 0.0 },
+            cache_hit_rate: if total_accesses > 0 {
+                (total_accesses - expired_blocks as u64) as f64 / total_accesses as f64
+            } else {
+                0.0
+            },
         }
     }
 
     /// Clean up expired blocks
     pub async fn cleanup_expired(&self) -> usize {
-        let mut blocks: tokio::sync::RwLockWriteGuard<'_, HashMap<u64, CachedBlock>> = self.blocks.write().await;
+        let mut blocks: tokio::sync::RwLockWriteGuard<'_, HashMap<u64, CachedBlock>> =
+            self.blocks.write().await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -349,11 +365,13 @@ pub struct EntropySwarm {
 
 impl EntropySwarm {
     /// Create a new entropy swarm with message channel
-    pub fn new_with_channel(config: EntropySwarmConfig) -> (Self, mpsc::UnboundedSender<(EntropyGossipMessage, PeerId)>) {
+    pub fn new_with_channel(
+        config: EntropySwarmConfig,
+    ) -> (Self, mpsc::UnboundedSender<(EntropyGossipMessage, PeerId)>) {
         let (request_tx, _) = mpsc::channel(100);
         let (_response_tx, response_rx) = mpsc::channel(100);
         let (message_tx, message_rx) = mpsc::unbounded_channel();
-        
+
         let swarm = Self {
             cache: EntropyCache::new(config.clone()),
             config,
@@ -366,7 +384,7 @@ impl EntropySwarm {
             message_rx: Arc::new(RwLock::new(message_rx)),
             swarm: Arc::new(RwLock::new(None)),
         };
-        
+
         (swarm, message_tx)
     }
 
@@ -375,7 +393,7 @@ impl EntropySwarm {
         let (swarm, _) = Self::new_with_channel(config);
         swarm
     }
-    
+
     /// Set the swarm reference for DHT operations
     pub async fn set_swarm(&self, swarm: Arc<crate::swarm::Swarm>) {
         let mut swarm_guard = self.swarm.write().await;
@@ -395,10 +413,13 @@ impl EntropySwarm {
         let transport_guard = self.transport.read().await;
         if let Some(transport) = transport_guard.as_ref() {
             let mut transport_lock = transport.write().await;
-            transport_lock.subscribe_entropy_topic().await
-                .map_err(|e| WireError::other(&format!("Failed to subscribe to entropy topic: {}", e)))
+            transport_lock.subscribe_entropy_topic().await.map_err(|e| {
+                WireError::other(&format!("Failed to subscribe to entropy topic: {}", e))
+            })
         } else {
-            Err(WireError::other("No transport available for topic subscription"))
+            Err(WireError::other(
+                "No transport available for topic subscription",
+            ))
         }
     }
 
@@ -408,10 +429,16 @@ impl EntropySwarm {
         let transport_guard = self.transport.read().await;
         if let Some(transport) = transport_guard.as_ref() {
             let mut transport_lock = transport.write().await;
-            transport_lock.unsubscribe_entropy_topic().await
-                .map_err(|e| WireError::other(&format!("Failed to unsubscribe from entropy topic: {}", e)))
+            transport_lock
+                .unsubscribe_entropy_topic()
+                .await
+                .map_err(|e| {
+                    WireError::other(&format!("Failed to unsubscribe from entropy topic: {}", e))
+                })
         } else {
-            Err(WireError::other("No transport available for topic unsubscription"))
+            Err(WireError::other(
+                "No transport available for topic unsubscription",
+            ))
         }
     }
 
@@ -437,7 +464,6 @@ impl EntropySwarm {
         peers.iter().cloned().collect()
     }
 
-
     /// Request entropy block from swarm
     pub async fn request_entropy_block(&self, start_round: u64) -> Result<Option<EntropyBlock>> {
         // First check local cache
@@ -451,50 +477,73 @@ impl EntropySwarm {
         if let Some(swarm) = swarm_guard.as_ref() {
             // Query DHT for providers of this entropy block
             let providers = swarm.query_entropy_block_providers(start_round).await;
-            
+
             if !providers.is_empty() {
-                info!("Found {} providers for entropy block {} in DHT", providers.len(), start_round);
-                
+                info!(
+                    "Found {} providers for entropy block {} in DHT",
+                    providers.len(),
+                    start_round
+                );
+
                 // Request from all providers (they'll respond if they have it)
-                for provider in providers.iter().take(3) { // Limit to first 3 providers
-                    debug!("Requesting block {} from provider {}", start_round, provider.provider);
-                    
+                for provider in providers.iter().take(3) {
+                    // Limit to first 3 providers
+                    debug!(
+                        "Requesting block {} from provider {}",
+                        start_round, provider.provider
+                    );
+
                     // Add provider to our entropy peers list
                     let mut entropy_peers = self.entropy_peers.write().await;
                     entropy_peers.insert(provider.provider);
                     drop(entropy_peers); // Release lock before async operation
-                    
+
                     // Send BlockRequest via GossipSub
                     let request_msg = EntropyGossipMessage::BlockRequest {
                         start_round,
                         requester: swarm.local_peer_id().to_string(),
                     };
-                    
+
                     // Serialize and publish the request
-                    let message_data = bincode::serialize(&request_msg)
-                        .map_err(|e| WireError::other(&format!("Failed to serialize block request: {}", e)))?;
-                    
+                    let message_data = bincode::serialize(&request_msg).map_err(|e| {
+                        WireError::other(&format!("Failed to serialize block request: {}", e))
+                    })?;
+
                     #[cfg(not(target_arch = "wasm32"))]
                     {
                         let transport_guard = self.transport.read().await;
                         if let Some(transport) = transport_guard.as_ref() {
                             let mut transport_lock = transport.write().await;
-                            if let Err(e) = transport_lock.publish_entropy_message(message_data).await {
-                                warn!("Failed to publish block request to provider {}: {}", provider.provider, e);
+                            if let Err(e) =
+                                transport_lock.publish_entropy_message(message_data).await
+                            {
+                                warn!(
+                                    "Failed to publish block request to provider {}: {}",
+                                    provider.provider, e
+                                );
                             } else {
-                                info!("Sent block request for {} to provider {}", start_round, provider.provider);
+                                info!(
+                                    "Sent block request for {} to provider {}",
+                                    start_round, provider.provider
+                                );
                             }
                         }
                     }
                 }
-                
+
                 // Requests sent - block will arrive asynchronously via handle_gossip_message
                 // and be stored in cache. For now, return None and let caller retry from cache.
-                debug!("Block requests sent for {} to {} providers - will arrive asynchronously", 
-                       start_round, providers.len().min(3));
+                debug!(
+                    "Block requests sent for {} to {} providers - will arrive asynchronously",
+                    start_round,
+                    providers.len().min(3)
+                );
                 return Ok(None);
             } else {
-                debug!("No providers found for entropy block {} in DHT", start_round);
+                debug!(
+                    "No providers found for entropy block {} in DHT",
+                    start_round
+                );
             }
         } else {
             debug!("No swarm available for DHT queries");
@@ -503,16 +552,21 @@ impl EntropySwarm {
         // Fallback: Broadcast request to all known entropy peers
         let peers = self.get_entropy_peers().await;
         if !peers.is_empty() {
-            debug!("Broadcasting block request for {} to {} known peers", start_round, peers.len());
-            
+            debug!(
+                "Broadcasting block request for {} to {} known peers",
+                start_round,
+                peers.len()
+            );
+
             let request_msg = EntropyGossipMessage::BlockRequest {
                 start_round,
                 requester: "local".to_string(), // TODO: Use actual peer ID
             };
-            
-            let message_data = bincode::serialize(&request_msg)
-                .map_err(|e| WireError::other(&format!("Failed to serialize block request: {}", e)))?;
-            
+
+            let message_data = bincode::serialize(&request_msg).map_err(|e| {
+                WireError::other(&format!("Failed to serialize block request: {}", e))
+            })?;
+
             #[cfg(not(target_arch = "wasm32"))]
             {
                 let transport_guard = self.transport.read().await;
@@ -521,11 +575,14 @@ impl EntropySwarm {
                     if let Err(e) = transport_lock.publish_entropy_message(message_data).await {
                         warn!("Failed to broadcast block request: {}", e);
                     } else {
-                        info!("Broadcast block request for {} to all known peers", start_round);
+                        info!(
+                            "Broadcast block request for {} to all known peers",
+                            start_round
+                        );
                     }
                 }
             }
-            
+
             return Ok(None); // Request sent, will arrive async
         }
 
@@ -533,11 +590,13 @@ impl EntropySwarm {
         Ok(None)
     }
 
-
     /// Publish entropy block to swarm via gossip
     pub async fn publish_entropy_block(&self, block: EntropyBlock) -> Result<()> {
         if !self.config.enable_gossip {
-            debug!("Gossip disabled, not publishing block {}-{}", block.start_round, block.end_round);
+            debug!(
+                "Gossip disabled, not publishing block {}-{}",
+                block.start_round, block.end_round
+            );
             return Ok(());
         }
 
@@ -549,7 +608,10 @@ impl EntropySwarm {
         if let Some(swarm) = swarm_guard.as_ref() {
             match swarm.announce_entropy_block(block.start_round).await {
                 Ok(_) => info!("Announced entropy block {} to DHT", block.start_round),
-                Err(e) => warn!("Failed to announce entropy block {} to DHT: {}", block.start_round, e),
+                Err(e) => warn!(
+                    "Failed to announce entropy block {} to DHT: {}",
+                    block.start_round, e
+                ),
             }
         } else {
             debug!("No swarm available for DHT announcement");
@@ -573,36 +635,53 @@ impl EntropySwarm {
             let transport_guard = self.transport.read().await;
             if let Some(transport) = transport_guard.as_ref() {
                 let mut transport_lock = transport.write().await;
-                transport_lock.publish_entropy_message(message_data).await
-                    .map_err(|e| WireError::other(&format!("Failed to publish gossip message: {}", e)))?;
+                transport_lock
+                    .publish_entropy_message(message_data)
+                    .await
+                    .map_err(|e| {
+                        WireError::other(&format!("Failed to publish gossip message: {}", e))
+                    })?;
             } else {
                 debug!("No transport available for gossip publishing");
             }
         }
 
-        info!("Published entropy block {}-{} to swarm", block.start_round, block.end_round);
+        info!(
+            "Published entropy block {}-{} to swarm",
+            block.start_round, block.end_round
+        );
         Ok(())
     }
 
     /// Handle received entropy block from peer
-    pub async fn handle_received_block(&self, block: EntropyBlock, from_peer: String) -> Result<()> {
+    pub async fn handle_received_block(
+        &self,
+        block: EntropyBlock,
+        from_peer: String,
+    ) -> Result<()> {
         // Validate the block using the proper verify_integrity method
         if block.verify_integrity() {
             let start_round = block.start_round;
             let end_round = block.end_round;
-            
-            info!("Received valid entropy block {}-{} from peer {}", 
-                  start_round, end_round, from_peer);
-            
+
+            info!(
+                "Received valid entropy block {}-{} from peer {}",
+                start_round, end_round, from_peer
+            );
+
             // Store in cache
             self.cache.store_block(block).await?;
-            info!("Stored received block {}-{} in cache", 
-                  start_round, end_round);
+            info!(
+                "Stored received block {}-{} in cache",
+                start_round, end_round
+            );
         } else {
-            warn!("Received corrupted block {}-{} from peer {}, discarding", 
-                  block.start_round, block.end_round, from_peer);
+            warn!(
+                "Received corrupted block {}-{} from peer {}, discarding",
+                block.start_round, block.end_round, from_peer
+            );
         }
-        
+
         Ok(())
     }
 
@@ -610,19 +689,26 @@ impl EntropySwarm {
     pub async fn announce_entropy_block_to_dht(&self, start_round: u64) -> Result<()> {
         let swarm_guard = self.swarm.read().await;
         if let Some(swarm) = swarm_guard.as_ref() {
-            swarm.announce_entropy_block(start_round).await
-                .map_err(|e| WireError::other(&format!("Failed to announce entropy block to DHT: {}", e)))
+            swarm
+                .announce_entropy_block(start_round)
+                .await
+                .map_err(|e| {
+                    WireError::other(&format!("Failed to announce entropy block to DHT: {}", e))
+                })
         } else {
             Err(WireError::other("No swarm available for DHT operations"))
         }
     }
 
     /// Query DHT for providers of an entropy block
-    pub async fn query_entropy_block_providers(&self, start_round: u64) -> Result<Vec<EntropyBlockProvider>> {
+    pub async fn query_entropy_block_providers(
+        &self,
+        start_round: u64,
+    ) -> Result<Vec<EntropyBlockProvider>> {
         let swarm_guard = self.swarm.read().await;
         if let Some(swarm) = swarm_guard.as_ref() {
             let providers = swarm.query_entropy_block_providers(start_round).await;
-            
+
             // Convert ProviderRecord to EntropyBlockProvider
             let mut result = Vec::new();
             for provider in providers {
@@ -632,7 +718,7 @@ impl EntropySwarm {
                 if provider.key.len() >= 32 {
                     block_hash.copy_from_slice(&provider.key[..32]);
                 }
-                
+
                 result.push(EntropyBlockProvider {
                     start_round,
                     end_round: start_round + 999, // Approximate end round
@@ -640,7 +726,7 @@ impl EntropySwarm {
                     peer_id: provider.provider.to_string(),
                 });
             }
-            
+
             Ok(result)
         } else {
             Err(WireError::other("No swarm available for DHT operations"))
@@ -677,7 +763,7 @@ impl EntropySwarm {
         let transport = self.transport.read().await;
         transport.clone()
     }
-    
+
     /// Get the configuration
     pub fn config(&self) -> &EntropySwarmConfig {
         &self.config
@@ -691,42 +777,60 @@ impl EntropySwarm {
     /// Shutdown the entropy swarm
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down entropy swarm");
-        
+
         // Clear cache
         self.cache.clear().await?;
-        
+
         // Clear peers
         let mut peers = self.entropy_peers.write().await;
         peers.clear();
-        
+
         // Clear transport
         let mut transport = self.transport.write().await;
         *transport = None;
-        
+
         // Clear swarm
         let mut swarm = self.swarm.write().await;
         *swarm = None;
-        
+
         info!("Entropy swarm shutdown complete");
         Ok(())
     }
 
     /// Handle incoming gossip message
-    pub async fn handle_gossip_message(&self, message: EntropyGossipMessage, from_peer: PeerId) -> Result<()> {
+    pub async fn handle_gossip_message(
+        &self,
+        message: EntropyGossipMessage,
+        from_peer: PeerId,
+    ) -> Result<()> {
         debug!("Received gossip message from {}: {:?}", from_peer, message);
 
         match message {
-            EntropyGossipMessage::BlockAvailable { start_round, end_round, block_hash: _, .. } => {
-                info!("Peer {} has block {}-{} available", from_peer, start_round, end_round);
-                
+            EntropyGossipMessage::BlockAvailable {
+                start_round,
+                end_round,
+                block_hash: _,
+                ..
+            } => {
+                info!(
+                    "Peer {} has block {}-{} available",
+                    from_peer, start_round, end_round
+                );
+
                 // Add peer to entropy peers if not already present
                 self.add_entropy_peer(from_peer).await?;
-                
+
                 // TODO: Request block if needed
             }
-            EntropyGossipMessage::BlockRequest { start_round, requester } => {
-                debug!("Peer {} requested block {} (requested by {})", from_peer, start_round, requester);
-                
+            EntropyGossipMessage::BlockRequest {
+                start_round,
+                requester,
+            } => {
+                debug!(
+                    "Peer {} requested block {} (requested by {})",
+                    from_peer, start_round, requester
+                );
+
                 // Serve block if we have it and serving is enabled
                 if self.config.enable_serving {
                     if let Some(block) = self.cache.get_block(start_round).await? {
@@ -734,20 +838,34 @@ impl EntropySwarm {
                             start_round,
                             block: Some(block),
                         };
-                        
+
                         // Serialize the response message
-                        let message_data = bincode::serialize(&response_msg)
-                            .map_err(|e| WireError::other(&format!("Failed to serialize response message: {}", e)))?;
-                        
+                        let message_data = bincode::serialize(&response_msg).map_err(|e| {
+                            WireError::other(&format!(
+                                "Failed to serialize response message: {}",
+                                e
+                            ))
+                        })?;
+
                         // Send response back to requester via GossipSub if transport is available
                         #[cfg(not(target_arch = "wasm32"))]
                         {
                             let transport_guard = self.transport.read().await;
                             if let Some(transport) = transport_guard.as_ref() {
                                 let mut transport_lock = transport.write().await;
-                                transport_lock.publish_entropy_message(message_data).await
-                                    .map_err(|e| WireError::other(&format!("Failed to publish response message: {}", e)))?;
-                                info!("Serving block {} to peer {} via GossipSub", start_round, from_peer);
+                                transport_lock
+                                    .publish_entropy_message(message_data)
+                                    .await
+                                    .map_err(|e| {
+                                        WireError::other(&format!(
+                                            "Failed to publish response message: {}",
+                                            e
+                                        ))
+                                    })?;
+                                info!(
+                                    "Serving block {} to peer {} via GossipSub",
+                                    start_round, from_peer
+                                );
                             } else {
                                 debug!("No transport available to serve block");
                             }
@@ -758,25 +876,31 @@ impl EntropySwarm {
             EntropyGossipMessage::BlockResponse { start_round, block } => {
                 if let Some(block) = block {
                     let end_round = block.end_round;
-                    
-                    info!("Received block {}-{} from peer {}", 
-                          start_round, end_round, from_peer);
-                
+
+                    info!(
+                        "Received block {}-{} from peer {}",
+                        start_round, end_round, from_peer
+                    );
+
                     // Verify block integrity before storing
                     if block.verify_integrity() {
                         self.cache.store_block(block.clone()).await?;
-                        info!("Stored received block {}-{} in cache", 
-                              start_round, end_round);
+                        info!(
+                            "Stored received block {}-{} in cache",
+                            start_round, end_round
+                        );
                     } else {
-                        warn!("Received corrupted block {}-{} from peer {}, discarding", 
-                              block.start_round, block.end_round, from_peer);
+                        warn!(
+                            "Received corrupted block {}-{} from peer {}, discarding",
+                            block.start_round, block.end_round, from_peer
+                        );
                     }
                 } else {
                     warn!("Received empty block response from peer {}", from_peer);
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -784,17 +908,20 @@ impl EntropySwarm {
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn process_messages(&self) -> Result<()> {
         let mut message_rx = self.message_rx.write().await;
-        
+
         // Process all available messages
         while let Ok((message, peer_id)) = message_rx.try_recv() {
-            debug!("Processing GossipSub message from {}: {:?}", peer_id, message);
-            
+            debug!(
+                "Processing GossipSub message from {}: {:?}",
+                peer_id, message
+            );
+
             // Handle the message
             if let Err(e) = self.handle_gossip_message(message, peer_id).await {
                 error!("Failed to handle GossipSub message from {}: {}", peer_id, e);
             }
         }
-        
+
         Ok(())
     }
 
@@ -802,11 +929,11 @@ impl EntropySwarm {
     #[cfg(not(target_arch = "wasm32"))]
     pub async fn run(&self) -> Result<()> {
         info!("Starting entropy swarm message processing loop");
-        
+
         loop {
             // Process incoming GossipSub messages
             self.process_messages().await?;
-            
+
             // Small delay to prevent busy waiting
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
@@ -820,7 +947,7 @@ mod tests {
 
     fn create_test_entropy_block(start_round: u64) -> EntropyBlock {
         let mut block = EntropyBlock::new(start_round);
-        
+
         // Add a few test rounds
         for i in 0..10 {
             let round = DrandRound::new(
@@ -831,7 +958,7 @@ mod tests {
             );
             block.add_round(round).unwrap();
         }
-        
+
         block
     }
 
@@ -839,18 +966,18 @@ mod tests {
     async fn test_entropy_cache_basic() {
         let config = EntropySwarmConfig::default();
         let cache = EntropyCache::new(config);
-        
+
         let block = create_test_entropy_block(1000);
         let start_round = block.start_round;
-        
+
         // Store block
         cache.store_block(block.clone()).await.unwrap();
-        
+
         // Retrieve block
         let retrieved = cache.get_block(start_round).await.unwrap();
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().start_round, start_round);
-        
+
         // Check stats
         let stats = cache.get_stats().await;
         assert_eq!(stats.total_blocks, 1);
@@ -861,9 +988,9 @@ mod tests {
     async fn test_entropy_swarm_creation() {
         let config = EntropySwarmConfig::default();
         let swarm = EntropySwarm::new(config);
-        
+
         assert!(swarm.get_entropy_peers().await.is_empty());
-        
+
         let stats = swarm.get_cache_stats().await;
         assert_eq!(stats.total_blocks, 0);
     }
@@ -872,13 +999,13 @@ mod tests {
     async fn test_entropy_peer_management() {
         let config = EntropySwarmConfig::default();
         let swarm = EntropySwarm::new(config);
-        
+
         let peer_id = PeerId::new();
-        
+
         // Add peer
         swarm.add_entropy_peer(peer_id).await.unwrap();
         assert_eq!(swarm.get_entropy_peers().await.len(), 1);
-        
+
         // Remove peer
         swarm.remove_entropy_peer(peer_id).await.unwrap();
         assert!(swarm.get_entropy_peers().await.is_empty());
@@ -888,10 +1015,10 @@ mod tests {
     async fn test_gossip_message_handling() {
         let config = EntropySwarmConfig::default();
         let swarm = EntropySwarm::new(config);
-        
+
         let peer_id = PeerId::new();
         let block = create_test_entropy_block(1000);
-        
+
         // Test BlockAvailable message
         let gossip_msg = EntropyGossipMessage::BlockAvailable {
             start_round: block.start_round,
@@ -899,9 +1026,12 @@ mod tests {
             block_hash: block.block_hash,
             peer_id: peer_id.to_string(),
         };
-        
-        swarm.handle_gossip_message(gossip_msg, peer_id).await.unwrap();
-        
+
+        swarm
+            .handle_gossip_message(gossip_msg, peer_id)
+            .await
+            .unwrap();
+
         // Peer should be added to entropy peers
         assert_eq!(swarm.get_entropy_peers().await.len(), 1);
     }
@@ -911,22 +1041,28 @@ mod tests {
     async fn test_dht_entropy_block_announcement() {
         let config = EntropySwarmConfig::default();
         let swarm = EntropySwarm::new(config);
-        
+
         let block = create_test_entropy_block(1000);
         let start_round = block.start_round;
-        
+
         // Store block in cache
         swarm.cache.store_block(block.clone()).await.unwrap();
-        
+
         // Announce block to DHT
-        swarm.announce_entropy_block_to_dht(start_round).await.unwrap();
-        
+        swarm
+            .announce_entropy_block_to_dht(start_round)
+            .await
+            .unwrap();
+
         // Query DHT for providers
-        let providers = swarm.query_entropy_block_providers(start_round).await.unwrap();
-        
+        let providers = swarm
+            .query_entropy_block_providers(start_round)
+            .await
+            .unwrap();
+
         // Should find at least one provider (ourselves)
         assert!(!providers.is_empty());
-        
+
         // Verify provider information
         let provider = &providers[0];
         assert_eq!(provider.start_round, start_round);

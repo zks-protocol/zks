@@ -26,26 +26,26 @@
 //! - drand entropy is derived from BLS threshold signatures (computationally secure)
 //! - ChaCha20 expansion for messages >32 bytes (stream cipher, not OTP)
 //! - Security reduces to hardness of ML-KEM + ChaCha20 + BLS
-//! 
+//!
 //! ## High-Entropy XOR Layer via Drand
-//! 
+//!
 //! **Note**: drand produces ~92 KB/day of high-quality random entropy.
 //! For small messages (≤32 bytes), we use drand directly for unpredictability.
 //! For larger data, use Hybrid mode (DEK wrapped with entropy, content with ChaCha20).
-//! 
+//!
 //! Security Properties:
 //! - 256-bit post-quantum computational security (NOT information-theoretic)
 //! - High-entropy XOR layer with drand randomness + ChaCha20-Poly1305 authentication
 //! - Bytes are consumed once per position (one-time usage property within computational bounds)
-//! 
+//!
 //! ## Keystream Design
-//! 
+//!
 //! For deterministic keystream generation (required for both parties to get
 //! identical keystream), we use **drand rounds directly** because:
 //! - drand rounds are globally deterministic (same round = same 32 bytes)
 //! - For N bytes, we fetch ceil(N/32) consecutive drand rounds
 //! drand + CSPRNG is used for **shared seed derivation**.
-//! 
+//!
 //! If drand is unavailable, the system falls back to ChaCha20 (256-bit computational).
 //!
 //! ## SequencedVernamBuffer (REQUIRED - Desync-Resistant)
@@ -67,17 +67,20 @@
 //! It causes silent decryption failures when messages are lost or reordered.
 //! Use `SequencedVernamBuffer` for all new code.
 
-use std::collections::VecDeque;
+use crate::constant_time::ct_eq;
+use crate::entropy_provider::EntropyProvider;
+use chacha20::{
+    cipher::{KeyIvInit, StreamCipher},
+    ChaCha20,
+};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{interval, Duration};
 use tracing::{debug, info, warn};
-use sha2::{Digest, Sha256};
 use zeroize::Zeroize;
-use crate::constant_time::ct_eq;
-use crate::entropy_provider::EntropyProvider;
-use chacha20::{ChaCha20, cipher::{KeyIvInit, StreamCipher}};
 
 /// Minimum buffer size before we start warning
 const MIN_BUFFER_SIZE: usize = 1024 * 256; // 256KB (increased from 64KB)
@@ -85,38 +88,36 @@ const MIN_BUFFER_SIZE: usize = 1024 * 256; // 256KB (increased from 64KB)
 /// Target buffer size to maintain
 const TARGET_BUFFER_SIZE: usize = 1024 * 1024; // 1MB
 
-
-
 /// Validates that the provided bytes have sufficient entropy quality
-/// 
+///
 /// # NIST SP 800-90B Compliance
-/// 
+///
 /// This function implements simplified health tests inspired by NIST SP 800-90B:
 /// - **Section 4.4.1**: Repetition Count Test (all zeros/ones detection)
 /// - **Section 6.3.2**: Chi-square Independence Test (byte uniformity)
 /// - **Section 3.1**: Shannon Entropy estimation
-/// 
+///
 /// # SECURITY LIMITATIONS
-/// 
+///
 /// Per NIST SP 800-90B Section 5:
-/// > "Statistical tests can indicate that a source is clearly broken, but cannot 
+/// > "Statistical tests can indicate that a source is clearly broken, but cannot
 /// > prove that a source is random."
-/// 
+///
 /// These tests are **defense-in-depth only** and CANNOT detect:
 /// - Encrypted data (passes all tests but is not random)
 /// - Compressed data (high entropy, not random)
 /// - Pseudorandom sequences with period longer than sample size
 /// - Cryptographically weak but statistically uniform outputs
-/// 
+///
 /// For drand entropy, primary assurance comes from BLS signature verification
 /// (see drand.rs). For local CSPRNG, we trust the OS implementation.
-/// 
+///
 /// # Tests Performed
 /// 1. **Repetition Count**: Empty/degenerate data check (all zeros, all ones)
 /// 2. **Chi-square Test**: Byte uniformity (for samples >= 256 bytes)
 /// 3. **Shannon Entropy**: Calculation threshold (>7.5 bits per byte)
 /// 4. **Adaptive Proportion**: Repeat ratio check (<5% consecutive repeats)
-/// 
+///
 /// # Returns
 /// `true` if the entropy passes basic quality checks (defense-in-depth)
 fn validate_entropy_quality(bytes: &[u8]) -> bool {
@@ -124,7 +125,7 @@ fn validate_entropy_quality(bytes: &[u8]) -> bool {
         debug!("Entropy validation failed: empty bytes");
         return false;
     }
-    
+
     // For very small data sizes, skip statistical tests
     if bytes.len() < 32 {
         // Just check for all zeros or all ones
@@ -140,14 +141,14 @@ fn validate_entropy_quality(bytes: &[u8]) -> bool {
         debug!("Small sample passed basic checks");
         return true;
     }
-    
+
     // Basic statistical tests for randomness
     // 1. Check byte distribution (should be roughly uniform)
     let mut byte_counts = [0u32; 256];
     for &byte in bytes {
         byte_counts[byte as usize] += 1;
     }
-    
+
     // Chi-square test for uniformity (only for larger samples)
     if bytes.len() >= 256 {
         let expected_count = bytes.len() as f64 / 256.0;
@@ -158,7 +159,7 @@ fn validate_entropy_quality(bytes: &[u8]) -> bool {
                 chi_square += (diff * diff) / expected_count;
             }
         }
-        
+
         // Chi-square should be reasonable for uniform distribution
         // For 255 degrees of freedom, values between 200-300 are typical for random data
         // Using wider bounds (100-500) to reduce false positives while maintaining security
@@ -168,24 +169,27 @@ fn validate_entropy_quality(bytes: &[u8]) -> bool {
             return false;
         }
     }
-    
+
     // 2. Check for obvious patterns (repeated bytes, sequences) - use constant-time comparison
     let mut repeated_bytes = 0;
     for i in 1..bytes.len() {
         // Use constant-time comparison to avoid timing leaks
-        if ct_eq(&[bytes[i]], &[bytes[i-1]]) {
+        if ct_eq(&[bytes[i]], &[bytes[i - 1]]) {
             repeated_bytes += 1;
         }
     }
-    
+
     // Too many repeated bytes suggests poor entropy
     let repeat_ratio = repeated_bytes as f64 / bytes.len() as f64;
     debug!("Repeat ratio: {:.2}%", repeat_ratio * 100.0);
     if repeat_ratio > 0.05 {
-        warn!("Entropy has too many repeated bytes: {:.2}%", repeat_ratio * 100.0);
+        warn!(
+            "Entropy has too many repeated bytes: {:.2}%",
+            repeat_ratio * 100.0
+        );
         return false;
     }
-    
+
     // 3. Calculate Shannon entropy (only for larger samples)
     if bytes.len() >= 64 {
         let mut shannon_entropy = 0.0;
@@ -195,15 +199,18 @@ fn validate_entropy_quality(bytes: &[u8]) -> bool {
                 shannon_entropy -= probability * probability.log2();
             }
         }
-        
+
         // Shannon entropy should be close to maximum (8 bits per byte)
         debug!("Shannon entropy: {:.2} bits", shannon_entropy);
         if shannon_entropy < 7.5 {
-            warn!("Entropy has insufficient Shannon entropy: {:.2} bits", shannon_entropy);
+            warn!(
+                "Entropy has insufficient Shannon entropy: {:.2} bits",
+                shannon_entropy
+            );
             return false;
         }
     }
-    
+
     true
 }
 
@@ -238,7 +245,7 @@ impl TrueVernamBuffer {
     }
 
     /// Add TRUE random bytes to the buffer
-    /// 
+    ///
     /// # Security
     /// This function validates that the provided bytes have sufficient entropy quality
     /// to ensure 256-bit post-quantum computational security guarantees.
@@ -247,19 +254,19 @@ impl TrueVernamBuffer {
         if bytes.len() < 32 {
             return Err(EntropyError::InvalidBufferSize { size: bytes.len() });
         }
-        
+
         // Validate entropy quality before accepting
         if !validate_entropy_quality(bytes) {
             return Err(EntropyError::InvalidQuality);
         }
-        
+
         // Additional integrity check: compute and verify hash
         debug!(
             "📥 Adding {} bytes to True Vernam buffer (hash: {})",
             bytes.len(),
             hex::encode(&Sha256::digest(bytes)[..8])
         );
-        
+
         self.buffer.extend(bytes.iter());
         self.bytes_fetched += bytes.len() as u64;
         debug!(
@@ -267,7 +274,7 @@ impl TrueVernamBuffer {
             bytes.len(),
             self.buffer.len()
         );
-        
+
         Ok(())
     }
 
@@ -277,7 +284,7 @@ impl TrueVernamBuffer {
         if self.buffer.is_empty() {
             return Err(EntropyError::BufferEmpty);
         }
-        
+
         if self.buffer.len() < count {
             return Err(EntropyError::InsufficientEntropy {
                 requested: count,
@@ -410,12 +417,12 @@ impl TrueVernamFetcher {
     ///
     /// Security: Even if worker is compromised, local + swarm entropy protects you.
     /// Even if your device is compromised, worker + swarm entropy protects you.
-    /// 
+    ///
     /// 256-BIT POST-QUANTUM COMPUTATIONAL SECURITY: Uses XOR combination of
     /// multiple entropy sources for defense-in-depth. Key exchange over network
     /// limits overall security to computational (not information-theoretic).
     /// For larger messages, falls back to SHA256-based mixing for practical key expansion.
-    /// 
+    ///
     /// OPTIMIZATION: When swarm_seed is set (trustless mode), we skip Worker calls
     /// entirely to save API costs. Local CSPRNG + swarm is already cryptographically
     /// secure and completely trustless.
@@ -446,12 +453,15 @@ impl TrueVernamFetcher {
                     );
                     // Fallback: generate MORE local entropy (not zeros!)
                     let mut fallback = [0u8; 32];
-                    getrandom::getrandom(&mut fallback)
-                        .map_err(|e| {
-                            tracing::error!("🚨 CRITICAL: Both CSPRNG and Worker entropy failed: {}", e);
-                            let err_msg = format!("Entropy generation failed: {}. Cannot proceed securely.", e);
-                            Box::<dyn std::error::Error + Send + Sync>::from(err_msg)
-                        })?;
+                    getrandom::getrandom(&mut fallback).map_err(|e| {
+                        tracing::error!(
+                            "🚨 CRITICAL: Both CSPRNG and Worker entropy failed: {}",
+                            e
+                        );
+                        let err_msg =
+                            format!("Entropy generation failed: {}. Cannot proceed securely.", e);
+                        Box::<dyn std::error::Error + Send + Sync>::from(err_msg)
+                    })?;
                     fallback.to_vec()
                 }
             }
@@ -460,12 +470,12 @@ impl TrueVernamFetcher {
         // 3. POST-QUANTUM COMPUTATIONAL SECURITY: Pure XOR combination for 256-bit secure entropy
         // This achieves 256-bit post-quantum computational security for messages ≤32 bytes
         let mut combined = [0u8; 32];
-        
+
         // XOR all entropy sources together (no hashing for computational security)
         for i in 0..32 {
             combined[i] = local_entropy[i] ^ worker_entropy[i];
         }
-        
+
         // Add swarm seed if available (TRUSTLESS - even if worker is evil)
         if let Some(swarm_seed) = &self.swarm_seed {
             for i in 0..32 {
@@ -535,29 +545,45 @@ pub enum EntropyError {
     /// Buffer is empty (no entropy available)
     BufferEmpty,
     /// Requested more bytes than available in buffer
-    InsufficientEntropy { 
+    InsufficientEntropy {
         /// Number of bytes requested
-        requested: usize, 
+        requested: usize,
         /// Number of bytes available
-        available: usize 
+        available: usize,
     },
     /// Invalid buffer size (must be at least 32 bytes)
-    InvalidBufferSize { 
+    InvalidBufferSize {
         /// The invalid size that was provided
-        size: usize 
+        size: usize,
     },
 }
 
 impl std::fmt::Display for EntropyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EntropyError::InvalidQuality => write!(f, "Entropy quality validation failed - data does not appear to be truly random"),
-            EntropyError::BufferEmpty => write!(f, "Buffer is empty - no entropy available for consumption"),
-            EntropyError::InsufficientEntropy { requested, available } => {
-                write!(f, "Insufficient entropy: requested {} bytes but only {} available", requested, available)
+            EntropyError::InvalidQuality => write!(
+                f,
+                "Entropy quality validation failed - data does not appear to be truly random"
+            ),
+            EntropyError::BufferEmpty => {
+                write!(f, "Buffer is empty - no entropy available for consumption")
+            }
+            EntropyError::InsufficientEntropy {
+                requested,
+                available,
+            } => {
+                write!(
+                    f,
+                    "Insufficient entropy: requested {} bytes but only {} available",
+                    requested, available
+                )
             }
             EntropyError::InvalidBufferSize { size } => {
-                write!(f, "Invalid buffer size: {} bytes (minimum 32 bytes required)", size)
+                write!(
+                    f,
+                    "Invalid buffer size: {} bytes (minimum 32 bytes required)",
+                    size
+                )
             }
         }
     }
@@ -575,12 +601,13 @@ mod tests {
 
         // Add some entropy (use high-quality random data)
         let entropy: Vec<u8> = vec![
-            0xDE, 0xAD, 0xBE, 0xEF, 0x55, 0xAA, 0x12, 0x34,
-            0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x11, 0x22,
-            0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA,
-            0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22,
+            0xDE, 0xAD, 0xBE, 0xEF, 0x55, 0xAA, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0,
+            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
+            0xFF, 0x00, 0x11, 0x22,
         ];
-        buffer.push_entropy(&entropy).expect("Valid entropy should be accepted");
+        buffer
+            .push_entropy(&entropy)
+            .expect("Valid entropy should be accepted");
         assert_eq!(buffer.available(), entropy.len());
 
         // Consume some
@@ -595,7 +622,10 @@ mod tests {
 
         // Buffer has 27 bytes remaining - should return error when trying to consume more than available
         match buffer.consume(28) {
-            Err(EntropyError::InsufficientEntropy { requested, available }) => {
+            Err(EntropyError::InsufficientEntropy {
+                requested,
+                available,
+            }) => {
                 assert_eq!(requested, 28);
                 assert_eq!(available, 27);
             }
@@ -610,7 +640,9 @@ mod tests {
         // Add entropy (use varied data to pass quality checks)
         // Use a pattern that should definitely pass quality checks
         let entropy: Vec<u8> = (0..200).map(|i| (i * 7 + 13) as u8).collect();
-        buffer.push_entropy(&entropy).expect("Valid entropy should be accepted");
+        buffer
+            .push_entropy(&entropy)
+            .expect("Valid entropy should be accepted");
 
         // Consume in chunks
         let _chunk1 = buffer.consume(50).unwrap();
@@ -625,7 +657,7 @@ mod tests {
 
         // The bytes are gone forever - TRUE one-time!
         match buffer.consume(1) {
-            Err(EntropyError::BufferEmpty) => {}, // Expected
+            Err(EntropyError::BufferEmpty) => {} // Expected
             _ => panic!("Expected BufferEmpty error"),
         }
     }
@@ -636,10 +668,9 @@ mod tests {
 
         // Valid random data should be accepted
         let valid_entropy: Vec<u8> = vec![
-            0xDE, 0xAD, 0xBE, 0xEF, 0x55, 0xAA, 0x12, 0x34,
-            0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0, 0x11, 0x22,
-            0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA,
-            0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22,
+            0xDE, 0xAD, 0xBE, 0xEF, 0x55, 0xAA, 0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0,
+            0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
+            0xFF, 0x00, 0x11, 0x22,
         ];
         assert!(buffer.push_entropy(&valid_entropy).is_ok());
 
@@ -654,11 +685,11 @@ mod tests {
 }
 
 /// Synchronized Vernam Buffer: 256-bit Post-Quantum Computational Security
-/// 
+///
 /// This provides strong XOR encryption by using synchronized drand entropy
 /// as the keystream source. Both parties fetch identical drand rounds to generate
 /// identical keystreams for 256-bit post-quantum computational security.
-/// 
+///
 /// Security Model:
 /// - Both parties fetch the same drand rounds (high-quality random entropy)
 /// - For ≤32 bytes: Use drand entropy directly (256-bit post-quantum computational)
@@ -667,25 +698,25 @@ mod tests {
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Synchronized deterministic keystream generator for high-entropy XOR encryption
-/// 
-/// ⚠️ CRITICAL SECURITY REQUIREMENTS:// 
+///
+/// ⚠️ CRITICAL SECURITY REQUIREMENTS://
 /// 1. SYNCHRONIZATION RISK: Both parties MUST consume keystream in EXACT same order.
 ///    - Lost messages → Desynchronization → Decryption failure
 ///    - Reordered messages → Desynchronization → Decryption failure  
 ///    - Out-of-order processing → Desynchronization → Decryption failure
-/// 
+///
 /// 2. RECOVERY MECHANISMS:
 ///    - Option A: Include position in message header (e.g., "position: 1234")
 ///    - Option B: Use sequence numbers with acknowledgments
 ///    - Option C: Implement re-synchronization protocol on failure
 ///    - Option D: Use reliable transport (TCP, QUIC) instead of UDP
-/// 
+///
 /// 3. OPERATIONAL CONSIDERATIONS:
 ///    - Monitor for repeated decryption failures (indicates desync)
 ///    - Implement automatic reconnection with fresh shared seed
 ///    - Log synchronization events for debugging
 ///    - Consider position counters in both directions (send/receive)
-/// 
+///
 /// 4. SECURITY PROPERTIES:
 ///    - 256-bit post-quantum computational security (key exchange over network)
 ///    - Uses ML-KEM shared secret + drand distributed randomness
@@ -703,11 +734,15 @@ pub struct SynchronizedVernamBuffer {
 
 impl SynchronizedVernamBuffer {
     /// Create a new synchronized buffer with a shared seed and entropy provider
-    /// 
+    ///
     /// The shared seed is used for ChaCha20 expansion when messages exceed 32 bytes.
     /// The starting_round determines which drand rounds to fetch for true OTP.
     /// Both parties must use the same starting_round to stay synchronized.
-    pub fn new_with_entropy_provider(shared_seed: [u8; 32], starting_round: u64, entropy_provider: Arc<dyn EntropyProvider>) -> Self {
+    pub fn new_with_entropy_provider(
+        shared_seed: [u8; 32],
+        starting_round: u64,
+        entropy_provider: Arc<dyn EntropyProvider>,
+    ) -> Self {
         Self {
             shared_seed,
             position_counter: AtomicU64::new(0),
@@ -715,24 +750,32 @@ impl SynchronizedVernamBuffer {
             entropy_provider,
         }
     }
-    
+
     /// Create a new synchronized buffer with a shared seed and drand client (legacy compatibility)
-    /// 
+    ///
     /// The shared seed is used for ChaCha20 expansion when messages exceed 32 bytes.
     /// The starting_round determines which drand rounds to fetch for true OTP.
     /// Both parties must use the same starting_round to stay synchronized.
-    pub fn new_with_drand(shared_seed: [u8; 32], starting_round: u64, drand_client: Arc<crate::drand::DrandEntropy>) -> Self {
-        let entropy_provider = Arc::new(crate::entropy_provider::DirectDrandProvider::new(drand_client));
+    pub fn new_with_drand(
+        shared_seed: [u8; 32],
+        starting_round: u64,
+        drand_client: Arc<crate::drand::DrandEntropy>,
+    ) -> Self {
+        let entropy_provider = Arc::new(crate::entropy_provider::DirectDrandProvider::new(
+            drand_client,
+        ));
         Self::new_with_entropy_provider(shared_seed, starting_round, entropy_provider)
     }
 
     /// Create a new synchronized buffer with just a shared seed (legacy compatibility)
-    /// 
+    ///
     /// This creates a buffer without drand client, falling back to ChaCha20 for all messages.
     pub fn new(shared_seed: [u8; 32]) -> Self {
         // Create a dummy drand client that will never be used (fallback mode)
         let drand_client = Arc::new(crate::drand::DrandEntropy::new());
-        let entropy_provider = Arc::new(crate::entropy_provider::DirectDrandProvider::new(drand_client));
+        let entropy_provider = Arc::new(crate::entropy_provider::DirectDrandProvider::new(
+            drand_client,
+        ));
         Self {
             shared_seed,
             position_counter: AtomicU64::new(0),
@@ -740,9 +783,9 @@ impl SynchronizedVernamBuffer {
             entropy_provider,
         }
     }
-    
+
     /// Create shared seed from multiple entropy sources (256-bit post-quantum computational)
-    /// 
+    ///
     /// This combines entropy sources using XOR for 256-bit post-quantum computational security.
     /// The result is secure within computational bounds if any source is random.
     pub fn create_shared_seed(
@@ -751,59 +794,64 @@ impl SynchronizedVernamBuffer {
         peer_contributions: [u8; 32],
     ) -> [u8; 32] {
         let mut shared_seed = [0u8; 32];
-        
+
         // Information-theoretic XOR combination: secure if any source is random
         for i in 0..32 {
             shared_seed[i] = mlkem_secret[i] ^ drand_entropy[i] ^ peer_contributions[i];
         }
-        
+
         debug!("🔑 Created 256-bit post-quantum computational shared seed (distributed trust - secure if any source is uncompromised)");
         shared_seed
     }
-    
+
     /// Generate high-entropy keystream for XOR encryption
-    /// 
+    ///
     /// This fetches drand rounds using the entropy provider.
     /// Both parties must fetch the same rounds to generate identical keystreams.
-    /// 
+    ///
     /// **OPTIMIZED**: Uses ALL 32 bytes of each drand round efficiently!
     /// For N bytes, fetches ceil(N/32) drand rounds instead of N rounds.
     /// This is 32x more efficient than the previous implementation.
-    /// 
+    ///
     /// **Note**: drand produces ~92KB/day. For large data, use Hybrid OTP instead.
     /// **PHASE 5 INTEGRATION**: Now supports Entropy Grid hierarchical fallback!
-    async fn generate_true_otp_keystream(&self, position: u64, length: usize) -> Result<Vec<u8>, crate::drand::DrandError> {
+    async fn generate_true_otp_keystream(
+        &self,
+        position: u64,
+        length: usize,
+    ) -> Result<Vec<u8>, crate::drand::DrandError> {
         let mut keystream = vec![0u8; length];
-        
+
         // OPTIMIZATION: Use all 32 bytes of each drand round
         // Position is divided by 32 to get the round offset
         // This makes the system 32x more efficient with drand entropy
         const BYTES_PER_ROUND: usize = 32;
         let rounds_needed = (length + BYTES_PER_ROUND - 1) / BYTES_PER_ROUND;
-        
+
         // Calculate which drand round to start from based on position
         let base_round = self.starting_round + (position / BYTES_PER_ROUND as u64);
         let start_offset = (position % BYTES_PER_ROUND as u64) as usize;
-        
+
         let mut bytes_written = 0;
         let mut current_round = base_round;
         let mut round_offset = start_offset;
-        
+
         while bytes_written < length {
             let drand_round = self.entropy_provider.fetch_round(current_round).await?;
-            
+
             // Copy bytes from this round, starting at the appropriate offset
             let bytes_available = BYTES_PER_ROUND - round_offset;
             let bytes_to_copy = std::cmp::min(bytes_available, length - bytes_written);
-            
-            keystream[bytes_written..bytes_written + bytes_to_copy]
-                .copy_from_slice(&drand_round.randomness[round_offset..round_offset + bytes_to_copy]);
-            
+
+            keystream[bytes_written..bytes_written + bytes_to_copy].copy_from_slice(
+                &drand_round.randomness[round_offset..round_offset + bytes_to_copy],
+            );
+
             bytes_written += bytes_to_copy;
             current_round += 1;
             round_offset = 0; // After first round, always start from byte 0
         }
-        
+
         // Log for large keystreams
         if length > 2 {
             info!("🔑 Generated high-entropy keystream: {} bytes from {} drand rounds (32x efficient)", 
@@ -816,11 +864,11 @@ impl SynchronizedVernamBuffer {
     }
 
     /// Generate keystream for a specific position (deterministic PRG)
-    /// 
+    ///
     /// Uses TRUE entropy when available (drand ~92KB/day budget).
     /// Fetches N drand rounds for N×32 bytes of TRUE random keystream.
     /// Falls back to ChaCha20 if drand unavailable or budget exceeded.
-    /// 
+    ///
     /// Both parties generate identical keystreams from the same position.
     async fn generate_at_position(&self, position: u64, length: usize) -> Vec<u8> {
         // Use TRUE OTP for ALL sizes when drand is configured
@@ -828,58 +876,68 @@ impl SynchronizedVernamBuffer {
             match self.generate_true_otp_keystream(position, length).await {
                 Ok(keystream) => return keystream,
                 Err(e) => {
-                    warn!("Failed to fetch drand for TRUE OTP: {}. Falling back to ChaCha20.", e);
+                    warn!(
+                        "Failed to fetch drand for TRUE OTP: {}. Falling back to ChaCha20.",
+                        e
+                    );
                     // Fall back to ChaCha20 if drand is unavailable
                 }
             }
         }
-        
+
         // Fallback: ChaCha20 (computational security, still 256-bit)
         let mut keystream = vec![0u8; length];
         let mut nonce_bytes = [0u8; 12];
-        
+
         // Use position as the last 8 bytes of the 12-byte nonce
         nonce_bytes[4..12].copy_from_slice(&position.to_be_bytes());
-        
+
         // Create ChaCha20 cipher with shared seed and position nonce
         let key = self.shared_seed;
         let nonce = nonce_bytes;
         let mut cipher = ChaCha20::new(&key.into(), &nonce.into());
         cipher.apply_keystream(&mut keystream);
-        
-        debug!("🔑 Generated {} bytes at position {} (computational ChaCha20 fallback)", length, position);
+
+        debug!(
+            "🔑 Generated {} bytes at position {} (computational ChaCha20 fallback)",
+            length, position
+        );
         keystream
     }
-    
+
     /// Consume keystream at the current position (synchronized)
-    /// 
+    ///
     /// ⚠️ CRITICAL SYNCHRONIZATION REQUIREMENT:
     /// Both parties MUST call this method in the EXACT same order with the EXACT same lengths.
     /// If messages are lost, reordered, or processed out-of-order, synchronization will break
     /// and decryption will fail (safe failure mode, but service disruption).
-    /// 
+    ///
     /// This is a fundamental property of true OTP systems - both parties must consume
     /// entropy from the same position in the shared keystream.
-    /// 
+    ///
     /// Returns identical keystreams on both ends when properly synchronized.
-    /// 
+    ///
     /// For ≤32 bytes: 256-bit post-quantum computational security (drand entropy)
     /// For >32 bytes: Computational security (ChaCha20 expansion)
     pub async fn consume(&self, length: usize) -> Vec<u8> {
-        let position = self.position_counter.fetch_add(length as u64, Ordering::SeqCst);
+        let position = self
+            .position_counter
+            .fetch_add(length as u64, Ordering::SeqCst);
         self.generate_at_position(position, length).await
     }
-    
+
     /// Consume keystream synchronously (blocking version for compatibility)
-    /// 
+    ///
     /// ⚠️ CRITICAL SYNCHRONIZATION REQUIREMENT:
     /// Both parties MUST call this method in the EXACT same order with the EXACT same lengths.
     /// See `consume()` documentation for detailed synchronization requirements.
-    /// 
+    ///
     /// Note: This blocks the current thread. Use `consume()` for async version.
     pub fn consume_sync(&self, length: usize) -> Vec<u8> {
-        let position = self.position_counter.fetch_add(length as u64, Ordering::SeqCst);
-        
+        let position = self
+            .position_counter
+            .fetch_add(length as u64, Ordering::SeqCst);
+
         // For small messages (≤32 bytes), use 256-bit post-quantum computational security
         if length <= 32 && self.starting_round > 0 {
             // Try to get the current runtime handle
@@ -903,7 +961,7 @@ impl SynchronizedVernamBuffer {
                 }
             }
         }
-        
+
         // Fallback to ChaCha20
         let mut keystream = vec![0u8; length];
         let mut nonce_bytes = [0u8; 12];
@@ -914,188 +972,209 @@ impl SynchronizedVernamBuffer {
         cipher.apply_keystream(&mut keystream);
         keystream
     }
-    
+
     /// Get current position (for debugging synchronization issues)
     pub fn current_position(&self) -> u64 {
         self.position_counter.load(Ordering::SeqCst)
     }
-    
+
     /// Reset position counter (use with extreme caution - breaks synchronization!)
     pub fn reset_position(&self, new_position: u64) {
         self.position_counter.store(new_position, Ordering::SeqCst);
-        warn!("🚨 Position counter reset to {} - synchronization may be broken!", new_position);
+        warn!(
+            "🚨 Position counter reset to {} - synchronization may be broken!",
+            new_position
+        );
     }
 }
 
 #[cfg(test)]
 mod synchronized_tests {
     use super::*;
-    
+
     #[test]
     fn test_synchronized_generation() {
         let seed = [0x42; 32]; // Test seed
-        
+
         // Create two "parties" with identical seeds (fallback mode)
         let alice_buffer = SynchronizedVernamBuffer::new(seed);
         let bob_buffer = SynchronizedVernamBuffer::new(seed);
-        
+
         // Both generate at same position - should be identical (using sync method)
         let alice_keystream = alice_buffer.consume_sync(32);
         let bob_keystream = bob_buffer.consume_sync(32);
-        
+
         assert_eq!(alice_keystream, bob_keystream);
         assert_eq!(alice_keystream.len(), 32);
-        
+
         // Different positions should generate different keystreams
         let alice_keystream2 = alice_buffer.consume_sync(32);
         assert_ne!(alice_keystream, alice_keystream2);
     }
-    
+
     #[test]
     fn test_consume_synchronization() {
         let _seed = [0xDE, 0xAD, 0xBE, 0xEF]; // Repeat to make 32 bytes
         let full_seed = [0xDE, 0xAD, 0xBE, 0xEF].repeat(8).try_into().unwrap();
-        
+
         let alice_buffer = SynchronizedVernamBuffer::new(full_seed);
         let bob_buffer = SynchronizedVernamBuffer::new(full_seed);
-        
+
         // Simulate message exchange: Alice encrypts, Bob decrypts
         let plaintext = b"Hello, this is secret!";
-        
+
         // Alice consumes keystream for encryption (using sync method)
         let alice_keystream = alice_buffer.consume_sync(plaintext.len());
         let mut alice_ciphertext = plaintext.to_vec();
         for (i, byte) in alice_ciphertext.iter_mut().enumerate() {
             *byte ^= alice_keystream[i];
         }
-        
+
         // Bob consumes keystream for decryption (same position due to sync)
         let bob_keystream = bob_buffer.consume_sync(plaintext.len());
         let mut bob_plaintext = alice_ciphertext.clone();
         for (i, byte) in bob_plaintext.iter_mut().enumerate() {
             *byte ^= bob_keystream[i];
         }
-        
+
         // Should decrypt correctly
         assert_eq!(bob_plaintext, plaintext);
         assert_eq!(alice_keystream, bob_keystream); // Identical keystreams
     }
-    
+
     #[tokio::test]
     async fn test_true_otp_generation() {
         // Mock drand client for testing
         use crate::drand::DrandEntropy;
-        
+
         // Create a test drand client (this will use the mock implementation)
         let drand_client = Arc::new(DrandEntropy::new());
-        
+
         // Create synchronized buffers with drand support
-        let alice_buffer = SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client.clone());
+        let alice_buffer =
+            SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client.clone());
         let bob_buffer = SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client);
-        
+
         // Test true OTP generation (≤32 bytes)
         let alice_keystream = alice_buffer.consume(16).await;
         let bob_keystream = bob_buffer.consume(16).await;
-        
+
         assert_eq!(alice_keystream, bob_keystream);
         assert_eq!(alice_keystream.len(), 16);
-        
+
         // Test that different positions generate different keystreams
         let alice_keystream2 = alice_buffer.consume(16).await;
         assert_ne!(alice_keystream, alice_keystream2);
     }
-    
+
     #[tokio::test]
     async fn test_true_otp_synchronization() {
         use crate::drand::DrandEntropy;
-        
+
         let drand_client = Arc::new(DrandEntropy::new());
-        let alice_buffer = SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client.clone());
-        let bob_buffer = SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client.clone());
-        
+        let alice_buffer =
+            SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client.clone());
+        let bob_buffer =
+            SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client.clone());
+
         // Simulate message exchange - both consume same amounts
         let plaintext = b"Hello, World! This is a test message.";
         let mut alice_ciphertext = Vec::new();
         let mut bob_ciphertext = Vec::new();
-        
+
         // Alice encrypts
         for chunk in plaintext.chunks(8) {
             let keystream = alice_buffer.consume(chunk.len()).await;
-            let encrypted: Vec<u8> = chunk.iter().zip(keystream.iter()).map(|(p, k)| p ^ k).collect();
+            let encrypted: Vec<u8> = chunk
+                .iter()
+                .zip(keystream.iter())
+                .map(|(p, k)| p ^ k)
+                .collect();
             alice_ciphertext.extend(encrypted);
         }
-        
+
         // Bob encrypts (should generate same keystreams)
         for chunk in plaintext.chunks(8) {
             let keystream = bob_buffer.consume(chunk.len()).await;
-            let encrypted: Vec<u8> = chunk.iter().zip(keystream.iter()).map(|(p, k)| p ^ k).collect();
+            let encrypted: Vec<u8> = chunk
+                .iter()
+                .zip(keystream.iter())
+                .map(|(p, k)| p ^ k)
+                .collect();
             bob_ciphertext.extend(encrypted);
         }
-        
+
         assert_eq!(alice_ciphertext, bob_ciphertext);
-        
+
         // Bob decrypts
         let mut bob_plaintext = Vec::new();
-        let bob_buffer_decrypt = SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client.clone());
+        let bob_buffer_decrypt =
+            SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client.clone());
         for chunk in alice_ciphertext.chunks(8) {
             let keystream = bob_buffer_decrypt.consume(chunk.len()).await;
-            let decrypted: Vec<u8> = chunk.iter().zip(keystream.iter()).map(|(c, k)| c ^ k).collect();
+            let decrypted: Vec<u8> = chunk
+                .iter()
+                .zip(keystream.iter())
+                .map(|(c, k)| c ^ k)
+                .collect();
             bob_plaintext.extend(decrypted);
         }
-        
+
         assert_eq!(bob_plaintext, plaintext);
     }
-    
+
     #[tokio::test]
     async fn test_true_otp_large_message_fallback() {
         use crate::drand::DrandEntropy;
-        
+
         let drand_client = Arc::new(DrandEntropy::new());
         let buffer = SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client);
-        
+
         // Test >32 bytes falls back to ChaCha20 (computational security)
         let keystream = buffer.consume(64).await;
         assert_eq!(keystream.len(), 64);
-        
+
         // Should generate different keystreams for different positions
         let keystream2 = buffer.consume(64).await;
         assert_ne!(keystream, keystream2);
     }
-    
+
     #[test]
     fn test_true_otp_sync_method() {
         use crate::drand::DrandEntropy;
-        
+
         let drand_client = Arc::new(DrandEntropy::new());
-        let alice_buffer = SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client.clone());
+        let alice_buffer =
+            SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client.clone());
         let bob_buffer = SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client);
-        
+
         // Test synchronous consumption (≤32 bytes)
         let alice_keystream = alice_buffer.consume_sync(16);
         let bob_keystream = bob_buffer.consume_sync(16);
-        
+
         assert_eq!(alice_keystream, bob_keystream);
         assert_eq!(alice_keystream.len(), 16);
     }
-    
+
     #[tokio::test]
     async fn test_synchronization_failure() {
         use crate::drand::DrandEntropy;
-        
+
         let drand_client = Arc::new(DrandEntropy::new());
-        let alice_buffer = SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client.clone());
+        let alice_buffer =
+            SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client.clone());
         let bob_buffer = SynchronizedVernamBuffer::new_with_drand([0x42; 32], 1000, drand_client);
-        
+
         // Alice consumes 16 bytes
         let _alice_keystream1 = alice_buffer.consume(16).await;
-        
+
         // Bob consumes 8 bytes (different amount)
         let _bob_keystream1 = bob_buffer.consume(8).await;
-        
+
         // Now both consume 16 bytes - should be different due to desynchronization
         let alice_keystream2 = alice_buffer.consume(16).await;
         let bob_keystream2 = bob_buffer.consume(16).await;
-        
+
         // Should be different due to position mismatch
         assert_ne!(alice_keystream2, bob_keystream2);
     }
@@ -1121,26 +1200,24 @@ use std::sync::RwLock;
 /// Window size for sequence number tracking (allows this many out-of-order messages)
 const SEQUENCE_WINDOW_SIZE: usize = 4096;
 
-
-
 /// Sequenced Vernam Buffer: Desync-Resistant High-Entropy XOR Implementation
-/// 
+///
 /// This implementation solves the fundamental synchronization problem with OTP systems
 /// by using sequence numbers to derive keystream positions deterministically.
-/// 
+///
 /// ## Security Properties
 /// - **Desync-resistant**: Lost or reordered messages don't break the system
 /// - **Replay protection**: Sliding window prevents replay attacks
 /// - **Position isolation**: Each sequence number maps to a unique keystream position
 /// - **256-bit post-quantum computational security**: Key exchange over network limits security class
 /// - **ChaCha20 fallback**: For larger messages (256-bit computational)
-/// 
+///
 /// ## Message Format
 /// Each message envelope includes:
 /// - 8 bytes: Sequence number (u64 big-endian)
 /// - 4 bytes: Message length (u32 big-endian)  
 /// - N bytes: Encrypted payload
-/// 
+///
 /// The sequence number allows the receiver to generate the exact same keystream
 /// that was used for encryption, regardless of message arrival order.
 pub struct SequencedVernamBuffer {
@@ -1175,7 +1252,7 @@ impl SequenceWindow {
             bitmap: [0; SEQUENCE_WINDOW_SIZE / 64],
         }
     }
-    
+
     /// Check if a sequence number is valid (not replayed, within window)
     #[allow(dead_code)]
     fn is_valid(&self, seq: u64) -> bool {
@@ -1193,20 +1270,23 @@ impl SequenceWindow {
             (self.bitmap[word_idx] & (1u64 << bit_idx)) == 0
         }
     }
-    
+
     /// Mark a sequence number as received and advance window if needed
     fn mark_received(&mut self, seq: u64) -> bool {
         if seq < self.base {
             // Below window - replay attack
-            warn!("🚨 Replay attack detected: seq {} < base {}", seq, self.base);
+            warn!(
+                "🚨 Replay attack detected: seq {} < base {}",
+                seq, self.base
+            );
             return false;
         }
-        
+
         if seq >= self.base + SEQUENCE_WINDOW_SIZE as u64 {
             // Above window - advance base
             let new_base = seq - SEQUENCE_WINDOW_SIZE as u64 / 2;
             let shift = (new_base - self.base) as usize;
-            
+
             if shift >= SEQUENCE_WINDOW_SIZE {
                 // Complete window reset
                 self.bitmap = [0; SEQUENCE_WINDOW_SIZE / 64];
@@ -1214,14 +1294,14 @@ impl SequenceWindow {
                 // Shift bitmap left
                 let word_shift = shift / 64;
                 let bit_shift = shift % 64;
-                
+
                 if word_shift > 0 {
                     self.bitmap.rotate_left(word_shift);
                     for i in (SEQUENCE_WINDOW_SIZE / 64 - word_shift)..(SEQUENCE_WINDOW_SIZE / 64) {
                         self.bitmap[i] = 0;
                     }
                 }
-                
+
                 if bit_shift > 0 {
                     let mut carry = 0u64;
                     for word in self.bitmap.iter_mut().rev() {
@@ -1231,22 +1311,22 @@ impl SequenceWindow {
                     }
                 }
             }
-            
+
             self.base = new_base;
             debug!("📊 Sequence window advanced to base {}", new_base);
         }
-        
+
         // Mark the bit
         let offset = (seq - self.base) as usize;
         if offset < SEQUENCE_WINDOW_SIZE {
             let word_idx = offset / 64;
             let bit_idx = offset % 64;
-            
+
             if (self.bitmap[word_idx] & (1u64 << bit_idx)) != 0 {
                 warn!("🚨 Replay attack detected: seq {} already received", seq);
                 return false;
             }
-            
+
             self.bitmap[word_idx] |= 1u64 << bit_idx;
             true
         } else {
@@ -1256,7 +1336,7 @@ impl SequenceWindow {
 }
 
 /// Registry for tracking keystream positions per sequence number
-/// 
+///
 /// This allows variable-length messages while maintaining OTP properties.
 /// Each sequence number gets a deterministic starting position.
 struct PositionRegistry {
@@ -1274,16 +1354,16 @@ impl PositionRegistry {
             max_message_size,
         }
     }
-    
+
     /// Get the keystream starting position for a given sequence number
-    /// 
+    ///
     /// Position = sequence_number * max_message_size
     /// This ensures non-overlapping keystream regions for each message.
     fn get_position(&self, seq: u64) -> u64 {
         // Deterministic calculation: each sequence gets max_message_size bytes of keystream space
         seq.saturating_mul(self.max_message_size)
     }
-    
+
     /// Clear old entries to prevent memory growth
     fn cleanup(&mut self, min_seq: u64) {
         self.positions.retain(|&k, _| k >= min_seq);
@@ -1292,7 +1372,7 @@ impl PositionRegistry {
 
 impl SequencedVernamBuffer {
     /// Create a new sequenced buffer with entropy provider support
-    /// 
+    ///
     /// # Arguments
     /// * `shared_seed` - 32-byte seed from key exchange (ML-KEM + drand + peer contributions)
     /// * `starting_round` - drand round number for TRUE OTP (use 0 to disable drand)
@@ -1316,94 +1396,106 @@ impl SequencedVernamBuffer {
             position_registry: RwLock::new(PositionRegistry::new(max_message_size)),
         }
     }
-    
+
     /// Create a new sequenced buffer with drand client (legacy compatibility)
     pub fn new_with_drand(
         shared_seed: [u8; 32],
         starting_round: u64,
         drand_client: Arc<crate::drand::DrandEntropy>,
     ) -> Self {
-        let entropy_provider = Arc::new(crate::entropy_provider::DirectDrandProvider::new(drand_client));
+        let entropy_provider = Arc::new(crate::entropy_provider::DirectDrandProvider::new(
+            drand_client,
+        ));
         Self::new_with_provider(shared_seed, starting_round, entropy_provider, 65536)
     }
-    
+
     /// Create a new sequenced buffer with just a shared seed (fallback mode)
     pub fn new(shared_seed: [u8; 32]) -> Self {
         let drand_client = Arc::new(crate::drand::DrandEntropy::new());
-        let entropy_provider = Arc::new(crate::entropy_provider::DirectDrandProvider::new(drand_client));
+        let entropy_provider = Arc::new(crate::entropy_provider::DirectDrandProvider::new(
+            drand_client,
+        ));
         Self::new_with_provider(shared_seed, 0, entropy_provider, 65536)
     }
-    
+
     /// Get the next sequence number for sending
-    /// 
+    ///
     /// This atomically increments the send counter and returns the sequence number
     /// that should be embedded in the message envelope.
     pub fn next_send_sequence(&self) -> u64 {
         self.send_sequence.fetch_add(1, Ordering::SeqCst)
     }
-    
+
     /// Generate keystream for a specific sequence number (for encryption)
-    /// 
+    ///
     /// The keystream position is deterministically derived from the sequence number,
     /// ensuring both sender and receiver generate identical keystreams.
     pub fn generate_for_sequence_sync(&self, seq: u64, length: usize) -> Vec<u8> {
-        let registry = self.position_registry.read()
+        let registry = self
+            .position_registry
+            .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let position = registry.get_position(seq);
         drop(registry);
-        
+
         self.generate_keystream_at_position_sync(position, length)
     }
-    
+
     /// Generate keystream at a specific position (async version with TRUE OTP support)
     pub async fn generate_for_sequence(&self, seq: u64, length: usize) -> Vec<u8> {
-        let registry = self.position_registry.read()
+        let registry = self
+            .position_registry
+            .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let position = registry.get_position(seq);
         drop(registry);
-        
+
         self.generate_keystream_at_position(position, length).await
     }
-    
+
     /// Consume keystream for receiving (validates sequence and marks as received)
-    /// 
+    ///
     /// Returns None if the sequence number is invalid (replay attack or too old).
     /// This provides built-in replay protection.
     pub fn consume_for_sequence_sync(&self, seq: u64, length: usize) -> Option<Vec<u8>> {
         // Validate and mark sequence as received
         {
-            let mut window = self.recv_window.write()
+            let mut window = self
+                .recv_window
+                .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             if !window.mark_received(seq) {
                 return None; // Replay attack or invalid sequence
             }
         }
-        
+
         // Update high water mark
         let _ = self.recv_sequence_high.fetch_max(seq, Ordering::SeqCst);
-        
+
         // Generate keystream at the sequence's position
         Some(self.generate_for_sequence_sync(seq, length))
     }
-    
+
     /// Consume keystream for receiving (async version)
     pub async fn consume_for_sequence(&self, seq: u64, length: usize) -> Option<Vec<u8>> {
         // Validate and mark sequence as received
         {
-            let mut window = self.recv_window.write()
+            let mut window = self
+                .recv_window
+                .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             if !window.mark_received(seq) {
                 return None; // Replay attack or invalid sequence
             }
         }
-        
+
         // Update high water mark
         let _ = self.recv_sequence_high.fetch_max(seq, Ordering::SeqCst);
-        
+
         // Generate keystream at the sequence's position
         Some(self.generate_for_sequence(seq, length).await)
     }
-    
+
     /// Generate keystream at a specific position (synchronous fallback)
     fn generate_keystream_at_position_sync(&self, position: u64, length: usize) -> Vec<u8> {
         // For TRUE OTP with drand (small messages only in sync context)
@@ -1424,11 +1516,11 @@ impl SequencedVernamBuffer {
                 }
             }
         }
-        
+
         // ChaCha20 fallback (computational security, 256-bit)
         self.generate_chacha_keystream(position, length)
     }
-    
+
     /// Generate keystream at a specific position (async with TRUE OTP)
     async fn generate_keystream_at_position(&self, position: u64, length: usize) -> Vec<u8> {
         // Try TRUE OTP first for all sizes
@@ -1440,91 +1532,104 @@ impl SequencedVernamBuffer {
                 }
             }
         }
-        
+
         // ChaCha20 fallback
         self.generate_chacha_keystream(position, length)
     }
-    
+
     /// Generate TRUE OTP keystream from drand rounds
-    /// 
+    ///
     /// **OPTIMIZED**: Uses ALL 32 bytes of each drand round efficiently!
     /// For N bytes, fetches ceil(N/32) drand rounds instead of N rounds.
-    async fn generate_true_otp_keystream(&self, position: u64, length: usize) -> Result<Vec<u8>, crate::drand::DrandError> {
+    async fn generate_true_otp_keystream(
+        &self,
+        position: u64,
+        length: usize,
+    ) -> Result<Vec<u8>, crate::drand::DrandError> {
         let mut keystream = vec![0u8; length];
-        
+
         // OPTIMIZATION: Use all 32 bytes of each drand round
         const BYTES_PER_ROUND: usize = 32;
         let rounds_needed = (length + BYTES_PER_ROUND - 1) / BYTES_PER_ROUND;
-        
+
         // Position is divided by 32 to get the round offset
         let base_round = self.starting_round + (position / BYTES_PER_ROUND as u64);
         let start_offset = (position % BYTES_PER_ROUND as u64) as usize;
-        
+
         let mut bytes_written = 0;
         let mut current_round = base_round;
         let mut round_offset = start_offset;
-        
+
         while bytes_written < length {
             let drand_round = self.entropy_provider.fetch_round(current_round).await?;
-            
+
             // Copy bytes from this round, starting at the appropriate offset
             let bytes_available = BYTES_PER_ROUND - round_offset;
             let bytes_to_copy = std::cmp::min(bytes_available, length - bytes_written);
-            
-            keystream[bytes_written..bytes_written + bytes_to_copy]
-                .copy_from_slice(&drand_round.randomness[round_offset..round_offset + bytes_to_copy]);
-            
+
+            keystream[bytes_written..bytes_written + bytes_to_copy].copy_from_slice(
+                &drand_round.randomness[round_offset..round_offset + bytes_to_copy],
+            );
+
             bytes_written += bytes_to_copy;
             current_round += 1;
             round_offset = 0;
         }
-        
+
         debug!("🔐 Generated TRUE OTP keystream: {} bytes at position {} ({} drand rounds, 32x efficient)", 
                length, position, rounds_needed);
         Ok(keystream)
     }
-    
+
     /// Generate ChaCha20 keystream (computational fallback)
     fn generate_chacha_keystream(&self, position: u64, length: usize) -> Vec<u8> {
         let mut keystream = vec![0u8; length];
-        
+
         // Derive unique nonce from position using HKDF for domain separation
         let mut nonce_input = [0u8; 40]; // 32 (seed) + 8 (position)
         nonce_input[..32].copy_from_slice(&self.shared_seed);
         nonce_input[32..40].copy_from_slice(&position.to_be_bytes());
         let nonce_hash = Sha256::digest(&nonce_input);
-        
+
         let mut nonce_bytes = [0u8; 12];
         nonce_bytes.copy_from_slice(&nonce_hash[..12]);
-        
+
         // Create ChaCha20 cipher with shared seed and position-derived nonce
         let mut cipher = ChaCha20::new(&self.shared_seed.into(), &nonce_bytes.into());
         cipher.apply_keystream(&mut keystream);
-        
-        debug!("🔐 Generated ChaCha20 keystream: {} bytes at position {} (256-bit computational)", 
-               length, position);
+
+        debug!(
+            "🔐 Generated ChaCha20 keystream: {} bytes at position {} (256-bit computational)",
+            length, position
+        );
         keystream
     }
-    
+
     /// Get current send sequence number (for debugging/monitoring)
     pub fn current_send_sequence(&self) -> u64 {
         self.send_sequence.load(Ordering::SeqCst)
     }
-    
+
     /// Get highest received sequence number (for debugging/monitoring)
     pub fn highest_recv_sequence(&self) -> u64 {
         self.recv_sequence_high.load(Ordering::SeqCst)
     }
-    
+
     /// Reset for a new session (DANGEROUS - only use when establishing new connection)
     pub fn reset(&self) {
         self.send_sequence.store(0, Ordering::SeqCst);
         self.recv_sequence_high.store(0, Ordering::SeqCst);
-        *self.recv_window.write().unwrap_or_else(|poisoned| poisoned.into_inner()) = SequenceWindow::new();
-        self.position_registry.write().unwrap_or_else(|poisoned| poisoned.into_inner()).cleanup(0);
+        *self
+            .recv_window
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = SequenceWindow::new();
+        self.position_registry
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .cleanup(0);
         warn!("🚨 SequencedVernamBuffer reset - new session started");
     }
-    
+
     /// Create shared seed from multiple entropy sources (same as SynchronizedVernamBuffer)
     pub fn create_shared_seed(
         mlkem_secret: [u8; 32],
@@ -1535,7 +1640,9 @@ impl SequencedVernamBuffer {
         for i in 0..32 {
             shared_seed[i] = mlkem_secret[i] ^ drand_entropy[i] ^ peer_contributions[i];
         }
-        debug!("🔑 Created 256-bit post-quantum computational shared seed for SequencedVernamBuffer");
+        debug!(
+            "🔑 Created 256-bit post-quantum computational shared seed for SequencedVernamBuffer"
+        );
         shared_seed
     }
 }
@@ -1547,151 +1654,179 @@ impl SequencedVernamBuffer {
 #[cfg(test)]
 mod sequenced_tests {
     use super::*;
-    
+
     #[test]
     fn test_sequenced_basic() {
         let seed = [0x42; 32];
         let alice = SequencedVernamBuffer::new(seed);
         let bob = SequencedVernamBuffer::new(seed);
-        
+
         // Alice sends message 0
         let seq0 = alice.next_send_sequence();
         assert_eq!(seq0, 0);
-        
+
         let alice_keystream = alice.generate_for_sequence_sync(seq0, 32);
-        
+
         // Bob receives message 0
-        let bob_keystream = bob.consume_for_sequence_sync(seq0, 32).expect("Should succeed");
-        
+        let bob_keystream = bob
+            .consume_for_sequence_sync(seq0, 32)
+            .expect("Should succeed");
+
         assert_eq!(alice_keystream, bob_keystream);
     }
-    
+
     #[test]
     fn test_sequenced_out_of_order() {
         let seed = [0x42; 32];
         let alice = SequencedVernamBuffer::new(seed);
         let bob = SequencedVernamBuffer::new(seed);
-        
+
         // Alice sends messages 0, 1, 2
         let seq0 = alice.next_send_sequence();
         let seq1 = alice.next_send_sequence();
         let seq2 = alice.next_send_sequence();
-        
+
         let ks0 = alice.generate_for_sequence_sync(seq0, 32);
         let ks1 = alice.generate_for_sequence_sync(seq1, 32);
         let ks2 = alice.generate_for_sequence_sync(seq2, 32);
-        
+
         // Bob receives in reverse order: 2, 0, 1
-        let bob_ks2 = bob.consume_for_sequence_sync(seq2, 32).expect("seq2 should work");
-        let bob_ks0 = bob.consume_for_sequence_sync(seq0, 32).expect("seq0 should work");
-        let bob_ks1 = bob.consume_for_sequence_sync(seq1, 32).expect("seq1 should work");
-        
+        let bob_ks2 = bob
+            .consume_for_sequence_sync(seq2, 32)
+            .expect("seq2 should work");
+        let bob_ks0 = bob
+            .consume_for_sequence_sync(seq0, 32)
+            .expect("seq0 should work");
+        let bob_ks1 = bob
+            .consume_for_sequence_sync(seq1, 32)
+            .expect("seq1 should work");
+
         // All should match despite out-of-order delivery
         assert_eq!(ks0, bob_ks0);
         assert_eq!(ks1, bob_ks1);
         assert_eq!(ks2, bob_ks2);
     }
-    
+
     #[test]
     fn test_sequenced_lost_message() {
         let seed = [0x42; 32];
         let alice = SequencedVernamBuffer::new(seed);
         let bob = SequencedVernamBuffer::new(seed);
-        
+
         // Alice sends messages 0, 1, 2
         let seq0 = alice.next_send_sequence();
         let seq1 = alice.next_send_sequence(); // This will be "lost"
         let seq2 = alice.next_send_sequence();
-        
+
         let ks0 = alice.generate_for_sequence_sync(seq0, 32);
         let _ks1 = alice.generate_for_sequence_sync(seq1, 32); // Lost in transit
         let ks2 = alice.generate_for_sequence_sync(seq2, 32);
-        
+
         // Bob only receives 0 and 2 (1 is lost)
-        let bob_ks0 = bob.consume_for_sequence_sync(seq0, 32).expect("seq0 should work");
-        let bob_ks2 = bob.consume_for_sequence_sync(seq2, 32).expect("seq2 should work");
-        
+        let bob_ks0 = bob
+            .consume_for_sequence_sync(seq0, 32)
+            .expect("seq0 should work");
+        let bob_ks2 = bob
+            .consume_for_sequence_sync(seq2, 32)
+            .expect("seq2 should work");
+
         // Both should still match - lost message doesn't break sync
         assert_eq!(ks0, bob_ks0);
         assert_eq!(ks2, bob_ks2);
     }
-    
+
     #[test]
     fn test_sequenced_replay_protection() {
         let seed = [0x42; 32];
         let bob = SequencedVernamBuffer::new(seed);
-        
+
         // Bob receives message 0
         assert!(bob.consume_for_sequence_sync(0, 32).is_some());
-        
+
         // Replay attack: try to receive message 0 again
-        assert!(bob.consume_for_sequence_sync(0, 32).is_none(), "Replay should be rejected");
+        assert!(
+            bob.consume_for_sequence_sync(0, 32).is_none(),
+            "Replay should be rejected"
+        );
     }
-    
+
     #[test]
     fn test_sequenced_window_advance() {
         let seed = [0x42; 32];
         let bob = SequencedVernamBuffer::new(seed);
-        
+
         // Receive message way ahead (simulating gap)
         let far_seq = SEQUENCE_WINDOW_SIZE as u64 + 100;
         assert!(bob.consume_for_sequence_sync(far_seq, 32).is_some());
-        
+
         // Old messages below new window should be rejected
-        assert!(bob.consume_for_sequence_sync(0, 32).is_none(), "Old seq should be rejected");
-        
+        assert!(
+            bob.consume_for_sequence_sync(0, 32).is_none(),
+            "Old seq should be rejected"
+        );
+
         // Messages within new window should work
         let within_window = far_seq - 100;
         assert!(bob.consume_for_sequence_sync(within_window, 32).is_some());
     }
-    
+
     #[test]
     fn test_sequenced_different_lengths() {
         let seed = [0x42; 32];
         let alice = SequencedVernamBuffer::new(seed);
         let bob = SequencedVernamBuffer::new(seed);
-        
+
         // Messages with different lengths
         let seq0 = alice.next_send_sequence();
         let seq1 = alice.next_send_sequence();
-        
+
         let ks0 = alice.generate_for_sequence_sync(seq0, 16); // Short message
         let ks1 = alice.generate_for_sequence_sync(seq1, 1024); // Long message
-        
+
         let bob_ks0 = bob.consume_for_sequence_sync(seq0, 16).unwrap();
         let bob_ks1 = bob.consume_for_sequence_sync(seq1, 1024).unwrap();
-        
+
         assert_eq!(ks0, bob_ks0);
         assert_eq!(ks1, bob_ks1);
     }
-    
+
     #[test]
     fn test_full_message_flow() {
         let seed = [0x42; 32];
         let alice = SequencedVernamBuffer::new(seed);
         let bob = SequencedVernamBuffer::new(seed);
-        
+
         let plaintext = b"Hello, this is a secret message!";
-        
+
         // Alice encrypts
         let seq = alice.next_send_sequence();
         let keystream = alice.generate_for_sequence_sync(seq, plaintext.len());
-        let ciphertext: Vec<u8> = plaintext.iter().zip(keystream.iter()).map(|(p, k)| p ^ k).collect();
-        
+        let ciphertext: Vec<u8> = plaintext
+            .iter()
+            .zip(keystream.iter())
+            .map(|(p, k)| p ^ k)
+            .collect();
+
         // Simulate message envelope: [seq:8][len:4][ciphertext:N]
         let mut envelope = Vec::new();
         envelope.extend_from_slice(&seq.to_be_bytes());
         envelope.extend_from_slice(&(plaintext.len() as u32).to_be_bytes());
         envelope.extend_from_slice(&ciphertext);
-        
+
         // Bob decrypts
         let recv_seq = u64::from_be_bytes(envelope[0..8].try_into().unwrap());
         let recv_len = u32::from_be_bytes(envelope[8..12].try_into().unwrap()) as usize;
         let recv_ciphertext = &envelope[12..];
-        
-        let keystream = bob.consume_for_sequence_sync(recv_seq, recv_len).expect("Should work");
-        let decrypted: Vec<u8> = recv_ciphertext.iter().zip(keystream.iter()).map(|(c, k)| c ^ k).collect();
-        
+
+        let keystream = bob
+            .consume_for_sequence_sync(recv_seq, recv_len)
+            .expect("Should work");
+        let decrypted: Vec<u8> = recv_ciphertext
+            .iter()
+            .zip(keystream.iter())
+            .map(|(c, k)| c ^ k)
+            .collect();
+
         assert_eq!(decrypted, plaintext);
     }
 }

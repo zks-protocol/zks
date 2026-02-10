@@ -19,7 +19,7 @@
 //! # Bandwidth Comparison
 //!
 //! ## Ciphertext Only (amortized over multiple messages in same epoch)
-//! 
+//!
 //! | Approach           | Per-Message CT | Savings |
 //! |--------------------|----------------|---------|
 //! | Naive ML-KEM-1024  | 1568           | 0%      |
@@ -41,9 +41,8 @@
 //! - Triple Ratchet Paper: <https://eprint.iacr.org/2021/1038>
 
 use crate::incremental_mlkem::{
-    self, Keys, Header, EncapsulationKey,
-    Ciphertext1, Ciphertext2,
-    CIPHERTEXT1_SIZE, CIPHERTEXT2_SIZE, HEADER_SIZE, ENCAPSULATION_KEY_SIZE,
+    self, Ciphertext1, Ciphertext2, EncapsulationKey, Header, Keys, CIPHERTEXT1_SIZE,
+    CIPHERTEXT2_SIZE, ENCAPSULATION_KEY_SIZE, HEADER_SIZE,
 };
 use hkdf::Hkdf;
 use sha2::Sha256;
@@ -92,7 +91,7 @@ pub struct KatanaRkem {
     our_keys: Keys,
     /// Peer's current header (pk1) - small, cached across epochs
     peer_header: Option<Header>,
-    /// Peer's current encapsulation key (pk2) 
+    /// Peer's current encapsulation key (pk2)
     peer_ek: Option<EncapsulationKey>,
     /// Current epoch number
     epoch: u64,
@@ -182,21 +181,27 @@ impl KatanaRkem {
     /// Set peer's initial public key components
     pub fn set_peer_public_key(&mut self, header: Header, ek: EncapsulationKey) -> Result<()> {
         if header.len() != HEADER_SIZE {
-            return Err(KatanaError::InvalidSize(
-                format!("Header: expected {} bytes, got {}", HEADER_SIZE, header.len())
-            ));
+            return Err(KatanaError::InvalidSize(format!(
+                "Header: expected {} bytes, got {}",
+                HEADER_SIZE,
+                header.len()
+            )));
         }
         if ek.len() != ENCAPSULATION_KEY_SIZE {
-            return Err(KatanaError::InvalidSize(
-                format!("EK: expected {} bytes, got {}", ENCAPSULATION_KEY_SIZE, ek.len())
-            ));
+            return Err(KatanaError::InvalidSize(format!(
+                "EK: expected {} bytes, got {}",
+                ENCAPSULATION_KEY_SIZE,
+                ek.len()
+            )));
         }
-        
+
         // Validate that header and ek match
         if !incremental_mlkem::ek_matches_header(&ek, &header) {
-            return Err(KatanaError::InvalidSize("Header and EK do not match".to_string()));
+            return Err(KatanaError::InvalidSize(
+                "Header and EK do not match".to_string(),
+            ));
         }
-        
+
         self.peer_header = Some(header);
         self.peer_ek = Some(ek);
         Ok(())
@@ -217,9 +222,13 @@ impl KatanaRkem {
     /// Sends: ct1 (1408B) + ct2 (160B) + new_header (64B) + new_ek (1536B) = 3168B
     /// But the new_ek can be cached for subsequent messages in the same epoch.
     pub fn ratchet_send(&mut self) -> Result<KatanaOutput> {
-        let peer_header = self.peer_header.as_ref()
+        let peer_header = self
+            .peer_header
+            .as_ref()
             .ok_or_else(|| KatanaError::StateError("No peer header".to_string()))?;
-        let peer_ek = self.peer_ek.as_ref()
+        let peer_ek = self
+            .peer_ek
+            .as_ref()
             .ok_or_else(|| KatanaError::StateError("No peer EK".to_string()))?;
 
         // Phase 1: Encapsulate with header only
@@ -241,7 +250,7 @@ impl KatanaRkem {
         let new_keys = incremental_mlkem::generate();
         let new_header = new_keys.hdr.clone();
         let new_ek = new_keys.ek.clone();
-        
+
         // Update our state
         self.our_keys = new_keys;
         self.root_key = new_root_key.clone();
@@ -252,7 +261,8 @@ impl KatanaRkem {
             self.epoch,
             CIPHERTEXT1_SIZE + CIPHERTEXT2_SIZE,
             CIPHERTEXT1_SIZE + CIPHERTEXT2_SIZE + HEADER_SIZE + ENCAPSULATION_KEY_SIZE,
-            (HEADER_SIZE + ENCAPSULATION_KEY_SIZE) * 100 / (CIPHERTEXT1_SIZE + CIPHERTEXT2_SIZE + HEADER_SIZE + ENCAPSULATION_KEY_SIZE)
+            (HEADER_SIZE + ENCAPSULATION_KEY_SIZE) * 100
+                / (CIPHERTEXT1_SIZE + CIPHERTEXT2_SIZE + HEADER_SIZE + ENCAPSULATION_KEY_SIZE)
         );
 
         Ok(KatanaOutput {
@@ -274,19 +284,24 @@ impl KatanaRkem {
     pub fn ratchet_receive(&mut self, ciphertext: &KatanaCiphertext) -> Result<KatanaOutput> {
         // Validate sizes
         if ciphertext.ct1.len() != CIPHERTEXT1_SIZE {
-            return Err(KatanaError::InvalidSize(
-                format!("CT1: expected {}, got {}", CIPHERTEXT1_SIZE, ciphertext.ct1.len())
-            ));
+            return Err(KatanaError::InvalidSize(format!(
+                "CT1: expected {}, got {}",
+                CIPHERTEXT1_SIZE,
+                ciphertext.ct1.len()
+            )));
         }
         if ciphertext.ct2.len() != CIPHERTEXT2_SIZE {
-            return Err(KatanaError::InvalidSize(
-                format!("CT2: expected {}, got {}", CIPHERTEXT2_SIZE, ciphertext.ct2.len())
-            ));
+            return Err(KatanaError::InvalidSize(format!(
+                "CT2: expected {}, got {}",
+                CIPHERTEXT2_SIZE,
+                ciphertext.ct2.len()
+            )));
         }
 
         // Decapsulate using our decapsulation key
-        let shared_secret = incremental_mlkem::decaps(&self.our_keys.dk, &ciphertext.ct1, &ciphertext.ct2)
-            .map_err(|e| KatanaError::IncrementalMlKemError(e.to_string()))?;
+        let shared_secret =
+            incremental_mlkem::decaps(&self.our_keys.dk, &ciphertext.ct1, &ciphertext.ct2)
+                .map_err(|e| KatanaError::IncrementalMlKemError(e.to_string()))?;
 
         // Convert to array
         let mut ss_array = [0u8; 32];
@@ -298,10 +313,10 @@ impl KatanaRkem {
         // Validate peer's new public key components match before storing
         if !incremental_mlkem::ek_matches_header(&ciphertext.new_ek, &ciphertext.new_header) {
             return Err(KatanaError::InvalidSize(
-                "Received header and EK do not match - possible tampering".to_string()
+                "Received header and EK do not match - possible tampering".to_string(),
             ));
         }
-        
+
         // Update peer's public key from the ciphertext
         self.peer_header = Some(ciphertext.new_header.clone());
         self.peer_ek = Some(ciphertext.new_ek.clone());
@@ -335,13 +350,16 @@ impl KatanaRkem {
     }
 
     /// Derive new root key and epoch key from shared secret
-    fn derive_keys(&self, shared_secret: &[u8; 32]) -> Result<(Zeroizing<[u8; 32]>, Zeroizing<[u8; 32]>)> {
+    fn derive_keys(
+        &self,
+        shared_secret: &[u8; 32],
+    ) -> Result<(Zeroizing<[u8; 32]>, Zeroizing<[u8; 32]>)> {
         let hk = Hkdf::<Sha256>::new(Some(b"katana-chain-v2"), &*self.root_key);
         let mut epoch_key = Zeroizing::new([0u8; 32]);
-        
+
         hk.expand(shared_secret, epoch_key.as_mut())
             .expect("HKDF should not fail");
-        
+
         // Chain the root key forward
         let hk2 = Hkdf::<Sha256>::new(Some(b"katana-root-advance"), &*epoch_key);
         let mut new_root_key = Zeroizing::new([0u8; 32]);
@@ -357,7 +375,7 @@ impl KatanaRkem {
         const NAIVE_BYTES_PER_RATCHET: usize = 1568 + 1568;
         // Incremental: ct1 (1408) + ct2 (160) = 1568 per ratchet (not counting new pk)
         const INCREMENTAL_BYTES_PER_RATCHET: usize = CIPHERTEXT1_SIZE + CIPHERTEXT2_SIZE;
-        
+
         let naive_bytes = NAIVE_BYTES_PER_RATCHET * self.epoch as usize;
         let katana_bytes = INCREMENTAL_BYTES_PER_RATCHET * self.epoch as usize;
         let saved = naive_bytes.saturating_sub(katana_bytes);
@@ -398,8 +416,11 @@ pub struct BandwidthStats {
 
 impl std::fmt::Display for BandwidthStats {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Katana RKEM: {} epochs, {}B sent ({}B saved = {:.1}% savings)",
-            self.epochs, self.katana_bytes, self.bytes_saved, self.savings_percent)
+        write!(
+            f,
+            "Katana RKEM: {} epochs, {}B sent ({}B saved = {:.1}% savings)",
+            self.epochs, self.katana_bytes, self.bytes_saved, self.savings_percent
+        )
     }
 }
 
@@ -415,7 +436,7 @@ mod tests {
     fn test_katana_creation() {
         let secret = [0u8; 32];
         let rkem = KatanaRkem::new(&secret, true).expect("creation should succeed");
-        
+
         assert_eq!(rkem.epoch(), 0);
         assert_eq!(rkem.header().len(), HEADER_SIZE);
         assert_eq!(rkem.encapsulation_key().len(), ENCAPSULATION_KEY_SIZE);
@@ -424,60 +445,78 @@ mod tests {
     #[test]
     fn test_katana_full_ratchet() {
         let secret = [42u8; 32];
-        
+
         // Create Alice and Bob
         let mut alice = KatanaRkem::new(&secret, true).expect("alice creation");
         let mut bob = KatanaRkem::new(&secret, false).expect("bob creation");
-        
+
         // Exchange initial public keys
-        alice.set_peer_public_key(bob.header().clone(), bob.encapsulation_key().clone())
+        alice
+            .set_peer_public_key(bob.header().clone(), bob.encapsulation_key().clone())
             .expect("alice set peer pk");
         bob.set_peer_public_key(alice.header().clone(), alice.encapsulation_key().clone())
             .expect("bob set peer pk");
-        
+
         // Alice sends to Bob
         let alice_output = alice.ratchet_send().expect("alice ratchet send");
-        let bob_output = bob.ratchet_receive(&alice_output.ciphertext).expect("bob ratchet receive");
-        
+        let bob_output = bob
+            .ratchet_receive(&alice_output.ciphertext)
+            .expect("bob ratchet receive");
+
         // Shared secrets should match
-        assert_eq!(*alice_output.shared_secret, *bob_output.shared_secret,
-            "Shared secrets must match");
-        
+        assert_eq!(
+            *alice_output.shared_secret, *bob_output.shared_secret,
+            "Shared secrets must match"
+        );
+
         // Epochs should advance
         assert_eq!(alice.epoch(), 1);
         assert_eq!(bob.epoch(), 1);
-        
+
         println!("Alice bandwidth stats: {}", alice.bandwidth_stats());
     }
 
     #[test]
     fn test_katana_multi_ratchet() {
         let secret = [123u8; 32];
-        
+
         let mut alice = KatanaRkem::new(&secret, true).expect("alice");
         let mut bob = KatanaRkem::new(&secret, false).expect("bob");
-        
-        alice.set_peer_public_key(bob.header().clone(), bob.encapsulation_key().clone()).unwrap();
-        bob.set_peer_public_key(alice.header().clone(), alice.encapsulation_key().clone()).unwrap();
-        
+
+        alice
+            .set_peer_public_key(bob.header().clone(), bob.encapsulation_key().clone())
+            .unwrap();
+        bob.set_peer_public_key(alice.header().clone(), alice.encapsulation_key().clone())
+            .unwrap();
+
         // Do 5 ratchet rounds
         for i in 0..5 {
             let alice_out = alice.ratchet_send().expect("alice send");
-            let bob_out = bob.ratchet_receive(&alice_out.ciphertext).expect("bob receive");
-            assert_eq!(*alice_out.shared_secret, *bob_out.shared_secret,
-                "Round {} secrets must match", i);
-            
+            let bob_out = bob
+                .ratchet_receive(&alice_out.ciphertext)
+                .expect("bob receive");
+            assert_eq!(
+                *alice_out.shared_secret, *bob_out.shared_secret,
+                "Round {} secrets must match",
+                i
+            );
+
             // Update Alice with Bob's new keys from response
-            alice.set_peer_public_key(
-                bob_out.ciphertext.new_header.clone(),
-                bob_out.ciphertext.new_ek.clone()
-            ).expect("alice update peer");
+            alice
+                .set_peer_public_key(
+                    bob_out.ciphertext.new_header.clone(),
+                    bob_out.ciphertext.new_ek.clone(),
+                )
+                .expect("alice update peer");
         }
-        
+
         let stats = alice.bandwidth_stats();
         assert_eq!(stats.epochs, 5);
-        assert!(stats.savings_percent > 40.0, "Should have significant savings");
-        
+        assert!(
+            stats.savings_percent > 40.0,
+            "Should have significant savings"
+        );
+
         println!("After 5 ratchets: {}", stats);
     }
 
@@ -490,7 +529,7 @@ mod tests {
             bytes_saved: 1568,
             savings_percent: 50.0,
         };
-        
+
         assert_eq!(stats.savings_percent, 50.0);
     }
 }

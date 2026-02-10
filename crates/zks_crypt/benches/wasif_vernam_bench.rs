@@ -1,18 +1,18 @@
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId, Throughput, black_box};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use zks_crypt::high_entropy_cipher::SynchronizedVernamBuffer;
 
 fn benchmark_synchronized_vernam(c: &mut Criterion) {
     let mut group = c.benchmark_group("SynchronizedVernam");
-    
+
     let seed = [0x42u8; 32];
-    
+
     for size in [32, 64, 128, 512, 1024].iter() {
         group.throughput(Throughput::Bytes(*size as u64));
         group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &s| {
             b.iter_batched(
                 || SynchronizedVernamBuffer::new(seed),
                 |buffer| black_box(buffer.consume_sync(s)),
-                criterion::BatchSize::SmallInput
+                criterion::BatchSize::SmallInput,
             )
         });
     }

@@ -42,20 +42,20 @@
 #![warn(missing_docs)]
 #![deny(clippy::all)]
 
-pub mod ml_kem;
-pub mod ml_dsa;
 pub mod errors;
 /// Incremental ML-KEM-1024 for bandwidth-efficient ratcheting
 pub mod incremental_mlkem;
 /// Katana RKEM - Bandwidth-optimized ratcheting KEM using incremental ML-KEM-1024
 pub mod katana_rkem;
+pub mod ml_dsa;
+pub mod ml_kem;
 pub mod prelude;
 
 // Re-export commonly used types
-pub use ml_kem::{MlKem, MlKemKeypair, MlKemEncapsulation};
-pub use ml_dsa::{MlDsa, MlDsaKeypair};
 pub use errors::{PqcError, Result};
-pub use katana_rkem::{KatanaRkem, KatanaOutput, KatanaCiphertext, BandwidthStats};
+pub use katana_rkem::{BandwidthStats, KatanaCiphertext, KatanaOutput, KatanaRkem};
+pub use ml_dsa::{MlDsa, MlDsaKeypair};
+pub use ml_kem::{MlKem, MlKemEncapsulation, MlKemKeypair};
 
 // Type aliases for convenience
 /// Alias for ML-KEM (Module-Lattice-Based Key Encapsulation Mechanism)

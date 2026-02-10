@@ -7,10 +7,10 @@ use serde::{Deserialize, Serialize};
 pub enum SecurityLevel {
     /// Classical encryption (ChaCha20-Poly1305 only)
     Classical,
-    
+
     /// Post-quantum encryption (ML-KEM + ChaCha20-Poly1305)
     PostQuantum,
-    
+
     /// Maximum security (ML-KEM + drand + swarm entropy, 256-bit post-quantum computational)
     TrueVernam,
 }
@@ -26,22 +26,22 @@ impl Default for SecurityLevel {
 pub struct ConnectionConfig {
     /// Security level
     pub security: SecurityLevel,
-    
+
     /// Connection timeout
     pub timeout: std::time::Duration,
-    
+
     /// Buffer size for data transfer
     pub buffer_size: usize,
-    
+
     /// Enable traffic scrambling for traffic analysis resistance
     pub enable_scrambling: bool,
-    
+
     /// Enable anti-replay protection
     pub enable_anti_replay: bool,
-    
+
     /// Enable compression
     pub enable_compression: bool,
-    
+
     /// Maximum message size
     pub max_message_size: usize,
 
@@ -77,7 +77,7 @@ impl ConnectionConfig {
             ..Default::default()
         }
     }
-    
+
     /// Create a new configuration with classical security
     pub fn classical() -> Self {
         Self {
@@ -85,7 +85,7 @@ impl ConnectionConfig {
             ..Default::default()
         }
     }
-    
+
     /// Create a new configuration with true vernam security
     pub fn true_vernam() -> Self {
         Self {
@@ -93,42 +93,40 @@ impl ConnectionConfig {
             ..Default::default()
         }
     }
-    
+
     /// Set the buffer size
     pub fn with_buffer_size(mut self, size: usize) -> Self {
         self.buffer_size = size;
         self
     }
-    
+
     /// Set the timeout
     pub fn with_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.timeout = timeout;
         self
     }
-    
+
     /// Enable or disable scrambling
     pub fn with_scrambling(mut self, enable: bool) -> Self {
         self.enable_scrambling = enable;
         self
     }
-    
+
     /// Enable or disable anti-replay protection
     pub fn with_anti_replay(mut self, enable: bool) -> Self {
         self.enable_anti_replay = enable;
         self
     }
-    
+
     /// Enable or disable compression
     pub fn with_compression(mut self, enable: bool) -> Self {
         self.enable_compression = enable;
         self
     }
-    
+
     /// Maximum message size
     pub fn with_max_message_size(mut self, size: usize) -> Self {
         self.max_message_size = size;
         self
     }
 }
-
-

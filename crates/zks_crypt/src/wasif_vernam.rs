@@ -1,13 +1,19 @@
 //! Wasif Vernam Cipher Implementation
-//! 
+//!
 //! This module implements the Wasif Vernam cipher, a quantum-resistant encryption scheme
 //! that combines multiple layers of security:
-//! 
+//!
 //! 1. Base Layer: ChaCha20-Poly1305 for authenticated encryption
 //! 2. XOR Layer: HKDF-derived keystream or TRUE Vernam random data
 //! 3. Optional: Ciphertext scrambling for traffic analysis resistance
 //! 4. Optional: Recursive key chain for forward secrecy
 
+use crate::anti_replay::AntiReplayContainer;
+use crate::high_entropy_cipher::{
+    SequencedVernamBuffer, SynchronizedVernamBuffer, TrueVernamBuffer,
+};
+use crate::recursive_chain::RecursiveChain;
+use crate::scramble::CiphertextScrambler;
 use chacha20poly1305::{
     aead::{Aead, Error as AeadError},
     ChaCha20Poly1305, KeyInit, Nonce,
@@ -16,34 +22,30 @@ use hkdf::Hkdf;
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use zeroize::Zeroizing;
-use crate::anti_replay::AntiReplayContainer;
-use crate::recursive_chain::RecursiveChain;
-use crate::scramble::CiphertextScrambler;
-use crate::high_entropy_cipher::{TrueVernamBuffer, SynchronizedVernamBuffer, SequencedVernamBuffer};
 use std::time::Duration;
+use tokio::sync::Mutex;
 use tokio::time::interval;
 use tracing::{debug, error, info, warn};
+use zeroize::Zeroizing;
 
 /// The main Wasif Vernam cipher implementation
-/// 
+///
 /// ✅ 256-BIT POST-QUANTUM COMPUTATIONAL SECURITY: When using SequencedVernamBuffer with shared
 /// random seeds, this provides strong encryption that is computationally infeasible to break.
-/// 
+///
 /// ✅ DESYNC-RESISTANT: The new SequencedVernamBuffer handles lost/reordered messages
 /// automatically. Each message has a sequence number embedded in the header, and the
 /// receiver generates keystream at the correct position regardless of delivery order.
-/// 
+///
 /// Security Modes:
 /// - Mode 0x01: High-entropy XOR via SequencedVernamBuffer (256-bit post-quantum computational, desync-resistant)
 /// - Mode 0x02: HKDF-based XOR (computational, 256-bit security)
 /// - Mode 0x03: Legacy SynchronizedVernamBuffer (deprecated - use Mode 0x01)
-/// 
+///
 /// Key Exchange: Both parties derive the same shared seed during handshake (from
 /// ML-KEM shared secret + drand entropy + peer contributions). The keystream is generated
 /// deterministically from seed + sequence number.
-/// 
+///
 /// NOTE: This provides 256-bit post-quantum computational security, not information-theoretic
 /// security, because the initial key exchange occurs over the network.
 pub struct WasifVernam {
@@ -62,7 +64,7 @@ pub struct WasifVernam {
     key_chain: Option<RecursiveChain>,
     /// Base IV for XOR nonce construction (derived from handshake transcript)
     /// Per Frontiers paper Section 3.10: nonce_i = base_iv ⊕ (0^32 ‖ be64(i))
-    /// 
+    ///
     /// SECURITY M3: This MUST be derived with explicit role separation:
     /// - Initiator uses HKDF with info="initiator-base-iv"
     /// - Responder uses HKDF with info="responder-base-iv"
@@ -78,9 +80,9 @@ pub struct WasifVernam {
 impl WasifVernam {
     /// Create a new Wasif Vernam cipher with the given key
     pub fn new(key: [u8; 32]) -> Result<Self, AeadError> {
-        let cipher = ChaCha20Poly1305::new_from_slice(&key)
-            .map_err(|_| chacha20poly1305::aead::Error)?;
-        
+        let cipher =
+            ChaCha20Poly1305::new_from_slice(&key).map_err(|_| chacha20poly1305::aead::Error)?;
+
         Ok(Self {
             cipher,
             nonce_counter: AtomicU64::new(0),
@@ -108,17 +110,20 @@ impl WasifVernam {
     }
 
     /// Enable TRUE Vernam mode with synchronized keystream generation (LEGACY - use enable_sequenced_vernam instead)
-    /// 
+    ///
     /// ⚠️ WARNING: This mode is vulnerable to desync if messages are lost or reordered.
     /// Use `enable_sequenced_vernam()` for desync-resistant encryption.
-    /// 
+    ///
     /// This provides 256-bit post-quantum computational security by using a shared seed
     /// derived from multiple entropy sources (ML-KEM + drand + peer contributions).
     /// Both parties generate identical keystreams from the same shared seed.
-    /// 
+    ///
     /// # Arguments
     /// * `shared_seed` - 32-byte shared seed from create_shared_seed()
-    #[deprecated(since = "1.18.0", note = "Use enable_sequenced_vernam() for desync-resistant encryption")]
+    #[deprecated(
+        since = "1.18.0",
+        note = "Use enable_sequenced_vernam() for desync-resistant encryption"
+    )]
     pub fn enable_synchronized_vernam(&mut self, shared_seed: [u8; 32]) {
         let sync_buffer = SynchronizedVernamBuffer::new(shared_seed);
         self.synchronized_buffer = Some(Arc::new(sync_buffer));
@@ -126,19 +131,19 @@ impl WasifVernam {
         self.has_swarm_entropy = true;
         info!("⚠️ Enabled LEGACY synchronized Vernam mode (vulnerable to desync - consider using sequenced mode)");
     }
-    
+
     /// Enable high-entropy XOR mode with SEQUENCED keystream generation (RECOMMENDED)
-    /// 
+    ///
     /// ✅ DESYNC-RESISTANT: This mode handles lost and reordered messages automatically.
     /// Each message has a sequence number embedded in the header, allowing the receiver
     /// to generate the correct keystream regardless of message delivery order.
-    /// 
+    ///
     /// Security Properties:
     /// - 256-bit post-quantum computational security (key exchange over network)
     /// - Replay protection via sliding window
     /// - Lost message tolerance - other messages still decrypt
     /// - Out-of-order tolerance - messages decrypt in any order
-    /// 
+    ///
     /// # Arguments
     /// * `shared_seed` - 32-byte shared seed from create_shared_seed()
     pub fn enable_sequenced_vernam(&mut self, shared_seed: [u8; 32]) {
@@ -147,12 +152,12 @@ impl WasifVernam {
         self.has_swarm_entropy = true;
         info!("✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)");
     }
-    
+
     /// Enable TRUE Vernam mode with SEQUENCED keystream generation and drand TRUE OTP
-    /// 
+    ///
     /// Same as `enable_sequenced_vernam()` but with explicit drand configuration for
     /// 256-bit post-quantum computational security on all message sizes.
-    /// 
+    ///
     /// # Arguments
     /// * `shared_seed` - 32-byte shared seed from create_shared_seed()
     /// * `starting_round` - drand round number to start from (both parties must use same)
@@ -163,26 +168,27 @@ impl WasifVernam {
         starting_round: u64,
         drand_client: Arc<crate::drand::DrandEntropy>,
     ) {
-        let seq_buffer = SequencedVernamBuffer::new_with_drand(shared_seed, starting_round, drand_client);
+        let seq_buffer =
+            SequencedVernamBuffer::new_with_drand(shared_seed, starting_round, drand_client);
         self.sequenced_buffer = Some(Arc::new(seq_buffer));
         self.has_swarm_entropy = true;
         info!("✅ Enabled SEQUENCED Vernam mode with drand (TRUE OTP, desync-resistant)");
     }
 
     /// Create a shared seed from multiple entropy sources for TRUE OTP
-    /// 
+    ///
     /// This combines multiple entropy sources using XOR for 256-bit post-quantum computational security:
     /// - ML-KEM shared secret from handshake
     /// - drand entropy (both parties fetch same round)
     /// - Peer contributions XOR'd during handshake
-    /// 
+    ///
     /// The result is 256-bit post-quantum computationally secure if at least one source is random.
-    /// 
+    ///
     /// # Arguments
     /// * `mlkem_secret` - 32-byte shared secret from ML-KEM handshake
     /// * `drand_entropy` - 32-byte drand entropy (same round for both parties)
     /// * `peer_contributions` - XOR of all peer contributions from handshake
-    /// 
+    ///
     /// # Returns
     /// 32-byte shared seed for synchronized Vernam buffer
     pub fn create_shared_seed(
@@ -191,12 +197,12 @@ impl WasifVernam {
         peer_contributions: [u8; 32],
     ) -> [u8; 32] {
         let mut shared_seed = [0u8; 32];
-        
+
         // 256-bit post-quantum computational XOR combination: secure if any source is random
         for i in 0..32 {
             shared_seed[i] = mlkem_secret[i] ^ drand_entropy[i] ^ peer_contributions[i];
         }
-        
+
         debug!("🔑 Created shared seed from ML-KEM + drand + peer contributions (256-bit post-quantum computational)");
         shared_seed
     }
@@ -204,8 +210,8 @@ impl WasifVernam {
     /// Enable ciphertext scrambling with a specific permutation size
     pub fn enable_scrambling(&mut self, size: usize) -> Result<(), AeadError> {
         // Use the swarm seed as entropy for scrambling
-        self.scrambler = Some(CiphertextScrambler::from_entropy(&self.swarm_seed, size)
-            .map_err(|_| AeadError)?);
+        self.scrambler =
+            Some(CiphertextScrambler::from_entropy(&self.swarm_seed, size).map_err(|_| AeadError)?);
         Ok(())
     }
 
@@ -213,16 +219,16 @@ impl WasifVernam {
     pub fn enable_key_chain(&mut self, initial_seed: [u8; 32], is_alice: bool) {
         self.key_chain = Some(RecursiveChain::new(&initial_seed, is_alice));
     }
-    
+
     /// Set the base IV for XOR nonce construction
-    /// 
+    ///
     /// Per Frontiers paper Section 3.10, the base IV should be derived from the handshake
     /// transcript using HKDF. This enables safe bidirectional key usage by providing
     /// directional separation in the nonce.
-    /// 
+    ///
     /// # Arguments
     /// * `base_iv` - 12-byte base IV derived from handshake transcript
-    /// 
+    ///
     /// # Example
     /// ```ignore
     /// // Derive base_iv from handshake transcript using HKDF
@@ -236,16 +242,16 @@ impl WasifVernam {
         self.base_iv_set = true;
         debug!("🔑 Base IV set for XOR nonce construction");
     }
-    
+
     /// Derive and set the base IV from shared secret with proper directional separation
-    /// 
+    ///
     /// SECURITY FIX M3: This is the RECOMMENDED way to set the base IV as it automatically
     /// handles role-based separation to prevent nonce collisions in bidirectional communication.
-    /// 
+    ///
     /// # Arguments
     /// * `shared_secret` - The shared secret from key exchange
     /// * `is_initiator` - True for the handshake initiator, false for responder
-    /// 
+    ///
     /// # Example
     /// ```ignore
     /// // After handshake completion:
@@ -255,39 +261,42 @@ impl WasifVernam {
     pub fn derive_base_iv(&mut self, shared_secret: &[u8; 32], is_initiator: bool) {
         let hk = Hkdf::<Sha256>::new(Some(b"zks-base-iv-v2"), shared_secret);
         let mut base_iv = [0u8; 12];
-        
+
         // Use different info strings for each role to ensure nonce separation
         let info = if is_initiator {
             b"initiator-base-iv-v2" as &[u8]
         } else {
             b"responder-base-iv-v2" as &[u8]
         };
-        
+
         hk.expand(info, &mut base_iv)
             .expect("HKDF expand should not fail for 12-byte output");
-        
+
         self.base_iv = base_iv;
         self.base_iv_set = true;
         self.is_initiator = Some(is_initiator);
-        
-        info!("🔑 Base IV derived with role separation (is_initiator: {})", is_initiator);
+
+        info!(
+            "🔑 Base IV derived with role separation (is_initiator: {})",
+            is_initiator
+        );
     }
 
     /// Generate a keystream using HKDF with the swarm seed
-    /// 
+    ///
     /// ⚠️ SECURITY NOTE: This uses a static swarm seed. For forward secrecy,
     /// call refresh_entropy() periodically or use the recursive key chain feature.
-    /// 
+    ///
     /// FIX m2: Now includes protocol version and direction in HKDF info parameter
     /// Generate keystream from swarm seed using HKDF.
-    /// 
+    ///
     /// # Security
     /// Returns `Zeroizing<Vec<u8>>` to ensure keying material is zeroed on drop.
     /// This is critical for defense-in-depth against memory disclosure attacks.
     fn generate_keystream(&self, offset: u64, length: usize) -> Zeroizing<Vec<u8>> {
         // Use stack allocation for small sizes to avoid heap allocation in hot path
         const SMALL_BUFFER_SIZE: usize = 1024;
-        
+
         let hk = Hkdf::<Sha256>::new(Some(b"zks-vernam-keystream-v2"), &*self.swarm_seed);
         // FIX m2: Include protocol version and role in info to prevent key reuse across versions
         let role_str = match self.is_initiator {
@@ -296,10 +305,13 @@ impl WasifVernam {
             None => "unknown",
         };
         let info = format!("v2-{}-offset-{}", role_str, offset);
-        
+
         if length <= SMALL_BUFFER_SIZE {
             let mut small_buffer = [0u8; SMALL_BUFFER_SIZE];
-            if hk.expand(info.as_bytes(), &mut small_buffer[..length]).is_err() {
+            if hk
+                .expand(info.as_bytes(), &mut small_buffer[..length])
+                .is_err()
+            {
                 // FIX m8: Zero the buffer even on failure before returning
                 small_buffer.fill(0);
                 return Zeroizing::new(Vec::new()); // Return empty vector on HKDF failure
@@ -327,7 +339,6 @@ impl WasifVernam {
 
     /// Encrypt data using the Wasif Vernam cipher
     pub fn encrypt(&mut self, data: &[u8]) -> Result<Vec<u8>, AeadError> {
-        
         // SECURITY FIX M3: Ensure base_iv has been set to prevent nonce collision
         // This is critical for bidirectional communication safety
         if !self.base_iv_set {
@@ -335,7 +346,7 @@ impl WasifVernam {
             error!("Using default zero base_iv would cause nonce collisions in bidirectional communication.");
             return Err(AeadError);
         }
-        
+
         // SECURITY FIX: Use compare_exchange loop to prevent TOCTOU race condition
         // Two threads could previously both pass the check and then both increment
         let counter = loop {
@@ -355,14 +366,14 @@ impl WasifVernam {
                 Err(_) => continue, // Another thread incremented, retry
             }
         };
-        
+
         // Generate unique nonce using XOR construction per Frontiers paper Section 3.10
         // nonce_i = base_iv ⊕ (0^32 ‖ be64(counter))
         let mut nonce_bytes = [0u8; 12];
-        
+
         // Place counter in big-endian format in last 8 bytes
         nonce_bytes[4..12].copy_from_slice(&counter.to_be_bytes());
-        
+
         // XOR with base_iv for directional separation and transcript binding
         for i in 0..12 {
             nonce_bytes[i] ^= self.base_iv[i];
@@ -397,14 +408,21 @@ impl WasifVernam {
                 for (i, byte) in mixed_data.iter_mut().enumerate() {
                     *byte ^= keystream[i];
                 }
-                self.key_offset.fetch_add(data.len() as u64, Ordering::SeqCst)
+                self.key_offset
+                    .fetch_add(data.len() as u64, Ordering::SeqCst)
             } else {
                 // Fallback to static swarm seed (computational security)
-                let offset = self.key_offset.fetch_add(data.len() as u64, Ordering::SeqCst);
+                let offset = self
+                    .key_offset
+                    .fetch_add(data.len() as u64, Ordering::SeqCst);
                 let keystream = self.generate_keystream(offset, data.len());
                 // SECURITY FIX: Validate keystream length to prevent panic
                 if keystream.len() != data.len() {
-                    error!("🚨 HKDF keystream generation failed: expected {} bytes, got {}", data.len(), keystream.len());
+                    error!(
+                        "🚨 HKDF keystream generation failed: expected {} bytes, got {}",
+                        data.len(),
+                        keystream.len()
+                    );
                     return Err(AeadError);
                 }
                 for (i, byte) in mixed_data.iter_mut().enumerate() {
@@ -458,7 +476,7 @@ impl WasifVernam {
             counter_bytes[i] ^= self.base_iv[4 + i];
         }
         let pid = u64::from_be_bytes(counter_bytes);
-        
+
         if !self.anti_replay.validate_pid(pid) {
             warn!("Replay attack detected!");
             return Err(AeadError);
@@ -487,7 +505,11 @@ impl WasifVernam {
                 // Fallback to static swarm seed (computational security)
                 let keystream = self.generate_keystream(key_offset, plaintext.len());
                 if keystream.len() != plaintext.len() {
-                    warn!("⚠️ HKDF keystream generation failed for decryption: expected {}, got {}", plaintext.len(), keystream.len());
+                    warn!(
+                        "⚠️ HKDF keystream generation failed for decryption: expected {}, got {}",
+                        plaintext.len(),
+                        keystream.len()
+                    );
                     return Err(AeadError);
                 }
                 for (i, byte) in plaintext.iter_mut().enumerate() {
@@ -502,25 +524,25 @@ impl WasifVernam {
     // ================================================================================================
     // SEQUENCED VERNAM MODE - DESYNC-RESISTANT ENCRYPTION
     // ================================================================================================
-    
+
     /// Encrypt data using SEQUENCED Vernam mode (DESYNC-RESISTANT)
-    /// 
+    ///
     /// ✅ RECOMMENDED: This mode handles lost and reordered messages automatically.
-    /// 
+    ///
     /// Message Envelope Format:
     /// ```text
     /// [Sequence:8][Length:4][Mode:1][Nonce:12][WrappedData][Tag:16]
     /// ```
-    /// 
+    ///
     /// Security Properties:
     /// - 256-bit post-quantum computational security (key exchange over network)
     /// - Replay protection via sliding window in SequencedVernamBuffer
     /// - Lost message tolerance - other messages still decrypt correctly
     /// - Out-of-order tolerance - messages decrypt in any arrival order
-    /// 
+    ///
     /// # Arguments
     /// * `data` - Plaintext data to encrypt
-    /// 
+    ///
     /// # Returns
     /// Encrypted envelope with embedded sequence number
     pub fn encrypt_sequenced(&mut self, data: &[u8]) -> Result<Vec<u8>, AeadError> {
@@ -532,27 +554,27 @@ impl WasifVernam {
                 return Err(AeadError);
             }
         };
-        
+
         // Get next sequence number for this message
         let sequence = seq_buffer.next_send_sequence();
-        
+
         // Generate keystream at sequence-derived position
         let keystream = seq_buffer.generate_for_sequence_sync(sequence, data.len());
-        
+
         // XOR plaintext with keystream (TRUE OTP layer)
         let mut mixed_data = Zeroizing::new(data.to_vec());
         for (i, byte) in mixed_data.iter_mut().enumerate() {
             *byte ^= keystream[i];
         }
-        
+
         // Generate nonce from sequence number (deterministic but unique per message)
         let mut nonce_bytes = [0u8; 12];
         nonce_bytes[4..12].copy_from_slice(&sequence.to_be_bytes());
-        
+
         // ChaCha20-Poly1305 authenticated encryption
         let nonce = Nonce::from_slice(&nonce_bytes);
         let ciphertext = self.cipher.encrypt(nonce, mixed_data.as_ref())?;
-        
+
         // Build envelope: [Sequence:8][Length:4][Mode:1][Nonce:12][Ciphertext+Tag]
         let mut envelope = Vec::with_capacity(8 + 4 + 1 + 12 + ciphertext.len());
         envelope.extend_from_slice(&sequence.to_be_bytes());
@@ -560,21 +582,25 @@ impl WasifVernam {
         envelope.push(0x01); // Mode: Sequenced TRUE OTP
         envelope.extend_from_slice(&nonce_bytes);
         envelope.extend_from_slice(&ciphertext);
-        
-        debug!("🔐 Encrypted {} bytes with seq {} (sequenced mode)", data.len(), sequence);
+
+        debug!(
+            "🔐 Encrypted {} bytes with seq {} (sequenced mode)",
+            data.len(),
+            sequence
+        );
         Ok(envelope)
     }
-    
+
     /// Decrypt data encrypted with SEQUENCED Vernam mode (DESYNC-RESISTANT)
-    /// 
+    ///
     /// ✅ RECOMMENDED: This mode handles lost and reordered messages automatically.
-    /// 
+    ///
     /// The sequence number embedded in the envelope allows the receiver to generate
     /// the exact keystream used for encryption, regardless of message arrival order.
-    /// 
+    ///
     /// # Arguments
     /// * `envelope` - Encrypted envelope from encrypt_sequenced()
-    /// 
+    ///
     /// # Returns
     /// Decrypted plaintext, or error if:
     /// - Envelope is malformed
@@ -584,10 +610,14 @@ impl WasifVernam {
         // Minimum envelope size: 8 + 4 + 1 + 12 + 16 = 41 bytes
         const MIN_ENVELOPE_SIZE: usize = 8 + 4 + 1 + 12 + 16;
         if envelope.len() < MIN_ENVELOPE_SIZE {
-            error!("🚨 Envelope too small: {} bytes (min: {})", envelope.len(), MIN_ENVELOPE_SIZE);
+            error!(
+                "🚨 Envelope too small: {} bytes (min: {})",
+                envelope.len(),
+                MIN_ENVELOPE_SIZE
+            );
             return Err(AeadError);
         }
-        
+
         // Require sequenced buffer to be enabled
         let seq_buffer = match &self.sequenced_buffer {
             Some(buf) => buf.clone(),
@@ -596,20 +626,20 @@ impl WasifVernam {
                 return Err(AeadError);
             }
         };
-        
+
         // Parse envelope header
         let sequence = u64::from_be_bytes(envelope[0..8].try_into().unwrap());
         let length = u32::from_be_bytes(envelope[8..12].try_into().unwrap()) as usize;
         let mode = envelope[12];
         let nonce_bytes: [u8; 12] = envelope[13..25].try_into().unwrap();
         let ciphertext = &envelope[25..];
-        
+
         // Validate mode
         if mode != 0x01 {
             error!("🚨 Invalid mode byte: {} (expected 0x01)", mode);
             return Err(AeadError);
         }
-        
+
         // Consume keystream for this sequence (validates sequence and provides replay protection)
         let keystream = match seq_buffer.consume_for_sequence_sync(sequence, length) {
             Some(ks) => ks,
@@ -618,35 +648,42 @@ impl WasifVernam {
                 return Err(AeadError);
             }
         };
-        
+
         // ChaCha20-Poly1305 authenticated decryption
         let nonce = Nonce::from_slice(&nonce_bytes);
         let mut plaintext = Zeroizing::new(self.cipher.decrypt(nonce, ciphertext)?);
-        
+
         // Reverse XOR layer
         for (i, byte) in plaintext.iter_mut().enumerate() {
             *byte ^= keystream[i];
         }
-        
-        debug!("🔓 Decrypted {} bytes from seq {} (sequenced mode)", length, sequence);
+
+        debug!(
+            "🔓 Decrypted {} bytes from seq {} (sequenced mode)",
+            length, sequence
+        );
         Ok((*plaintext).clone())
     }
-    
+
     /// Get the current send sequence number (for debugging/monitoring)
     pub fn current_send_sequence(&self) -> Option<u64> {
-        self.sequenced_buffer.as_ref().map(|b| b.current_send_sequence())
+        self.sequenced_buffer
+            .as_ref()
+            .map(|b| b.current_send_sequence())
     }
-    
+
     /// Get the highest received sequence number (for debugging/monitoring)
     pub fn highest_recv_sequence(&self) -> Option<u64> {
-        self.sequenced_buffer.as_ref().map(|b| b.highest_recv_sequence())
+        self.sequenced_buffer
+            .as_ref()
+            .map(|b| b.highest_recv_sequence())
     }
 
     /// Encrypt data using high-entropy XOR mode with embedded XOR key
-    /// 
+    ///
     /// ⚠️ LEGACY: This method uses the synchronized buffer which is vulnerable to desync.
     /// Use `encrypt_sequenced()` for desync-resistant encryption.
-    /// 
+    ///
     /// 256-BIT POST-QUANTUM COMPUTATIONAL SECURITY:
     /// - All messages encrypted with high-entropy XOR + ChaCha20-Poly1305
     /// - Key exchange over network limits security to computational (not information-theoretic)
@@ -654,7 +691,7 @@ impl WasifVernam {
     pub fn encrypt_true_vernam(&mut self, data: &[u8]) -> Result<Vec<u8>, AeadError> {
         let mut nonce_bytes = [0u8; 12];
         let counter = self.nonce_counter.fetch_add(1, Ordering::SeqCst);
-        
+
         // Check for nonce wraparound - this would cause nonce reuse
         // Note: counter is the value BEFORE the increment, so 0 is valid for the first call
         if counter == u64::MAX {
@@ -662,7 +699,7 @@ impl WasifVernam {
             error!("🚨 CRITICAL: Nonce counter wrapped around - nonce reuse imminent!");
             return Err(AeadError);
         }
-        
+
         nonce_bytes[4..12].copy_from_slice(&counter.to_be_bytes());
 
         let mut mixed_data = Zeroizing::new(data.to_vec());
@@ -673,13 +710,13 @@ impl WasifVernam {
         // TRUE OTP requires pre-synchronized entropy between parties.
         // This implementation provides 256-bit post-quantum computational security + XOR obfuscation.
         let computational_threshold = 32; // XOR of 32-byte sources = 32 bytes output
-        
+
         if data.len() <= computational_threshold {
             // 256-bit post-quantum computational: Use synchronized Vernam buffer (no key transmission!)
             if let Some(ref sync_buffer) = self.synchronized_buffer {
                 // Generate identical keystream on both parties from shared seed
                 let keystream = sync_buffer.consume_sync(data.len());
-                
+
                 // XOR with synchronized keystream (256-bit post-quantum computationally secure)
                 for (i, byte) in mixed_data.iter_mut().enumerate() {
                     *byte ^= keystream[i];
@@ -687,48 +724,61 @@ impl WasifVernam {
                 }
                 mode_byte = 0x01; // 0x01 = High-entropy XOR mode (256-bit post-quantum computational)
                 debug!("🔐 High-entropy XOR: Generated {} synchronized bytes (256-bit post-quantum computationally secure)", data.len());
-                
             } else if let Some(ref buffer_arc) = self.true_vernam_buffer {
                 // Fallback to old TrueVernamBuffer if synchronized not available
                 match buffer_arc.try_lock() {
                     Ok(mut buffer) => {
                         match buffer.consume(data.len()) {
-                        Ok(keystream) => {
-                            // XOR with TRUE random data (256-bit post-quantum computationally secure)
-                            for (i, byte) in mixed_data.iter_mut().enumerate() {
-                                *byte ^= keystream[i];
-                                xor_key[i] = keystream[i];
-                            }
-                            mode_byte = 0x01; // 0x01 = True Vernam mode (256-bit post-quantum computational)
-                            debug!("🔐 256-bit post-quantum computational: Used {} TRUE random bytes for encryption (256-bit post-quantum computationally secure)", data.len());
-                        },
-                        Err(_) => {
-                            // Buffer empty/error - fallback to HKDF mode
-                            warn!("⚠️ True Vernam buffer unavailable! Falling back to HKDF mode");
-                            if self.has_swarm_entropy {
-                                let offset = self.key_offset.fetch_add(data.len() as u64, Ordering::SeqCst);
-                                let keystream = self.generate_keystream(offset, data.len());
-                                if keystream.len() != data.len() {
-                                    warn!("⚠️ HKDF keystream generation failed for {} bytes", data.len());
-                                    return Err(AeadError);
-                                }
+                            Ok(keystream) => {
+                                // XOR with TRUE random data (256-bit post-quantum computationally secure)
                                 for (i, byte) in mixed_data.iter_mut().enumerate() {
                                     *byte ^= keystream[i];
                                     xor_key[i] = keystream[i];
                                 }
-                                mode_byte = 0x02; // 0x02 = HKDF fallback mode (computational)
+                                mode_byte = 0x01; // 0x01 = True Vernam mode (256-bit post-quantum computational)
+                                debug!("🔐 256-bit post-quantum computational: Used {} TRUE random bytes for encryption (256-bit post-quantum computationally secure)", data.len());
+                            }
+                            Err(_) => {
+                                // Buffer empty/error - fallback to HKDF mode
+                                warn!(
+                                    "⚠️ True Vernam buffer unavailable! Falling back to HKDF mode"
+                                );
+                                if self.has_swarm_entropy {
+                                    let offset = self
+                                        .key_offset
+                                        .fetch_add(data.len() as u64, Ordering::SeqCst);
+                                    let keystream = self.generate_keystream(offset, data.len());
+                                    if keystream.len() != data.len() {
+                                        warn!(
+                                            "⚠️ HKDF keystream generation failed for {} bytes",
+                                            data.len()
+                                        );
+                                        return Err(AeadError);
+                                    }
+                                    for (i, byte) in mixed_data.iter_mut().enumerate() {
+                                        *byte ^= keystream[i];
+                                        xor_key[i] = keystream[i];
+                                    }
+                                    mode_byte = 0x02; // 0x02 = HKDF fallback mode (computational)
+                                }
                             }
                         }
                     }
-                    }
                     Err(_) => {
                         // Failed to acquire lock - log and fallback to HKDF mode
-                        warn!("⚠️ Failed to acquire TrueVernamBuffer lock! Falling back to HKDF mode");
+                        warn!(
+                            "⚠️ Failed to acquire TrueVernamBuffer lock! Falling back to HKDF mode"
+                        );
                         if self.has_swarm_entropy {
-                            let offset = self.key_offset.fetch_add(data.len() as u64, Ordering::SeqCst);
+                            let offset = self
+                                .key_offset
+                                .fetch_add(data.len() as u64, Ordering::SeqCst);
                             let keystream = self.generate_keystream(offset, data.len());
                             if keystream.len() != data.len() {
-                                warn!("⚠️ HKDF keystream generation failed for {} bytes", data.len());
+                                warn!(
+                                    "⚠️ HKDF keystream generation failed for {} bytes",
+                                    data.len()
+                                );
                                 return Err(AeadError);
                             }
                             for (i, byte) in mixed_data.iter_mut().enumerate() {
@@ -741,10 +791,15 @@ impl WasifVernam {
                 }
             } else if self.has_swarm_entropy {
                 // No synchronized buffer, use HKDF mode
-                let offset = self.key_offset.fetch_add(data.len() as u64, Ordering::SeqCst);
+                let offset = self
+                    .key_offset
+                    .fetch_add(data.len() as u64, Ordering::SeqCst);
                 let keystream = self.generate_keystream(offset, data.len());
                 if keystream.len() != data.len() {
-                    warn!("⚠️ HKDF keystream generation failed for {} bytes", data.len());
+                    warn!(
+                        "⚠️ HKDF keystream generation failed for {} bytes",
+                        data.len()
+                    );
                     return Err(AeadError);
                 }
                 for (i, byte) in mixed_data.iter_mut().enumerate() {
@@ -756,10 +811,15 @@ impl WasifVernam {
         } else {
             // LARGER MESSAGES: Use HKDF expansion (computational security, 256-bit)
             if self.has_swarm_entropy {
-                let offset = self.key_offset.fetch_add(data.len() as u64, Ordering::SeqCst);
+                let offset = self
+                    .key_offset
+                    .fetch_add(data.len() as u64, Ordering::SeqCst);
                 let keystream = self.generate_keystream(offset, data.len());
                 if keystream.len() != data.len() {
-                    warn!("⚠️ HKDF keystream generation failed for {} bytes", data.len());
+                    warn!(
+                        "⚠️ HKDF keystream generation failed for {} bytes",
+                        data.len()
+                    );
                     return Err(AeadError);
                 }
                 for (i, byte) in mixed_data.iter_mut().enumerate() {
@@ -767,7 +827,10 @@ impl WasifVernam {
                     xor_key[i] = keystream[i];
                 }
                 mode_byte = 0x02; // 0x02 = HKDF mode (computational)
-                debug!("🔐 COMPUTATIONAL: Used HKDF for {} bytes (256-bit security)", data.len());
+                debug!(
+                    "🔐 COMPUTATIONAL: Used HKDF for {} bytes (256-bit security)",
+                    data.len()
+                );
             }
         }
 
@@ -793,7 +856,7 @@ impl WasifVernam {
 
         let nonce = Nonce::from_slice(&data[0..12]);
         let mode = data[12];
-        
+
         // CRITICAL: For true OTP, never extract XOR key from ciphertext - use synchronized entropy!
         let ciphertext = &data[13..];
 
@@ -807,7 +870,7 @@ impl WasifVernam {
                 if let Some(ref sync_buffer) = self.synchronized_buffer {
                     // Generate identical keystream on both parties from shared seed
                     let keystream = sync_buffer.consume_sync(payload.len());
-                    
+
                     // XOR with synchronized keystream (256-bit post-quantum computationally secure)
                     let mut result = payload.clone();
                     for (i, byte) in result.iter_mut().enumerate() {
@@ -815,7 +878,6 @@ impl WasifVernam {
                     }
                     debug!("🔐 TRUE OTP: Generated {} synchronized bytes for decryption (256-bit post-quantum computationally secure)", payload.len());
                     result.to_vec()
-                    
                 } else if let Some(ref buffer_arc) = self.true_vernam_buffer {
                     // Fallback to old TrueVernamBuffer if synchronized not available
                     if let Ok(mut buffer) = buffer_arc.try_lock() {
@@ -825,7 +887,9 @@ impl WasifVernam {
                                 for (i, byte) in result.iter_mut().enumerate() {
                                     *byte ^= xor_key[i];
                                 }
-                                debug!("🔐 Decrypted with TRUE Vernam mode using synchronized entropy");
+                                debug!(
+                                    "🔐 Decrypted with TRUE Vernam mode using synchronized entropy"
+                                );
                                 result.to_vec()
                             }
                             Err(_) => {
@@ -857,16 +921,16 @@ impl WasifVernam {
     }
 
     /// Encrypt data using Hybrid TRUE OTP (any file size, 256-bit post-quantum computational security)
-    /// 
+    ///
     /// # Security Model
     /// - DEK wrapped with TRUE OTP (256-bit post-quantum computational)
     /// - Content encrypted with ChaCha20-Poly1305(DEK) (computational)
     /// - Overall security: 256-bit post-quantum computational (breaking ChaCha20 requires breaking OTP first)
-    /// 
+    ///
     /// # Arguments
     /// * `data` - Data to encrypt (any size)
     /// * `sync_entropy` - 32-byte synchronized entropy from Entropy Grid
-    /// 
+    ///
     /// # Returns
     /// Encrypted envelope containing wrapped DEK + ciphertext
     pub async fn encrypt_hybrid_otp_with_entropy(
@@ -877,24 +941,22 @@ impl WasifVernam {
         use crate::hybrid_computational::wrap_dek_true_otp;
         use crate::true_entropy::TrueEntropy;
         use chacha20poly1305::aead::Aead;
-        
+
         // 1. Generate TRUE random DEK (32 bytes)
         let entropy = TrueEntropy::global();
         let dek = entropy.get_entropy_32_sync();
-        
+
         // 2. Wrap DEK with TRUE OTP (256-bit post-quantum computational)
         let wrapped_dek = wrap_dek_true_otp(&dek, sync_entropy);
-        
+
         // 3. Encrypt content with ChaCha20-Poly1305(DEK)
-        let cipher = ChaCha20Poly1305::new_from_slice(&*dek)
-            .map_err(|_| AeadError)?;
-        
+        let cipher = ChaCha20Poly1305::new_from_slice(&*dek).map_err(|_| AeadError)?;
+
         let nonce_bytes: [u8; 12] = rand::random();
         let nonce = Nonce::from_slice(&nonce_bytes);
-        
-        let ciphertext = cipher.encrypt(nonce, data)
-            .map_err(|_| AeadError)?;
-        
+
+        let ciphertext = cipher.encrypt(nonce, data).map_err(|_| AeadError)?;
+
         // 4. Build envelope: [Version:1][Mode:1][WrappedDEK:32][Nonce:12][Ciphertext]
         let mut envelope = Vec::with_capacity(1 + 1 + 32 + 12 + ciphertext.len());
         envelope.push(0x01); // Version
@@ -902,17 +964,20 @@ impl WasifVernam {
         envelope.extend_from_slice(&wrapped_dek);
         envelope.extend_from_slice(&nonce_bytes);
         envelope.extend_from_slice(&ciphertext);
-        
-        info!("🔐 Hybrid OTP encrypted {} bytes (256-bit post-quantum computational security)", data.len());
+
+        info!(
+            "🔐 Hybrid OTP encrypted {} bytes (256-bit post-quantum computational security)",
+            data.len()
+        );
         Ok(envelope)
     }
 
     /// Decrypt data encrypted with Hybrid TRUE OTP
-    /// 
+    ///
     /// # Arguments
     /// * `envelope` - Encrypted envelope from encrypt_hybrid_otp
     /// * `sync_entropy` - Same 32-byte synchronized entropy used for encryption
-    /// 
+    ///
     /// # Returns
     /// Decrypted plaintext
     pub fn decrypt_hybrid_otp_with_entropy(
@@ -922,39 +987,35 @@ impl WasifVernam {
     ) -> Result<Vec<u8>, AeadError> {
         use crate::hybrid_computational::unwrap_dek_true_otp;
         use chacha20poly1305::aead::Aead;
-        
+
         // Validate envelope structure
         if envelope.len() < 1 + 1 + 32 + 12 + 16 {
             warn!("⚠️ Invalid Hybrid OTP envelope: too short");
             return Err(AeadError);
         }
-        
+
         // Parse envelope
         let version = envelope[0];
         let mode = envelope[1];
-        
+
         if version != 0x01 || mode != 0x03 {
             warn!("⚠️ Invalid Hybrid OTP envelope: wrong version/mode");
             return Err(AeadError);
         }
-        
-        let wrapped_dek: [u8; 32] = envelope[2..34].try_into()
-            .map_err(|_| AeadError)?;
-        let nonce_bytes: [u8; 12] = envelope[34..46].try_into()
-            .map_err(|_| AeadError)?;
+
+        let wrapped_dek: [u8; 32] = envelope[2..34].try_into().map_err(|_| AeadError)?;
+        let nonce_bytes: [u8; 12] = envelope[34..46].try_into().map_err(|_| AeadError)?;
         let ciphertext = &envelope[46..];
-        
+
         // Unwrap DEK with synchronized OTP
         let dek = unwrap_dek_true_otp(&wrapped_dek, sync_entropy);
-        
+
         // Decrypt content with ChaCha20-Poly1305(DEK)
-        let cipher = ChaCha20Poly1305::new_from_slice(&*dek)
-            .map_err(|_| AeadError)?;
-        
+        let cipher = ChaCha20Poly1305::new_from_slice(&*dek).map_err(|_| AeadError)?;
+
         let nonce = Nonce::from_slice(&nonce_bytes);
-        let plaintext = cipher.decrypt(nonce, ciphertext)
-            .map_err(|_| AeadError)?;
-        
+        let plaintext = cipher.decrypt(nonce, ciphertext).map_err(|_| AeadError)?;
+
         info!("🔐 Hybrid OTP decrypted {} bytes", plaintext.len());
         Ok(plaintext)
     }
@@ -1065,21 +1126,21 @@ impl WasifVernam {
     }
 
     /// Encrypt data using Hybrid TRUE OTP (256-bit post-quantum computationally secure)
-    /// 
+    ///
     /// This method combines 256-bit post-quantum computational TRUE OTP with ChaCha20-Poly1305 for
     /// any file size, using the global TrueEntropy provider.
-    /// 
+    ///
     /// # Returns
     /// Returns a tuple of (envelope, otp_key). The OTP key MUST be stored
     /// separately and transmitted via secure OTP channel, never included
     /// in the same stream as the envelope.
     pub fn encrypt_hybrid_otp(&mut self, data: &[u8]) -> Result<(Vec<u8>, [u8; 32]), AeadError> {
         use crate::hybrid_computational::encrypt_hybrid_otp;
-        
+
         // Use TrueEntropy for now (EntropySwarm integration can be added later)
         let entropy = crate::true_entropy::TrueEntropy::global();
         let provider = entropy.as_entropy_provider();
-        
+
         match encrypt_hybrid_otp(data, &provider) {
             Ok((envelope, otp)) => Ok((envelope, otp)),
             Err(e) => {
@@ -1090,20 +1151,20 @@ impl WasifVernam {
     }
 
     /// Encrypt data using Hybrid high-entropy XOR with a custom entropy provider
-    /// 
+    ///
     /// This method allows using custom entropy sources (like EntropySwarm)
     /// while maintaining 256-bit post-quantum computational security.
-    /// 
+    ///
     /// # Returns
     /// Returns a tuple of (envelope, otp_key). The OTP key MUST be stored
     /// separately and transmitted via secure channel.
     pub fn encrypt_hybrid_otp_with_provider(
-        &mut self, 
-        data: &[u8], 
-        provider: &dyn crate::entropy_provider::EntropyProvider
+        &mut self,
+        data: &[u8],
+        provider: &dyn crate::entropy_provider::EntropyProvider,
     ) -> Result<(Vec<u8>, [u8; 32]), AeadError> {
         use crate::hybrid_computational::encrypt_hybrid_otp;
-        
+
         match encrypt_hybrid_otp(data, provider) {
             Ok((envelope, otp)) => Ok((envelope, otp)),
             Err(e) => {
@@ -1120,19 +1181,19 @@ impl Drop for WasifVernam {
         // Zeroize the nonce counter to prevent timing analysis
         self.nonce_counter.store(0, Ordering::SeqCst);
         self.key_offset.store(0, Ordering::SeqCst);
-        
+
         // Key chain state is already zeroized via Zeroizing wrapper on its internal fields
-        
+
         // Note: swarm_seed is already Zeroizing<[u8; 32]>, so it will auto-zeroize
         // Note: true_vernam_buffer contains TrueVernamBuffer which has its own Drop impl
         // Note: scrambler contains only permutation maps (not sensitive cryptographic material)
-        
+
         info!("🔒 WasifVernam cipher zeroized - all sensitive data cleared");
     }
 }
 
 /// Continuous Entropy Refresher: Periodically fetches fresh entropy and refreshes the cipher
-/// 
+///
 /// This is what makes ZKS a TRUE continuous entropy system:
 /// - Every 30 seconds (or after 1MB traffic), fetch fresh entropy from swarm/worker
 /// - Mix into existing seed using refresh_entropy()
@@ -1195,9 +1256,9 @@ pub type EntropyTaxPayer = ContinuousEntropyRefresher;
 #[cfg(test)]
 mod unbreakability_tests {
     use super::*;
-    use std::collections::HashSet;
     use crate::high_entropy_cipher::SynchronizedVernamBuffer;
-    
+    use std::collections::HashSet;
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TEST 1: SYNCHRONIZED KEYSTREAM GENERATION
     // Proves: Both parties generate identical keystreams from same seed
@@ -1208,21 +1269,27 @@ mod unbreakability_tests {
         let seed = [42u8; 32];
         let alice = SynchronizedVernamBuffer::new(seed);
         let bob = SynchronizedVernamBuffer::new(seed);
-        
+
         // Generate keystream from both parties
         let alice_key = alice.consume_sync(1024);
         let bob_key = bob.consume_sync(1024);
-        
+
         assert_eq!(alice_key.len(), 1024, "Alice keystream wrong length");
         assert_eq!(bob_key.len(), 1024, "Bob keystream wrong length");
-        assert_eq!(alice_key, bob_key, "CRITICAL: Keystreams MUST be identical!");
-        
+        assert_eq!(
+            alice_key, bob_key,
+            "CRITICAL: Keystreams MUST be identical!"
+        );
+
         // Verify position tracking works
         let alice_key2 = alice.consume_sync(512);
         let bob_key2 = bob.consume_sync(512);
-        assert_eq!(alice_key2, bob_key2, "Second keystream batch must also match");
+        assert_eq!(
+            alice_key2, bob_key2,
+            "Second keystream batch must also match"
+        );
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TEST 2: XOR INDEPENDENCE (SHANNON'S THEOREM)
     // Proves: If ANY entropy source is truly random, the XOR result is random
@@ -1232,27 +1299,36 @@ mod unbreakability_tests {
     fn test_xor_independence_shannons_theorem() {
         // Weak source 1: All zeros (completely compromised)
         let mlkem = [0u8; 32];
-        // Weak source 2: All ones (completely compromised)  
+        // Weak source 2: All ones (completely compromised)
         let peer = [0xFF; 32];
         // Strong source: True random
         let mut drand = [0u8; 32];
         getrandom::getrandom(&mut drand).expect("RNG failed");
-        
+
         let seed = WasifVernam::create_shared_seed(mlkem, drand, peer);
-        
+
         // Seed should NOT be all zeros or all ones
         assert_ne!(seed, [0u8; 32], "Seed must not be all zeros");
         assert_ne!(seed, [0xFF; 32], "Seed must not be all 0xFF");
-        
+
         // XOR with compromised sources should equal drand XOR'd with 0xFF
-        let expected: [u8; 32] = drand.iter().map(|b| b ^ 0xFF).collect::<Vec<_>>().try_into().unwrap();
+        let expected: [u8; 32] = drand
+            .iter()
+            .map(|b| b ^ 0xFF)
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
         assert_eq!(seed, expected, "XOR must follow Shannon's theorem");
-        
+
         // Verify randomness is preserved - expect at least 16 unique bytes in 32
         let unique_bytes: HashSet<u8> = seed.iter().cloned().collect();
-        assert!(unique_bytes.len() >= 16, "Seed lacks byte diversity: only {} unique bytes", unique_bytes.len());
+        assert!(
+            unique_bytes.len() >= 16,
+            "Seed lacks byte diversity: only {} unique bytes",
+            unique_bytes.len()
+        );
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TEST 3: ENTROPY QUALITY VALIDATION
     // Proves: Generated keystream passes basic randomness checks
@@ -1261,32 +1337,36 @@ mod unbreakability_tests {
     fn test_entropy_quality() {
         let mut entropy = [0u8; 32];
         getrandom::getrandom(&mut entropy).expect("RNG failed");
-        
+
         let buffer = SynchronizedVernamBuffer::new(entropy);
         // Use larger keystream for better statistical power
         let keystream = buffer.consume_sync(4096);
-        
+
         // Chi-square test: count byte frequencies
         let mut freq = [0u32; 256];
         for byte in keystream.iter() {
             freq[*byte as usize] += 1;
         }
-        
+
         // For uniform distribution: expected = 4096/256 = 16
         let expected = keystream.len() as f64 / 256.0;
-        let chi_square: f64 = freq.iter()
+        let chi_square: f64 = freq
+            .iter()
             .map(|&f| {
                 let diff = f as f64 - expected;
                 diff * diff / expected
             })
             .sum();
-        
+
         // For 255 degrees of freedom, p=0.05: chi-square should be < 293
         // Allow generous bounds for random variation (< 400)
-        assert!(chi_square < 400.0, 
-            "Chi-square {} too high - keystream may not be random", chi_square);
+        assert!(
+            chi_square < 400.0,
+            "Chi-square {} too high - keystream may not be random",
+            chi_square
+        );
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TEST 4: KEY NON-TRANSMISSION
     // Proves: The cipher key is NOT present in the ciphertext
@@ -1296,22 +1376,32 @@ mod unbreakability_tests {
         let key = [0x42u8; 32]; // Recognizable pattern
         let mut cipher = WasifVernam::new(key).expect("Failed to create cipher");
         cipher.derive_base_iv(&key, true); // Required for encryption
-        
+
         let plaintext = b"This is a secret message for testing";
         let ciphertext = cipher.encrypt(plaintext).expect("Encryption failed");
-        
+
         // Key bytes should NOT appear consecutively in ciphertext
         // With random data, expect ~4 matches (32/256). Alert if > 12 (statistically improbable)
         for window in ciphertext.windows(32) {
-            let matches = window.iter().zip(key.iter()).filter(|(a, b)| a == b).count();
-            assert!(matches < 12, "Key-like pattern detected in ciphertext! {} matches", matches);
+            let matches = window
+                .iter()
+                .zip(key.iter())
+                .filter(|(a, b)| a == b)
+                .count();
+            assert!(
+                matches < 12,
+                "Key-like pattern detected in ciphertext! {} matches",
+                matches
+            );
         }
-        
+
         // Plaintext should NOT appear in ciphertext
-        assert!(!ciphertext.windows(plaintext.len()).any(|w| w == plaintext),
-            "Plaintext leaked into ciphertext!");
+        assert!(
+            !ciphertext.windows(plaintext.len()).any(|w| w == plaintext),
+            "Plaintext leaked into ciphertext!"
+        );
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TEST 5: FORWARD SECRECY
     // Proves: Key rotation makes past keystream unreconstructable
@@ -1320,32 +1410,34 @@ mod unbreakability_tests {
     fn test_forward_secrecy_key_rotation() {
         let initial_key = [42u8; 32];
         let initial_seed = [1u8; 32];
-        
+
         let mut cipher = WasifVernam::new(initial_key).expect("Failed to create cipher");
         cipher.enable_key_chain(initial_seed, true);
         cipher.derive_base_iv(&initial_key, true); // Required for encryption
         cipher.refresh_entropy(&[99u8; 32]);
-        
+
         // Store initial offset
         let offset_before = cipher.get_key_offset();
-        
+
         // Encrypt many messages to trigger key rotation (every 1000 messages)
         for i in 0..1005 {
             let msg = format!("Message number {}", i);
             let _ = cipher.encrypt(msg.as_bytes()).expect("Encryption failed");
         }
-        
+
         let offset_after = cipher.get_key_offset();
-        
+
         // Offset should have advanced significantly
         assert!(offset_after > offset_before, "Key offset must advance");
-        
+
         // Key rotation resets nonce counter - verify it's reasonable
         // (Can't directly access nonce counter, but encrypt should work)
-        let test_msg = cipher.encrypt(b"test").expect("Post-rotation encrypt failed");
+        let test_msg = cipher
+            .encrypt(b"test")
+            .expect("Post-rotation encrypt failed");
         assert!(!test_msg.is_empty(), "Post-rotation encryption must work");
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TEST 6: NONCE UNIQUENESS
     // Proves: Each encryption uses a unique nonce (no reuse = no break)
@@ -1355,27 +1447,35 @@ mod unbreakability_tests {
         let key = [42u8; 32];
         let mut cipher = WasifVernam::new(key).expect("Failed to create cipher");
         cipher.derive_base_iv(&key, true); // Required for encryption
-        
+
         let mut seen_nonces: HashSet<[u8; 12]> = HashSet::new();
         let message = b"test message";
-        
+
         // Encrypt 10,000 messages and verify all nonces are unique
         for i in 0..10_000 {
             let ciphertext = cipher.encrypt(message).expect("Encryption failed");
-            
+
             // First 12 bytes are the nonce
-            let nonce: [u8; 12] = ciphertext.get(..12)
+            let nonce: [u8; 12] = ciphertext
+                .get(..12)
                 .expect("Ciphertext too short for nonce")
                 .try_into()
                 .expect("Nonce conversion failed");
-            
-            assert!(seen_nonces.insert(nonce), 
-                "CRITICAL SECURITY FAILURE: Nonce reused at message {}!", i);
+
+            assert!(
+                seen_nonces.insert(nonce),
+                "CRITICAL SECURITY FAILURE: Nonce reused at message {}!",
+                i
+            );
         }
-        
-        assert_eq!(seen_nonces.len(), 10_000, "All 10,000 nonces must be unique");
+
+        assert_eq!(
+            seen_nonces.len(),
+            10_000,
+            "All 10,000 nonces must be unique"
+        );
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TEST 7: ENCRYPT/DECRYPT ROUND-TRIP
     // Proves: Decryption correctly reverses encryption
@@ -1383,34 +1483,38 @@ mod unbreakability_tests {
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
         let key = [42u8; 32];
-        
+
         let plaintexts = vec![
             b"Hello, World!".to_vec(),
-            b"".to_vec(), // Empty message
-            vec![0u8; 1], // Single byte
-            vec![0xFF; 1000], // 1KB of 0xFF
+            b"".to_vec(),                   // Empty message
+            vec![0u8; 1],                   // Single byte
+            vec![0xFF; 1000],               // 1KB of 0xFF
             (0..=255).collect::<Vec<u8>>(), // All byte values
         ];
-        
+
         for plaintext in plaintexts {
             // Use separate sender/receiver cipher instances with SAME base_iv
             // In real protocol, both parties derive the same base_iv from handshake
             let mut sender = WasifVernam::new(key).expect("Failed to create sender cipher");
             sender.derive_base_iv(&key, true); // Sender derives base_iv
-            
+
             // Receiver uses sender's base_iv (via set_base_iv) for decryption
             // This simulates proper protocol where receiver knows sender's IV
             let mut receiver = WasifVernam::new(key).expect("Failed to create receiver cipher");
             receiver.derive_base_iv(&key, true); // SAME as sender for this test
-            
+
             let ciphertext = sender.encrypt(&plaintext).expect("Encryption failed");
             let decrypted = receiver.decrypt(&ciphertext).expect("Decryption failed");
-            
-            assert_eq!(decrypted, plaintext, 
-                "Round-trip failed for message of length {}", plaintext.len());
+
+            assert_eq!(
+                decrypted,
+                plaintext,
+                "Round-trip failed for message of length {}",
+                plaintext.len()
+            );
         }
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TEST 8: CIPHERTEXT INDISTINGUISHABILITY
     // Proves: Same plaintext produces different ciphertext each time
@@ -1418,36 +1522,36 @@ mod unbreakability_tests {
     #[test]
     fn test_ciphertext_indistinguishable() {
         let key = [42u8; 32];
-        
+
         // Use separate sender/receiver cipher instances with SAME base_iv
         // Receiver needs sender's base_iv to properly validate anti-replay
         let mut sender = WasifVernam::new(key).expect("Failed to create sender cipher");
         sender.derive_base_iv(&key, true); // Sender is initiator
-        
+
         let mut receiver = WasifVernam::new(key).expect("Failed to create receiver cipher");
         receiver.derive_base_iv(&key, true); // SAME as sender for proper anti-replay
-        
+
         let plaintext = b"Same message encrypted multiple times";
-        
+
         let ct1 = sender.encrypt(plaintext).expect("Encrypt 1 failed");
         let ct2 = sender.encrypt(plaintext).expect("Encrypt 2 failed");
         let ct3 = sender.encrypt(plaintext).expect("Encrypt 3 failed");
-        
+
         // All ciphertexts must be different (due to unique nonces)
         assert_ne!(ct1, ct2, "Ciphertexts 1 and 2 must differ");
         assert_ne!(ct2, ct3, "Ciphertexts 2 and 3 must differ");
         assert_ne!(ct1, ct3, "Ciphertexts 1 and 3 must differ");
-        
+
         // But all must decrypt to same plaintext (receiver decrypts)
         let dec1 = receiver.decrypt(&ct1).expect("Decrypt 1 failed");
         let dec2 = receiver.decrypt(&ct2).expect("Decrypt 2 failed");
         let dec3 = receiver.decrypt(&ct3).expect("Decrypt 3 failed");
-        
+
         assert_eq!(dec1, plaintext.to_vec());
         assert_eq!(dec2, plaintext.to_vec());
         assert_eq!(dec3, plaintext.to_vec());
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TEST 9: SYNCHRONIZED VERNAM KEYSTREAM
     // Proves: Synchronized buffer produces deterministic keystream for OTP
@@ -1455,35 +1559,41 @@ mod unbreakability_tests {
     #[test]
     fn test_synchronized_vernam_keystream() {
         let shared_seed = [0xAB; 32];
-        
+
         // Create two synchronized buffers (simulating Alice and Bob)
         let alice_buffer = SynchronizedVernamBuffer::new(shared_seed);
         let bob_buffer = SynchronizedVernamBuffer::new(shared_seed);
-        
+
         // Both should generate identical keystreams for OTP
         let plaintext = b"Information-theoretically secure message";
-        
+
         let alice_keystream = alice_buffer.consume_sync(plaintext.len());
         let bob_keystream = bob_buffer.consume_sync(plaintext.len());
-        
+
         // Keystreams must be identical - this is the core of OTP
         assert_eq!(alice_keystream, bob_keystream, "OTP keystreams must match");
-        
+
         // XOR with keystream produces ciphertext
-        let ciphertext: Vec<u8> = plaintext.iter()
+        let ciphertext: Vec<u8> = plaintext
+            .iter()
             .zip(alice_keystream.iter())
             .map(|(p, k)| p ^ k)
             .collect();
-        
+
         // XOR again recovers plaintext (OTP property)
-        let recovered: Vec<u8> = ciphertext.iter()
+        let recovered: Vec<u8> = ciphertext
+            .iter()
             .zip(bob_keystream.iter())
             .map(|(c, k)| c ^ k)
             .collect();
-        
-        assert_eq!(recovered, plaintext.to_vec(), "OTP must be reversible with same keystream");
+
+        assert_eq!(
+            recovered,
+            plaintext.to_vec(),
+            "OTP must be reversible with same keystream"
+        );
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TEST 10: SHARED SEED DETERMINISM
     // Proves: create_shared_seed is deterministic given same inputs
@@ -1493,17 +1603,17 @@ mod unbreakability_tests {
         let mlkem = [1u8; 32];
         let drand = [2u8; 32];
         let peer = [3u8; 32];
-        
+
         let seed1 = WasifVernam::create_shared_seed(mlkem, drand, peer);
         let seed2 = WasifVernam::create_shared_seed(mlkem, drand, peer);
-        
+
         assert_eq!(seed1, seed2, "Shared seed must be deterministic");
-        
+
         // Verify XOR is correct: 1 ^ 2 ^ 3 = 0
         let expected: [u8; 32] = [1 ^ 2 ^ 3; 32];
         assert_eq!(seed1, expected, "XOR computation must be correct");
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TEST 11: RANDOM SEED VARIATION
     // Proves: Synchronization works with any random seed, not just test values
@@ -1514,18 +1624,21 @@ mod unbreakability_tests {
         for iteration in 0..10 {
             let mut seed = [0u8; 32];
             getrandom::getrandom(&mut seed).expect("RNG failed");
-            
+
             let alice = SynchronizedVernamBuffer::new(seed);
             let bob = SynchronizedVernamBuffer::new(seed);
-            
+
             let alice_key = alice.consume_sync(1024);
             let bob_key = bob.consume_sync(1024);
-            
-            assert_eq!(alice_key, bob_key, 
-                "Keystream mismatch on iteration {} with random seed", iteration);
+
+            assert_eq!(
+                alice_key, bob_key,
+                "Keystream mismatch on iteration {} with random seed",
+                iteration
+            );
         }
     }
-    
+
     // ═══════════════════════════════════════════════════════════════════════════
     // TEST 12: ENTROPY STATE ISOLATION
     // Proves: Encrypt/decrypt within same entropy epoch works correctly
@@ -1534,45 +1647,53 @@ mod unbreakability_tests {
     #[test]
     fn test_entropy_epoch_isolation() {
         let key = [42u8; 32];
-        
+
         // EPOCH 1: Before any entropy changes
         {
             // Use separate sender/receiver cipher instances with SAME base_iv
             // Receiver needs sender's base_iv to properly validate anti-replay
             let mut sender = WasifVernam::new(key).expect("Failed to create sender cipher");
             sender.derive_base_iv(&key, true); // Sender is initiator
-            
+
             let mut receiver = WasifVernam::new(key).expect("Failed to create receiver cipher");
             receiver.derive_base_iv(&key, true); // SAME as sender for proper anti-replay
-            
+
             let ct = sender.encrypt(b"epoch1 message").expect("Encrypt failed");
             let dec = receiver.decrypt(&ct).expect("Decrypt failed");
             assert_eq!(dec, b"epoch1 message".to_vec(), "Epoch 1 round-trip failed");
         }
-        
+
         // EPOCH 2: Fresh cipher with entropy injected
         {
             let mut cipher = WasifVernam::new(key).expect("Failed to create cipher");
             cipher.derive_base_iv(&key, true); // Required for encryption
             cipher.refresh_entropy(&[99u8; 32]);
-            
+
             let ct = cipher.encrypt(b"epoch2 message").expect("Encrypt failed");
             // Note: decrypt after refresh will also use the XOR layer
             // so within the same epoch, it should work
             // (Both encrypt and decrypt use has_swarm_entropy=true)
-            
+
             // Verify ciphertext is produced
             assert!(!ct.is_empty(), "Epoch 2 must produce ciphertext");
-            
+
             // Verify ciphertext differs from a cipher without entropy
             let mut plain_cipher = WasifVernam::new(key).expect("Failed");
             plain_cipher.derive_base_iv(&key, true); // Required for encryption
-            let _plain_ct = plain_cipher.encrypt(b"epoch2 message").expect("Encrypt failed");
-            
+            let _plain_ct = plain_cipher
+                .encrypt(b"epoch2 message")
+                .expect("Encrypt failed");
+
             // Ciphertexts are different due to unique nonces (not entropy)
             // but the entropy state is different internally
-            assert!(cipher.has_swarm_entropy(), "Cipher should have swarm entropy");
-            assert!(!plain_cipher.has_swarm_entropy(), "Plain cipher should not have swarm entropy");
+            assert!(
+                cipher.has_swarm_entropy(),
+                "Cipher should have swarm entropy"
+            );
+            assert!(
+                !plain_cipher.has_swarm_entropy(),
+                "Plain cipher should not have swarm entropy"
+            );
         }
     }
 }
@@ -1585,51 +1706,60 @@ mod unbreakability_tests {
 #[cfg(test)]
 mod post_quantum_tests {
     use super::*;
-    
+
     // Test that large messages are handled correctly
     #[test]
     fn test_large_message_encryption() {
         let key = [42u8; 32];
         let mut cipher = WasifVernam::new(key).expect("Failed to create cipher");
         cipher.derive_base_iv(&key, true); // Required for encryption
-        
+
         // Test with 1MB message
         let large_plaintext = vec![0xAB; 1024 * 1024];
-        let ciphertext = cipher.encrypt(&large_plaintext).expect("Large encryption failed");
-        let decrypted = cipher.decrypt(&ciphertext).expect("Large decryption failed");
-        
-        assert_eq!(decrypted, large_plaintext, "Large message round-trip failed");
+        let ciphertext = cipher
+            .encrypt(&large_plaintext)
+            .expect("Large encryption failed");
+        let decrypted = cipher
+            .decrypt(&ciphertext)
+            .expect("Large decryption failed");
+
+        assert_eq!(
+            decrypted, large_plaintext,
+            "Large message round-trip failed"
+        );
     }
-    
+
     // Test entropy injection doesn't break cipher
     #[test]
     fn test_entropy_injection_safe() {
         let key = [42u8; 32];
         let mut cipher = WasifVernam::new(key).expect("Failed to create cipher");
         cipher.derive_base_iv(&key, true); // Required for encryption
-        
+
         // Encrypt before entropy
         let ct1 = cipher.encrypt(b"before").expect("Encrypt before failed");
-        
+
         // Pre-entropy decryption should work
         let dec1 = cipher.decrypt(&ct1).expect("Decrypt 1 failed");
         assert_eq!(dec1, b"before".to_vec());
-        
+
         // Inject various entropy patterns - should not crash
         cipher.refresh_entropy(&[0u8; 32]); // Zeros
         cipher.refresh_entropy(&[0xFF; 32]); // Ones
         let mut random = [0u8; 32];
         getrandom::getrandom(&mut random).unwrap();
         cipher.refresh_entropy(&random);
-        
+
         // Encrypt after entropy - should still work (though decryption requires sync)
         let ct2 = cipher.encrypt(b"after").expect("Encrypt after failed");
-        
+
         // Ciphertext should be produced
-        assert!(!ct2.is_empty(), "Post-entropy encryption must produce ciphertext");
-        
+        assert!(
+            !ct2.is_empty(),
+            "Post-entropy encryption must produce ciphertext"
+        );
+
         // Note: Decryption after entropy refresh requires synchronized state
         // between sender and receiver - this is by design for forward secrecy
     }
 }
-

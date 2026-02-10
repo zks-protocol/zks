@@ -1,18 +1,18 @@
 //! 3-Message handshake implementation for ZK Protocol
-//! 
+//!
 //! Implements a post-quantum secure 3-message handshake:
 //! 1. Initiator -> Responder: HandshakeInit (contains ephemeral public key)
 //! 2. Responder -> Initiator: HandshakeResponse (contains ephemeral public key + signature)
 //! 3. Initiator -> Responder: HandshakeFinish (contains confirmation)
 
-use std::time::{SystemTime, UNIX_EPOCH};
-use serde::{Serialize, Deserialize};
-use sha2::{Sha256, Digest};
-use subtle::ConstantTimeEq;
 use hkdf::Hkdf;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::time::{SystemTime, UNIX_EPOCH};
+use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, Zeroizing};
-use zks_pqcrypto::ml_kem::{MlKem, MlKemKeypair};
 use zks_pqcrypto::ml_dsa::{MlDsa, MlDsaKeypair, PUBLIC_KEY_SIZE as ML_DSA_PUBLIC_KEY_SIZE};
+use zks_pqcrypto::ml_kem::{MlKem, MlKemKeypair};
 
 use crate::{ProtoError, Result};
 
@@ -133,11 +133,11 @@ pub struct Handshake {
 
 impl Handshake {
     /// Create a new handshake as initiator
-    /// 
+    ///
     /// # Arguments
     /// * `room_id` - The room identifier for session context
     /// * `trusted_responder_public_key` - The trusted ML-DSA public key of the responder (must be 2592 bytes for ML-DSA-87)
-    /// 
+    ///
     /// # Security Note
     /// The `trusted_responder_public_key` must be obtained through a secure, out-of-band channel.
     /// This key is used to verify the responder's identity during the handshake.
@@ -150,7 +150,7 @@ impl Handshake {
                 trusted_responder_public_key.len()
             )));
         }
-        
+
         Ok(Self {
             role: HandshakeRole::Initiator,
             state: HandshakeState::Idle,
@@ -166,12 +166,12 @@ impl Handshake {
             trusted_responder_public_key: Some(trusted_responder_public_key),
         })
     }
-    
+
     /// Create a new handshake as responder
-    /// 
+    ///
     /// # Arguments
     /// * `room_id` - The room identifier for session context
-    /// 
+    ///
     /// # Security Note
     /// The responder will generate its own ML-DSA signing keypair for authentication.
     /// The initiator must have the responder's trusted public key through a secure channel.
@@ -191,55 +191,58 @@ impl Handshake {
             trusted_responder_public_key: None,
         }
     }
-    
+
     /// Get current role
     pub fn role(&self) -> HandshakeRole {
         self.role
     }
-    
+
     /// Get current state
     pub fn state(&self) -> HandshakeState {
         self.state
     }
-    
+
     /// Check if handshake is complete
     pub fn is_complete(&self) -> bool {
         self.state == HandshakeState::Complete
     }
-    
+
     /// Get shared secret after handshake completion
     /// Returns a copy of the shared secret (the original remains protected by Zeroizing)
     pub fn shared_secret(&self) -> Option<[u8; 32]> {
         self.shared_secret.as_ref().map(|s| **s)
     }
-    
+
     /// Set the ML-DSA signing keypair for the responder
-    /// 
+    ///
     /// # Security Note
     /// This keypair should be persistent and its public key must be known to
     /// initiators through a trusted channel. The public key is used by initiators
     /// to verify the responder's identity during the handshake.
     pub fn set_signing_keypair(&mut self, keypair: MlDsaKeypair) -> Result<()> {
         if self.role != HandshakeRole::Responder {
-            return Err(ProtoError::handshake("Only responder can set signing keypair"));
+            return Err(ProtoError::handshake(
+                "Only responder can set signing keypair",
+            ));
         }
         self.signing_keypair = Some(keypair);
         Ok(())
     }
-    
+
     /// Generate ephemeral key pair using ML-KEM
     fn generate_ephemeral_key(&mut self) -> Result<Vec<u8>> {
         // Generate ML-KEM keypair
-        let keypair = MlKem::generate_keypair()
-            .map_err(|e| ProtoError::handshake(&format!("Failed to generate ML-KEM keypair: {}", e)))?;
-        
+        let keypair = MlKem::generate_keypair().map_err(|e| {
+            ProtoError::handshake(&format!("Failed to generate ML-KEM keypair: {}", e))
+        })?;
+
         let public_key = keypair.public_key.clone();
         self.local_ephemeral_keypair = Some(keypair);
         Ok(public_key)
     }
-    
+
     /// Generate random nonce using high-entropy randomness (drand + OsRng)
-    /// 
+    ///
     /// # Security
     /// Uses TrueEntropy which combines drand beacon + local CSPRNG via XOR
     /// for 256-bit post-quantum computational security. Secure if ANY source is uncompromised.
@@ -247,11 +250,11 @@ impl Handshake {
         // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security
         use zks_crypt::true_entropy::get_sync_entropy_32;
         let entropy = get_sync_entropy_32();
-        let nonce = *entropy;  // Copy the 32 bytes
+        let nonce = *entropy; // Copy the 32 bytes
         self.local_nonce = Some(nonce);
         Ok(nonce)
     }
-    
+
     /// Get current timestamp
     fn current_timestamp(&self) -> u64 {
         SystemTime::now()
@@ -259,19 +262,19 @@ impl Handshake {
             .unwrap_or_default()
             .as_secs()
     }
-    
+
     /// Validate timestamp for replay protection
     fn validate_timestamp(&self, timestamp: u64) -> Result<()> {
         let current_time = self.current_timestamp();
         let time_diff = current_time.saturating_sub(timestamp);
-        
+
         if time_diff > MAX_TIMESTAMP_DIFF {
             return Err(ProtoError::handshake(&format!(
                 "Message timestamp too old: {} seconds ago (max allowed: {} seconds)",
                 time_diff, MAX_TIMESTAMP_DIFF
             )));
         }
-        
+
         // Also check for future timestamps (clock skew tolerance)
         if timestamp > current_time + 60 {
             return Err(ProtoError::handshake(&format!(
@@ -279,24 +282,28 @@ impl Handshake {
                 timestamp - current_time
             )));
         }
-        
+
         Ok(())
     }
-    
+
     /// Create handshake init message as initiator
     pub fn create_init(&mut self) -> Result<HandshakeInit> {
         if self.role != HandshakeRole::Initiator {
-            return Err(ProtoError::handshake("Only initiator can create init message"));
+            return Err(ProtoError::handshake(
+                "Only initiator can create init message",
+            ));
         }
-        
+
         if self.state != HandshakeState::Idle {
-            return Err(ProtoError::handshake("Invalid state for creating init message"));
+            return Err(ProtoError::handshake(
+                "Invalid state for creating init message",
+            ));
         }
-        
+
         let ephemeral_key = self.generate_ephemeral_key()?;
         let nonce = self.generate_nonce()?;
         let timestamp = self.current_timestamp();
-        
+
         let init = HandshakeInit {
             version: self.version,
             room_id: self.room_id.clone(),
@@ -304,56 +311,64 @@ impl Handshake {
             timestamp,
             nonce,
         };
-        
+
         self.state = HandshakeState::InitSent;
         Ok(init)
     }
-    
+
     /// Process handshake init message as responder
     pub fn process_init(&mut self, init: &HandshakeInit) -> Result<()> {
         if self.role != HandshakeRole::Responder {
-            return Err(ProtoError::handshake("Only responder can process init message"));
+            return Err(ProtoError::handshake(
+                "Only responder can process init message",
+            ));
         }
-        
+
         if self.state != HandshakeState::Idle {
-            return Err(ProtoError::handshake("Invalid state for processing init message"));
+            return Err(ProtoError::handshake(
+                "Invalid state for processing init message",
+            ));
         }
-        
+
         // Validate version
         if init.version != self.version {
             return Err(ProtoError::handshake("Version mismatch"));
         }
-        
+
         // Validate room_id
         if init.room_id != self.room_id {
             return Err(ProtoError::handshake("Room ID mismatch"));
         }
-        
+
         // SECURITY: Validate timestamp for replay protection (symmetric with response validation)
         self.validate_timestamp(init.timestamp)?;
-        
+
         // Store remote ephemeral key and nonce
         self.remote_ephemeral_public_key = Some(init.ephemeral_key.clone());
         self.remote_nonce = Some(init.nonce);
-        
+
         self.state = HandshakeState::InitSent;
         Ok(())
     }
-    
+
     /// Create handshake response message as responder
     pub fn create_response(&mut self) -> Result<HandshakeResponse> {
         if self.role != HandshakeRole::Responder {
-            return Err(ProtoError::handshake("Only responder can create response message"));
+            return Err(ProtoError::handshake(
+                "Only responder can create response message",
+            ));
         }
-        
+
         if self.state != HandshakeState::InitSent {
-            return Err(ProtoError::handshake("Invalid state for creating response message"));
+            return Err(ProtoError::handshake(
+                "Invalid state for creating response message",
+            ));
         }
-        
+
         let ephemeral_key = self.generate_ephemeral_key()?;
         let nonce = self.generate_nonce()?;
         let timestamp = self.current_timestamp();
-        
+
         // Generate ML-KEM ciphertext by encrypting to the initiator's public key
         let encapsulation = if let Some(remote_public_key) = &self.remote_ephemeral_public_key {
             MlKem::encapsulate(remote_public_key)
@@ -361,24 +376,27 @@ impl Handshake {
         } else {
             return Err(ProtoError::handshake("No remote ephemeral key available"));
         };
-        
+
         // Store the ciphertext and shared secret for later use
         let ciphertext = encapsulation.ciphertext.clone();
         self.ciphertext = Some(ciphertext.clone());
-        
+
         // Store the shared secret from encapsulation (wrapped in Zeroizing for secure cleanup)
         if encapsulation.shared_secret.len() == 32 {
             let mut secret_array = [0u8; 32];
             secret_array.copy_from_slice(&encapsulation.shared_secret);
             self.shared_secret = Some(Zeroizing::new(secret_array));
         } else {
-            return Err(ProtoError::handshake("Invalid shared secret length from encapsulation"));
+            return Err(ProtoError::handshake(
+                "Invalid shared secret length from encapsulation",
+            ));
         }
-        
+
         // Use persistent signing keypair (must be set before creating response)
-        let signing_keypair = self.signing_keypair.as_ref()
-            .ok_or_else(|| ProtoError::handshake("No signing keypair set. Call set_signing_keypair() first."))?;
-        
+        let signing_keypair = self.signing_keypair.as_ref().ok_or_else(|| {
+            ProtoError::handshake("No signing keypair set. Call set_signing_keypair() first.")
+        })?;
+
         // SECURITY FIX M2: Compute full transcript hash for SIGMA-style binding
         // This prevents unknown key share attacks where Mallory forwards messages
         // between Alice and Bob while impersonating one party.
@@ -412,7 +430,7 @@ impl Handshake {
         // Include the room ID as context binding
         transcript_hasher.update(self.room_id.as_bytes());
         let transcript_hash = transcript_hasher.finalize();
-        
+
         // Create message to sign: transcript_hash + timestamp + ML-KEM shared secret commitment
         // SECURITY: Using transcript hash instead of individual fields prevents
         // attackers from substituting portions of the handshake
@@ -427,18 +445,18 @@ impl Handshake {
             ss_commitment.update(&ss[..]);
             message.extend_from_slice(&ss_commitment.finalize());
         }
-        
+
         // Sign the message
         let signature = MlDsa::sign(&message, signing_keypair.signing_key())
             .map_err(|e| ProtoError::handshake(&format!("Failed to sign response: {}", e)))?;
-        
+
         // Get the signing public key for inclusion in response
         let signing_public_key = signing_keypair.verifying_key().to_vec();
-        
+
         // Derive shared secret for responder (now we have all keys and nonces)
         let shared_secret = self.derive_shared_secret();
         self.shared_secret = Some(Zeroizing::new(shared_secret));
-        
+
         let response = HandshakeResponse {
             version: self.version,
             room_id: self.room_id.clone(),
@@ -449,45 +467,48 @@ impl Handshake {
             timestamp,
             nonce,
         };
-        
+
         self.state = HandshakeState::ResponseSent;
         Ok(response)
     }
-    
 
-    
     /// Process handshake response message as initiator
     pub fn process_response(&mut self, response: &HandshakeResponse) -> Result<()> {
         if self.role != HandshakeRole::Initiator {
-            return Err(ProtoError::handshake("Only initiator can process response message"));
+            return Err(ProtoError::handshake(
+                "Only initiator can process response message",
+            ));
         }
-        
+
         if self.state != HandshakeState::InitSent {
-            return Err(ProtoError::handshake("Invalid state for processing response message"));
+            return Err(ProtoError::handshake(
+                "Invalid state for processing response message",
+            ));
         }
-        
+
         // Validate version
         if response.version != self.version {
             return Err(ProtoError::handshake("Version mismatch"));
         }
-        
+
         // Validate room_id
         if response.room_id != self.room_id {
             return Err(ProtoError::handshake("Room ID mismatch"));
         }
-        
+
         // Validate timestamp for replay protection
         self.validate_timestamp(response.timestamp)?;
-        
+
         // Store remote ephemeral key and nonce
         self.remote_ephemeral_public_key = Some(response.ephemeral_key.clone());
         self.remote_nonce = Some(response.nonce);
-        
+
         // Decapsulate the ciphertext to get the shared secret
         if let Some(local_keypair) = &self.local_ephemeral_keypair {
-            let shared_secret = MlKem::decapsulate(&response.ciphertext, local_keypair.secret_key())
-                .map_err(|e| ProtoError::handshake(&format!("Failed to decapsulate: {}", e)))?;
-            
+            let shared_secret =
+                MlKem::decapsulate(&response.ciphertext, local_keypair.secret_key())
+                    .map_err(|e| ProtoError::handshake(&format!("Failed to decapsulate: {}", e)))?;
+
             // Convert Zeroizing<Vec<u8>> to Zeroizing<[u8; 32]>
             if shared_secret.len() == 32 {
                 let mut secret_array = [0u8; 32];
@@ -497,35 +518,44 @@ impl Handshake {
                 return Err(ProtoError::handshake("Invalid shared secret length"));
             }
         } else {
-            return Err(ProtoError::handshake("No local ephemeral keypair available"));
+            return Err(ProtoError::handshake(
+                "No local ephemeral keypair available",
+            ));
         }
-        
+
         // Verify signature using ML-DSA with trusted public key
         self.verify_response_signature(response)?;
-        
+
         self.state = HandshakeState::ResponseSent;
         Ok(())
     }
-    
+
     /// Verify response signature using ML-DSA with SIGMA-style transcript binding
     fn verify_response_signature(&self, response: &HandshakeResponse) -> Result<()> {
         // Get the trusted responder public key
-        let trusted_public_key = self.trusted_responder_public_key.as_ref()
+        let trusted_public_key = self
+            .trusted_responder_public_key
+            .as_ref()
             .ok_or_else(|| ProtoError::handshake("No trusted responder public key available"))?;
-        
+
         // Check if we are in loose verification mode (trusted key is all zeros)
         let is_loose_verification = trusted_public_key.iter().all(|&b| b == 0);
 
         if !is_loose_verification {
             // SECURITY: Use constant-time comparison to prevent timing attacks
             // This prevents an attacker from learning which bytes differ through timing analysis
-            if !bool::from(response.signing_public_key.as_slice().ct_eq(trusted_public_key.as_slice())) {
+            if !bool::from(
+                response
+                    .signing_public_key
+                    .as_slice()
+                    .ct_eq(trusted_public_key.as_slice()),
+            ) {
                 return Err(ProtoError::handshake(
-                    "Responder public key does not match trusted key. Possible MITM attack."
+                    "Responder public key does not match trusted key. Possible MITM attack.",
                 ));
             }
         }
-        
+
         // SECURITY FIX M2: Reconstruct transcript hash for verification
         // MUST match create_response() transcript hash construction exactly
         let mut transcript_hasher = Sha256::new();
@@ -543,7 +573,7 @@ impl Handshake {
         // Room ID context binding
         transcript_hasher.update(response.room_id.as_bytes());
         let transcript_hash = transcript_hasher.finalize();
-        
+
         // Reconstruct the signed message with transcript hash
         let mut message = Vec::new();
         message.extend_from_slice(b"ZKS_HANDSHAKE_V1_RESPONDER"); // Domain separator
@@ -556,7 +586,7 @@ impl Handshake {
             ss_commitment.update(&ss[..]);
             message.extend_from_slice(&ss_commitment.finalize());
         }
-        
+
         // Verify the signature using the trusted public key (or response key if loose)
         let verification_key = if is_loose_verification {
             &response.signing_public_key
@@ -566,25 +596,25 @@ impl Handshake {
 
         MlDsa::verify(&message, &response.signature, verification_key)
             .map_err(|e| ProtoError::handshake(&format!("Signature verification failed: {}", e)))?;
-        
+
         Ok(())
     }
-    
+
     /// Derive shared secret from current state (using ML-KEM shared secret)
     fn derive_shared_secret(&self) -> [u8; 32] {
         // For ML-KEM, the shared secret is already established through encapsulation/decapsulation
         // We just need to return it if available, or derive it from the key material
-        
+
         if let Some(ref shared_secret) = self.shared_secret {
             return **shared_secret;
         }
-        
+
         // Fallback: derive from key material using HKDF if shared secret not available
         // This provides much stronger key derivation than simple SHA256 hashing
-        
+
         // Collect all available key material in a consistent order
         let mut key_material = Vec::new();
-        
+
         // Add ephemeral keys (initiator first for consistency)
         match self.role {
             HandshakeRole::Initiator => {
@@ -604,7 +634,7 @@ impl Handshake {
                 }
             }
         }
-        
+
         // Add nonces (initiator first for consistency)
         match self.role {
             HandshakeRole::Initiator => {
@@ -624,41 +654,48 @@ impl Handshake {
                 }
             }
         }
-        
+
         // Use deterministic salt for HKDF to ensure reproducibility
         // This is safe because the key material already contains randomness from nonces and ephemeral keys
         let salt = b"ZK_HANDSHAKE_HKDF_SALT_V1";
-        
+
         // Use HKDF to derive a strong shared secret
         // SECURITY: HKDF-SHA256 expand should never fail for 32-byte output,
         // but we handle it gracefully instead of panicking (defense-in-depth)
         let hkdf = Hkdf::<Sha256>::new(Some(salt), &key_material);
         let mut shared_secret = [0u8; 32];
-        if hkdf.expand(b"ZK_HANDSHAKE_SHARED_SECRET_V1", &mut shared_secret).is_err() {
+        if hkdf
+            .expand(b"ZK_HANDSHAKE_SHARED_SECRET_V1", &mut shared_secret)
+            .is_err()
+        {
             // Fallback: use direct SHA256 hash if HKDF fails (should never happen)
             let mut hasher = Sha256::new();
             hasher.update(&key_material);
             hasher.update(b"ZK_HANDSHAKE_FALLBACK_V1");
             shared_secret.copy_from_slice(&hasher.finalize());
         }
-        
+
         shared_secret
     }
-    
+
     /// Create handshake finish message as initiator
     pub fn create_finish(&mut self) -> Result<HandshakeFinish> {
         if self.role != HandshakeRole::Initiator {
-            return Err(ProtoError::handshake("Only initiator can create finish message"));
+            return Err(ProtoError::handshake(
+                "Only initiator can create finish message",
+            ));
         }
-        
+
         if self.state != HandshakeState::ResponseSent {
-            return Err(ProtoError::handshake("Invalid state for creating finish message"));
+            return Err(ProtoError::handshake(
+                "Invalid state for creating finish message",
+            ));
         }
-        
+
         // Derive shared secret (wrapped in Zeroizing for secure cleanup)
         let shared_secret = self.derive_shared_secret();
         self.shared_secret = Some(Zeroizing::new(shared_secret));
-        
+
         // Create confirmation by hashing the shared secret with additional context
         // This prevents sending the raw secret over the wire
         let mut hasher = Sha256::new();
@@ -667,42 +704,47 @@ impl Handshake {
         let confirmation_hash = hasher.finalize();
         let mut confirmation = [0u8; 32];
         confirmation.copy_from_slice(&confirmation_hash);
-        
+
         let timestamp = self.current_timestamp();
-        
+
         let finish = HandshakeFinish {
             version: self.version,
             confirmation,
             timestamp,
         };
-        
+
         self.state = HandshakeState::Complete;
         Ok(finish)
     }
-    
+
     /// Process handshake finish message as responder
     pub fn process_finish(&mut self, finish: &HandshakeFinish) -> Result<()> {
         if self.role != HandshakeRole::Responder {
-            return Err(ProtoError::handshake("Only responder can process finish message"));
+            return Err(ProtoError::handshake(
+                "Only responder can process finish message",
+            ));
         }
-        
+
         if self.state != HandshakeState::ResponseSent {
-            return Err(ProtoError::handshake("Invalid state for processing finish message"));
+            return Err(ProtoError::handshake(
+                "Invalid state for processing finish message",
+            ));
         }
-        
+
         // Validate version
         if finish.version != self.version {
             return Err(ProtoError::handshake("Version mismatch"));
         }
-        
+
         // Validate timestamp for replay protection
         self.validate_timestamp(finish.timestamp)?;
-        
+
         // Get the shared secret that was derived when processing the response
-        let shared_secret = self.shared_secret.as_ref().ok_or_else(|| {
-            ProtoError::handshake("Shared secret not available")
-        })?;
-        
+        let shared_secret = self
+            .shared_secret
+            .as_ref()
+            .ok_or_else(|| ProtoError::handshake("Shared secret not available"))?;
+
         // Create expected confirmation by hashing the shared secret with the same context
         let mut hasher = Sha256::new();
         hasher.update(b"ZK_HANDSHAKE_CONFIRMATION");
@@ -710,12 +752,12 @@ impl Handshake {
         let expected_confirmation_hash = hasher.finalize();
         let mut expected_confirmation = [0u8; 32];
         expected_confirmation.copy_from_slice(&expected_confirmation_hash);
-        
+
         // Verify confirmation using constant-time comparison
         if !bool::from(finish.confirmation.ct_eq(&expected_confirmation)) {
             return Err(ProtoError::handshake("Invalid confirmation"));
         }
-        
+
         self.state = HandshakeState::Complete;
         Ok(())
     }
@@ -724,19 +766,20 @@ impl Handshake {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_handshake_initiator() {
         // Generate a trusted responder public key for testing
         let responder_keypair = MlDsa::generate_keypair().unwrap();
         let trusted_public_key = responder_keypair.verifying_key().to_vec();
-        
-        let handshake = Handshake::new_initiator("test-room".to_string(), trusted_public_key).unwrap();
+
+        let handshake =
+            Handshake::new_initiator("test-room".to_string(), trusted_public_key).unwrap();
         assert_eq!(handshake.role(), HandshakeRole::Initiator);
         assert_eq!(handshake.state(), HandshakeState::Idle);
         assert!(!handshake.is_complete());
     }
-    
+
     #[test]
     fn test_handshake_responder() {
         let handshake = Handshake::new_responder("test-room".to_string());
@@ -744,48 +787,51 @@ mod tests {
         assert_eq!(handshake.state(), HandshakeState::Idle);
         assert!(!handshake.is_complete());
     }
-    
+
     #[test]
     fn test_handshake_flow() {
         // Generate a persistent signing keypair for the responder
         let responder_signing_keypair = MlDsa::generate_keypair().unwrap();
         let trusted_public_key = responder_signing_keypair.verifying_key().to_vec();
-        
+
         // Create initiator with trusted responder public key
-        let mut initiator = Handshake::new_initiator("test-room".to_string(), trusted_public_key).unwrap();
+        let mut initiator =
+            Handshake::new_initiator("test-room".to_string(), trusted_public_key).unwrap();
         let mut responder = Handshake::new_responder("test-room".to_string());
-        
+
         // Set the signing keypair for the responder
-        responder.set_signing_keypair(responder_signing_keypair).unwrap();
-        
+        responder
+            .set_signing_keypair(responder_signing_keypair)
+            .unwrap();
+
         // Step 1: Initiator creates init message
         let init = initiator.create_init().unwrap();
         assert_eq!(initiator.state(), HandshakeState::InitSent);
-        
+
         // Step 2: Responder processes init message
         responder.process_init(&init).unwrap();
         assert_eq!(responder.state(), HandshakeState::InitSent);
-        
+
         // Step 3: Responder creates response message
         let response = responder.create_response().unwrap();
         assert_eq!(responder.state(), HandshakeState::ResponseSent);
-        
+
         // Step 4: Initiator processes response message
         initiator.process_response(&response).unwrap();
         assert_eq!(initiator.state(), HandshakeState::ResponseSent);
-        
+
         // Step 5: Initiator creates finish message
         let finish = initiator.create_finish().unwrap();
         assert_eq!(initiator.state(), HandshakeState::Complete);
         assert!(initiator.is_complete());
         assert!(initiator.shared_secret().is_some());
-        
+
         // Step 6: Responder processes finish message
         responder.process_finish(&finish).unwrap();
         assert_eq!(responder.state(), HandshakeState::Complete);
         assert!(responder.is_complete());
         assert!(responder.shared_secret().is_some());
-        
+
         // Both should have the same shared secret
         assert_eq!(initiator.shared_secret(), responder.shared_secret());
     }

@@ -145,7 +145,10 @@ impl ServerState {
 
     /// Add a peer to a room
     fn join_room(&self, room_id: &str, mut peer_info: PeerInfo) -> Result<(), String> {
-        let mut room = self.rooms.entry(room_id.to_string()).or_insert_with(Room::new);
+        let mut room = self
+            .rooms
+            .entry(room_id.to_string())
+            .or_insert_with(Room::new);
 
         if room.peers.len() >= self.max_peers_per_room
             && !room.peers.contains_key(&peer_info.peer_id)
@@ -253,12 +256,12 @@ fn getrandom_fill(buf: &mut [u8]) {
     // Use thread_rng as a fallback-safe approach
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    
+
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    
+
     for (i, byte) in buf.iter_mut().enumerate() {
         let mut hasher = DefaultHasher::new();
         (now, i, std::thread::current().id()).hash(&mut hasher);
@@ -271,11 +274,7 @@ fn getrandom_fill(buf: &mut [u8]) {
 // ============================================================================
 
 /// Handle a single WebSocket connection
-async fn handle_connection(
-    stream: TcpStream,
-    addr: SocketAddr,
-    state: Arc<ServerState>,
-) {
+async fn handle_connection(stream: TcpStream, addr: SocketAddr, state: Arc<ServerState>) {
     info!("🔌 New connection from: {}", addr);
 
     let ws_stream = match tokio_tungstenite::accept_async(stream).await {
@@ -318,7 +317,9 @@ async fn handle_connection(
                     message: format!("Invalid message format: {}", e),
                 };
                 let _ = ws_sender
-                    .send(Message::Text(serde_json::to_string(&error_response).unwrap()))
+                    .send(Message::Text(
+                        serde_json::to_string(&error_response).unwrap(),
+                    ))
                     .await;
                 continue;
             }
@@ -366,12 +367,10 @@ async fn handle_connection(
                 })
             }
 
-            _ => {
-                Some(SignalingMessage::Error {
-                    code: "UNSUPPORTED".to_string(),
-                    message: "Unsupported message type".to_string(),
-                })
-            }
+            _ => Some(SignalingMessage::Error {
+                code: "UNSUPPORTED".to_string(),
+                message: "Unsupported message type".to_string(),
+            }),
         };
 
         // Send response if any
@@ -422,7 +421,8 @@ async fn cleanup_task(state: Arc<ServerState>) {
         for room_id in room_ids {
             if let Some(mut room) = state.rooms.get_mut(&room_id) {
                 let before = room.peers.len();
-                room.peers.retain(|_, p| now.saturating_sub(p.last_seen) < timeout);
+                room.peers
+                    .retain(|_, p| now.saturating_sub(p.last_seen) < timeout);
                 cleaned += before - room.peers.len();
 
                 if room.peers.is_empty() {

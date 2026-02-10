@@ -1,9 +1,10 @@
 //! Relay server implementation for ZK Protocol
-//! 
+//!
 //! Provides TURN-like relay functionality for NAT traversal when direct peer-to-peer
 //! connections are not possible. This module implements a lightweight relay server
 //! that can forward encrypted traffic between peers.
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -12,9 +13,8 @@ use tokio::net::{TcpListener, UdpSocket};
 use tokio::sync::{mpsc, RwLock};
 use tokio::time::interval;
 use tracing::{debug, info, warn};
-use serde::{Serialize, Deserialize};
 
-use crate::{WireError, Result};
+use crate::{Result, WireError};
 
 /// Unique identifier for a relay allocation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -22,7 +22,7 @@ pub struct RelayId([u8; 16]);
 
 impl RelayId {
     /// Generate a new random relay ID using high-entropy randomness (drand + OsRng)
-    /// 
+    ///
     /// # Security
     /// Uses TrueEntropy for 256-bit post-quantum computational security.
     /// Secure if ANY entropy source is uncompromised.
@@ -33,17 +33,17 @@ impl RelayId {
         id.copy_from_slice(&entropy);
         Self(id)
     }
-    
+
     /// Create from a byte array
     pub fn from_bytes(bytes: [u8; 16]) -> Self {
         Self(bytes)
     }
-    
+
     /// Convert to byte array
     pub fn to_bytes(&self) -> [u8; 16] {
         self.0
     }
-    
+
     /// Convert to hex string
     pub fn to_hex(&self) -> String {
         hex::encode(self.0)
@@ -95,7 +95,7 @@ impl RelayAllocation {
             .as_secs();
         now > self.credentials.expires_at
     }
-    
+
     /// Check if this allocation is idle (no activity for too long)
     pub fn is_idle(&self, timeout: Duration) -> bool {
         self.last_activity.elapsed() > timeout
@@ -123,7 +123,7 @@ impl Default for RelayConfig {
             bind_addr: "0.0.0.0:3478".parse().unwrap(),
             max_allocations: 1000,
             allocation_lifetime: 3600, // 1 hour
-            idle_timeout: 600, // 10 minutes
+            idle_timeout: 600,         // 10 minutes
             auth_required: true,
         }
     }
@@ -154,30 +154,32 @@ impl RelayServer {
             tcp_listener: None,
         }
     }
-    
+
     /// Start the relay server
     pub async fn start(&mut self) -> Result<()> {
         info!("Starting relay server on {}", self.config.bind_addr);
-        
+
         // Create UDP socket
-        let udp_socket = UdpSocket::bind(self.config.bind_addr).await
+        let udp_socket = UdpSocket::bind(self.config.bind_addr)
+            .await
             .map_err(|e| WireError::BindError(format!("Failed to bind UDP socket: {}", e)))?;
         self.udp_socket = Some(Arc::new(udp_socket));
-        
+
         // Create TCP listener for control channel
-        let tcp_listener = TcpListener::bind(self.config.bind_addr).await
+        let tcp_listener = TcpListener::bind(self.config.bind_addr)
+            .await
             .map_err(|e| WireError::BindError(format!("Failed to bind TCP listener: {}", e)))?;
         self.tcp_listener = Some(tcp_listener);
-        
+
         info!("Relay server started successfully");
         Ok(())
     }
-    
+
     /// Get the server configuration
     pub fn config(&self) -> &RelayConfig {
         &self.config
     }
-    
+
     /// Create a new allocation for a client
     pub async fn create_allocation(
         &self,
@@ -187,21 +189,23 @@ impl RelayServer {
         // Check if we have room for more allocations
         let allocation_count = self.allocations.read().await.len();
         if allocation_count >= self.config.max_allocations {
-            return Err(WireError::ResourceExhausted("Maximum allocations reached".to_string()).into());
+            return Err(
+                WireError::ResourceExhausted("Maximum allocations reached".to_string()).into(),
+            );
         }
-        
+
         // Check if credentials are valid
         if self.config.auth_required && self.is_expired(&credentials) {
             return Err(WireError::AuthenticationError("Credentials expired".to_string()).into());
         }
-        
+
         // Generate relay address (using a different port)
         let relay_addr = self.generate_relay_address(client_addr)?;
-        
+
         // Create allocation
         let allocation_id = RelayId::new();
         let (tx, _rx) = mpsc::channel::<Vec<u8>>(100);
-        
+
         let allocation = RelayAllocation {
             id: allocation_id,
             client_addr,
@@ -211,24 +215,34 @@ impl RelayServer {
             last_activity: Instant::now(),
             client_channel: tx,
         };
-        
+
         // Store allocation
-        self.allocations.write().await.insert(allocation_id, allocation);
-        self.client_map.write().await.insert(client_addr, allocation_id);
-        
-        info!("Created relay allocation {} for client {}", allocation_id.to_hex(), client_addr);
-        
+        self.allocations
+            .write()
+            .await
+            .insert(allocation_id, allocation);
+        self.client_map
+            .write()
+            .await
+            .insert(client_addr, allocation_id);
+
+        info!(
+            "Created relay allocation {} for client {}",
+            allocation_id.to_hex(),
+            client_addr
+        );
+
         // Start allocation maintenance task
         let allocations = self.allocations.clone();
         let client_map = self.client_map.clone();
         let allocation_id_copy = allocation_id;
         let idle_timeout = Duration::from_secs(self.config.idle_timeout);
-        
+
         tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(60)); // Check every minute
             loop {
                 interval.tick().await;
-                
+
                 // Check if allocation still exists and is not idle
                 let should_continue = {
                     let allocations = allocations.read().await;
@@ -238,7 +252,7 @@ impl RelayServer {
                         false // Allocation was removed
                     }
                 };
-                
+
                 if !should_continue {
                     // Clean up allocation
                     allocations.write().await.remove(&allocation_id_copy);
@@ -248,10 +262,10 @@ impl RelayServer {
                 }
             }
         });
-        
+
         Ok(allocation_id)
     }
-    
+
     /// Relay data from one peer to another
     pub async fn relay_data(
         &self,
@@ -260,59 +274,77 @@ impl RelayServer {
         data: Vec<u8>,
     ) -> Result<()> {
         // Find allocation for the destination
-        let allocation_id = self.client_map.read().await.get(&to_addr)
+        let allocation_id = self
+            .client_map
+            .read()
+            .await
+            .get(&to_addr)
             .copied()
             .ok_or_else(|| WireError::NotFound("No allocation for destination".to_string()))?;
-        
+
         let mut allocations = self.allocations.write().await;
         if let Some(allocation) = allocations.get_mut(&allocation_id) {
             // Update last activity
             allocation.last_activity = Instant::now();
-            
+
             let data_len = data.len();
             // Send data to client
             if let Err(e) = allocation.client_channel.try_send(data) {
-                warn!("Failed to send data to client {}: {}", allocation_id.to_hex(), e);
+                warn!(
+                    "Failed to send data to client {}: {}",
+                    allocation_id.to_hex(),
+                    e
+                );
                 return Err(WireError::ChannelError("Failed to send data".to_string()).into());
             }
-            
-            debug!("Relayed {} bytes from {} to {}", data_len, from_addr, to_addr);
+
+            debug!(
+                "Relayed {} bytes from {} to {}",
+                data_len, from_addr, to_addr
+            );
             Ok(())
         } else {
             Err(WireError::NotFound("Allocation not found".to_string()).into())
         }
     }
-    
+
     /// Get allocation information
     pub async fn get_allocation(&self, id: RelayId) -> Option<RelayAllocation> {
         self.allocations.read().await.get(&id).cloned()
     }
-    
+
     /// Remove an allocation
     pub async fn remove_allocation(&self, id: RelayId) -> Result<()> {
         let allocation = self.allocations.write().await.remove(&id);
         if let Some(allocation) = allocation {
-            self.client_map.write().await.remove(&allocation.client_addr);
-            info!("Removed allocation {} for client {}", id.to_hex(), allocation.client_addr);
+            self.client_map
+                .write()
+                .await
+                .remove(&allocation.client_addr);
+            info!(
+                "Removed allocation {} for client {}",
+                id.to_hex(),
+                allocation.client_addr
+            );
         }
         Ok(())
     }
-    
+
     /// Generate a relay address for a client using high-entropy randomness (drand + OsRng)
     fn generate_relay_address(&self, _client_addr: SocketAddr) -> Result<SocketAddr> {
         // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security
         use zks_crypt::true_entropy::get_sync_entropy;
         let entropy = get_sync_entropy(2);
         let port_bytes = [entropy[0], entropy[1]];
-        
+
         let base_port = self.config.bind_addr.port();
         // Generate random offset within safe range (1-1000) to avoid port conflicts
         let random_offset = (u16::from_le_bytes(port_bytes) % 1000) + 1;
         let relay_port = base_port.saturating_add(random_offset);
-        
+
         Ok(SocketAddr::new(self.config.bind_addr.ip(), relay_port))
     }
-    
+
     /// Check if credentials are expired
     fn is_expired(&self, credentials: &RelayCredentials) -> bool {
         let now = std::time::SystemTime::now()
@@ -321,14 +353,14 @@ impl RelayServer {
             .as_secs();
         now > credentials.expires_at
     }
-    
+
     /// Get server statistics
     pub async fn get_stats(&self) -> RelayStats {
         let allocations = self.allocations.read().await;
         RelayStats {
             active_allocations: allocations.len(),
             total_allocations: allocations.len(), // Simplified
-            uptime: Duration::from_secs(0), // Would need to track start time
+            uptime: Duration::from_secs(0),       // Would need to track start time
         }
     }
 }
@@ -363,54 +395,66 @@ impl RelayClient {
             allocation: None,
         }
     }
-    
+
     /// Connect to the relay server and create an allocation
     pub async fn connect(&mut self, _credentials: RelayCredentials) -> Result<RelayId> {
         // Create UDP socket
-        let socket = UdpSocket::bind("0.0.0.0:0").await
+        let socket = UdpSocket::bind("0.0.0.0:0")
+            .await
             .map_err(|e| WireError::BindError(format!("Failed to bind UDP socket: {}", e)))?;
-        
+
         // Connect to relay server
-        socket.connect(self.server_addr).await
-            .map_err(|e| WireError::ConnectionError(format!("Failed to connect to relay: {}", e)))?;
-        
+        socket.connect(self.server_addr).await.map_err(|e| {
+            WireError::ConnectionError(format!("Failed to connect to relay: {}", e))
+        })?;
+
         self.socket = Some(Arc::new(socket));
-        
+
         // In a real implementation, this would perform the relay protocol handshake
         // For now, we'll just return a dummy allocation ID
         let allocation_id = RelayId::new();
         self.allocation = Some(allocation_id);
-        
-        info!("Connected to relay server at {} with allocation {}", self.server_addr, allocation_id.to_hex());
+
+        info!(
+            "Connected to relay server at {} with allocation {}",
+            self.server_addr,
+            allocation_id.to_hex()
+        );
         Ok(allocation_id)
     }
-    
+
     /// Send data through the relay
     pub async fn send(&self, data: Vec<u8>) -> Result<()> {
         if let Some(ref socket) = self.socket {
-            socket.send(&data).await
+            socket
+                .send(&data)
+                .await
                 .map_err(|e| WireError::ConnectionError(format!("Failed to send data: {}", e)))?;
             Ok(())
         } else {
             Err(WireError::NotConnected("Not connected to relay".to_string()).into())
         }
     }
-    
+
     /// Receive data from the relay
     pub async fn recv(&self, buf: &mut [u8]) -> Result<usize> {
         if let Some(ref socket) = self.socket {
-            let len = socket.recv(buf).await
-                .map_err(|e| WireError::ConnectionError(format!("Failed to receive data: {}", e)))?;
+            let len = socket.recv(buf).await.map_err(|e| {
+                WireError::ConnectionError(format!("Failed to receive data: {}", e))
+            })?;
             Ok(len)
         } else {
             Err(WireError::NotConnected("Not connected to relay".to_string()).into())
         }
     }
-    
+
     /// Disconnect from the relay server
     pub async fn disconnect(&mut self) -> Result<()> {
         if let Some(allocation_id) = self.allocation {
-            info!("Disconnecting from relay server, releasing allocation {}", allocation_id.to_hex());
+            info!(
+                "Disconnecting from relay server, releasing allocation {}",
+                allocation_id.to_hex()
+            );
             self.allocation = None;
             self.socket = None;
         }
@@ -421,17 +465,17 @@ impl RelayClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_relay_id_generation() {
         let id1 = RelayId::new();
         let id2 = RelayId::new();
-        
+
         assert_ne!(id1, id2);
         assert_eq!(id1.to_bytes().len(), 16);
         assert_eq!(id2.to_bytes().len(), 16);
     }
-    
+
     #[tokio::test]
     async fn test_relay_config_default() {
         let config = RelayConfig::default();

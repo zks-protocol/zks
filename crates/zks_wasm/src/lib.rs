@@ -4,16 +4,18 @@ use wasm_bindgen::prelude::*;
 pub use zks_pqcrypto::ml_dsa::{MlDsa, MlDsaKeypair};
 
 // WebSocket transport modules
-pub mod transport;
-pub mod onion_transport;
 pub mod bindings;
+pub mod onion_transport;
+pub mod transport;
 
 // Re-export transport types
-pub use transport::{WebSocketTransport, TransportConfig, TransportState};
-pub use onion_transport::{BrowserOnionTransport, BrowserTransportConfig, OnionCircuit, OnionMessage};
+pub use onion_transport::{
+    BrowserOnionTransport, BrowserTransportConfig, OnionCircuit, OnionMessage,
+};
+pub use transport::{TransportConfig, TransportState, WebSocketTransport};
 
 // Re-export JavaScript bindings
-pub use bindings::{ZksOnionTransport, ZksConnectionManager};
+pub use bindings::{ZksConnectionManager, ZksOnionTransport};
 
 /// Utility functions for encryption/decryption and post-quantum crypto
 #[wasm_bindgen]
@@ -36,25 +38,33 @@ impl ZksWasmUtils {
     pub fn generate_ml_dsa_keypair() -> std::result::Result<JsValue, JsValue> {
         let keypair = MlDsa::generate_keypair()
             .map_err(|e| JsValue::from_str(&format!("Failed to generate keypair: {}", e)))?;
-        
+
         let result = serde_wasm_bindgen::to_value(&serde_json::json!({
             "verifying_key": keypair.verifying_key(),
             "signing_key": keypair.signing_key()
-        })).map_err(|e| JsValue::from_str(&format!("Failed to serialize keypair: {}", e)))?;
-        
+        }))
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize keypair: {}", e)))?;
+
         Ok(result)
     }
 
     /// Sign data using ML-DSA (post-quantum signatures)
     #[wasm_bindgen]
-    pub fn ml_dsa_sign(message: &[u8], signing_key: &[u8]) -> std::result::Result<Vec<u8>, JsValue> {
+    pub fn ml_dsa_sign(
+        message: &[u8],
+        signing_key: &[u8],
+    ) -> std::result::Result<Vec<u8>, JsValue> {
         MlDsa::sign(message, signing_key)
             .map_err(|e| JsValue::from_str(&format!("Failed to sign message: {}", e)))
     }
 
     /// Verify ML-DSA signature
     #[wasm_bindgen]
-    pub fn ml_dsa_verify(message: &[u8], signature: &[u8], verifying_key: &[u8]) -> std::result::Result<(), JsValue> {
+    pub fn ml_dsa_verify(
+        message: &[u8],
+        signature: &[u8],
+        verifying_key: &[u8],
+    ) -> std::result::Result<(), JsValue> {
         MlDsa::verify(message, signature, verifying_key)
             .map_err(|e| JsValue::from_str(&format!("Signature verification failed: {}", e)))
     }

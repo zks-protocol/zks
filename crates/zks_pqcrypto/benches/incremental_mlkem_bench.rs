@@ -2,40 +2,40 @@
 //!
 //! Run with: cargo bench --package zks_pqcrypto
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use zks_pqcrypto::incremental_mlkem::{
-    self, generate, encaps1, encaps2, decaps,
-    HEADER_SIZE, ENCAPSULATION_KEY_SIZE, CIPHERTEXT1_SIZE, CIPHERTEXT2_SIZE,
+    self, decaps, encaps1, encaps2, generate, CIPHERTEXT1_SIZE, CIPHERTEXT2_SIZE,
+    ENCAPSULATION_KEY_SIZE, HEADER_SIZE,
 };
 use zks_pqcrypto::ml_kem::MlKem;
 
 /// Benchmark incremental keypair generation vs naive
 fn benchmark_keygen(c: &mut Criterion) {
     let mut group = c.benchmark_group("ML-KEM-1024-Keygen");
-    
+
     group.bench_function("incremental", |b| {
         b.iter(|| {
             let keys = generate();
             black_box(keys)
         })
     });
-    
+
     group.bench_function("naive-768", |b| {
         b.iter(|| {
             let keypair = MlKem::generate_keypair();
             black_box(keypair)
         })
     });
-    
+
     group.finish();
 }
 
 /// Benchmark incremental encapsulation phases
 fn benchmark_encapsulate(c: &mut Criterion) {
     let mut group = c.benchmark_group("ML-KEM-1024-Encapsulate");
-    
+
     let keys = generate();
-    
+
     // Phase 1: Header only (can be cached)
     group.bench_function("encaps1-header-only", |b| {
         b.iter(|| {
@@ -43,7 +43,7 @@ fn benchmark_encapsulate(c: &mut Criterion) {
             black_box(result)
         })
     });
-    
+
     // Phase 2: Complete with EK
     group.bench_function("encaps2-with-ek", |b| {
         let (_, encaps_state, _) = encaps1(&keys.hdr).expect("encaps1");
@@ -52,7 +52,7 @@ fn benchmark_encapsulate(c: &mut Criterion) {
             black_box(ct2)
         })
     });
-    
+
     // Full incremental encapsulation (both phases)
     group.bench_function("full-incremental", |b| {
         b.iter(|| {
@@ -61,7 +61,7 @@ fn benchmark_encapsulate(c: &mut Criterion) {
             black_box((ct1, ct2, ss))
         })
     });
-    
+
     // Naive ML-KEM-768 for comparison
     group.bench_function("naive-768-full", |b| {
         let keypair = MlKem::generate_keypair().unwrap();
@@ -70,33 +70,29 @@ fn benchmark_encapsulate(c: &mut Criterion) {
             black_box(encaps)
         })
     });
-    
+
     group.finish();
 }
 
 /// Benchmark decapsulation
 fn benchmark_decapsulate(c: &mut Criterion) {
     let mut group = c.benchmark_group("ML-KEM-1024-Decapsulate");
-    
+
     let keys = generate();
     let (ct1, es, _) = encaps1(&keys.hdr).expect("encaps1");
     let ct2 = encaps2(&keys.ek, &es).expect("encaps2");
-    
+
     group.bench_function("incremental-decaps", |b| {
         b.iter(|| {
-            let ss = decaps(
-                black_box(&keys.dk),
-                black_box(&ct1),
-                black_box(&ct2),
-            );
+            let ss = decaps(black_box(&keys.dk), black_box(&ct1), black_box(&ct2));
             black_box(ss)
         })
     });
-    
+
     // Naive ML-KEM-768 for comparison
     let keypair = MlKem::generate_keypair().unwrap();
     let encaps = MlKem::encapsulate(&keypair.public_key).unwrap();
-    
+
     group.bench_function("naive-768-decaps", |b| {
         b.iter(|| {
             let ss = MlKem::decapsulate(
@@ -106,14 +102,14 @@ fn benchmark_decapsulate(c: &mut Criterion) {
             black_box(ss)
         })
     });
-    
+
     group.finish();
 }
 
 /// Benchmark complete round-trip
 fn benchmark_round_trip(c: &mut Criterion) {
     let mut group = c.benchmark_group("ML-KEM-1024-RoundTrip");
-    
+
     group.bench_function("incremental-complete", |b| {
         b.iter(|| {
             // Keygen
@@ -127,7 +123,7 @@ fn benchmark_round_trip(c: &mut Criterion) {
             black_box((ct1, ct2, ss2))
         })
     });
-    
+
     group.bench_function("naive-768-complete", |b| {
         b.iter(|| {
             // Keygen
@@ -139,7 +135,7 @@ fn benchmark_round_trip(c: &mut Criterion) {
             black_box(ss)
         })
     });
-    
+
     group.finish();
 }
 
@@ -152,9 +148,15 @@ fn benchmark_sizes(c: &mut Criterion) {
             println!("EK (pk2):            {} bytes", ENCAPSULATION_KEY_SIZE);
             println!("Ciphertext1:         {} bytes", CIPHERTEXT1_SIZE);
             println!("Ciphertext2:         {} bytes", CIPHERTEXT2_SIZE);
-            println!("Total incremental:   {} bytes", CIPHERTEXT1_SIZE + CIPHERTEXT2_SIZE);
+            println!(
+                "Total incremental:   {} bytes",
+                CIPHERTEXT1_SIZE + CIPHERTEXT2_SIZE
+            );
             println!("Naive ML-KEM-1024:   3136 bytes (1568 + 1568)");
-            println!("Bandwidth savings:   {:.1}%", incremental_mlkem::bandwidth_savings_percent());
+            println!(
+                "Bandwidth savings:   {:.1}%",
+                incremental_mlkem::bandwidth_savings_percent()
+            );
         })
     });
 }

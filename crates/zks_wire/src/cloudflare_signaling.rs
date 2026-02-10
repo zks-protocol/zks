@@ -1,17 +1,17 @@
 //! Production Cloudflare Workers signaling client for ZKS Protocol
-//! 
+//!
 //! This module provides real-world signaling using Cloudflare Workers
 //! with authentication, rate limiting, and global edge distribution.
 
-use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
 use futures_util::{SinkExt, TryStreamExt};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn, error};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
+use tracing::{debug, error, info, warn};
 
 use crate::signaling::{PeerCapabilities, PeerInfo};
 
@@ -35,7 +35,8 @@ pub struct CloudflareSignalingConfig {
 impl Default for CloudflareSignalingConfig {
     fn default() -> Self {
         Self {
-            primary_endpoint: "wss://zks-protocol-signaling-prod.your-domain.workers.dev".to_string(),
+            primary_endpoint: "wss://zks-protocol-signaling-prod.your-domain.workers.dev"
+                .to_string(),
             fallback_endpoints: vec![
                 "wss://zks-protocol-signaling-backup.your-domain.workers.dev".to_string(),
             ],
@@ -66,7 +67,8 @@ impl CloudflareSignalingConfig {
     /// Staging configuration for testing
     pub fn staging() -> Self {
         Self {
-            primary_endpoint: "wss://zks-protocol-signaling-staging.md-wasif-faisal.workers.dev".to_string(),
+            primary_endpoint: "wss://zks-protocol-signaling-staging.md-wasif-faisal.workers.dev"
+                .to_string(),
             fallback_endpoints: vec![],
             auth_token: None,
             connection_timeout: Duration::from_secs(15),
@@ -79,7 +81,8 @@ impl CloudflareSignalingConfig {
 /// Production signaling client with Cloudflare Workers integration
 #[derive(Clone)]
 pub struct CloudflareSignalingClient {
-    ws_stream: Arc<Mutex<WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>,
+    ws_stream:
+        Arc<Mutex<WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>,
     peer_id: String,
     config: CloudflareSignalingConfig,
     is_connected: Arc<Mutex<bool>>,
@@ -92,8 +95,11 @@ impl CloudflareSignalingClient {
         config: CloudflareSignalingConfig,
         peer_id: String,
     ) -> Result<Self, CloudflareSignalingError> {
-        info!("Connecting to Cloudflare signaling server: {}", config.primary_endpoint);
-        
+        info!(
+            "Connecting to Cloudflare signaling server: {}",
+            config.primary_endpoint
+        );
+
         // Try primary endpoint first, then fallbacks
         let mut last_error = None;
         let endpoints = std::iter::once(&config.primary_endpoint)
@@ -108,7 +114,7 @@ impl CloudflareSignalingClient {
             match Self::try_connect_endpoint(endpoint, &config, &peer_id).await {
                 Ok(ws_stream) => {
                     info!("Successfully connected to signaling server: {}", endpoint);
-                    
+
                     return Ok(Self {
                         ws_stream: Arc::new(Mutex::new(ws_stream)),
                         peer_id,
@@ -132,9 +138,12 @@ impl CloudflareSignalingClient {
         endpoint: &str,
         config: &CloudflareSignalingConfig,
         peer_id: &str,
-    ) -> Result<WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, CloudflareSignalingError> {
+    ) -> Result<
+        WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+        CloudflareSignalingError,
+    > {
         let mut request = endpoint.into_client_request()?;
-        
+
         // Add authentication headers if token is provided
         if let Some(token) = &config.auth_token {
             request.headers_mut().insert(
@@ -144,25 +153,33 @@ impl CloudflareSignalingClient {
         }
 
         // Add custom headers for ZKS Protocol
-        request.headers_mut().insert(
-            "X-ZKS-Protocol-Version",
-            "1.0".parse().unwrap(),
-        );
-        request.headers_mut().insert(
-            "X-ZKS-Peer-ID",
-            peer_id.parse().unwrap(),
-        );
+        request
+            .headers_mut()
+            .insert("X-ZKS-Protocol-Version", "1.0".parse().unwrap());
+        request
+            .headers_mut()
+            .insert("X-ZKS-Peer-ID", peer_id.parse().unwrap());
 
         let connect_future = connect_async(request);
-        let (ws_stream, _response) = timeout(config.connection_timeout, connect_future).await
+        let (ws_stream, _response) = timeout(config.connection_timeout, connect_future)
+            .await
             .map_err(|_| CloudflareSignalingError::ConnectionTimeout)?
-            .map_err(|e| CloudflareSignalingError::ConnectionFailed(format!("WebSocket connection failed: {}", e)))?;
+            .map_err(|e| {
+                CloudflareSignalingError::ConnectionFailed(format!(
+                    "WebSocket connection failed: {}",
+                    e
+                ))
+            })?;
 
         Ok(ws_stream)
     }
 
     /// Join a swarm room with production-grade error handling
-    pub async fn join_room(&self, room_id: &str, capabilities: PeerCapabilities) -> Result<(), CloudflareSignalingError> {
+    pub async fn join_room(
+        &self,
+        room_id: &str,
+        capabilities: PeerCapabilities,
+    ) -> Result<(), CloudflareSignalingError> {
         let peer_info = PeerInfo {
             peer_id: self.peer_id.clone(),
             public_key: vec![], // Will be populated with actual key
@@ -185,7 +202,10 @@ impl CloudflareSignalingClient {
     }
 
     /// Discover peers with timeout and retry logic
-    pub async fn discover_peers(&self, room_id: &str) -> Result<Vec<PeerInfo>, CloudflareSignalingError> {
+    pub async fn discover_peers(
+        &self,
+        room_id: &str,
+    ) -> Result<Vec<PeerInfo>, CloudflareSignalingError> {
         let message = CloudflareSignalingMessage::Discover {
             room_id: room_id.to_string(),
         };
@@ -193,7 +213,8 @@ impl CloudflareSignalingClient {
         self.send_message(message).await?;
 
         // Wait for response with timeout
-        let response = timeout(self.config.message_timeout, self.receive_message()).await
+        let response = timeout(self.config.message_timeout, self.receive_message())
+            .await
             .map_err(|_| CloudflareSignalingError::ResponseTimeout)??;
 
         match response {
@@ -201,15 +222,20 @@ impl CloudflareSignalingClient {
                 debug!("Discovered {} peers in room {}", peers.len(), room_id);
                 Ok(peers)
             }
-            CloudflareSignalingMessage::Error { code, message } => {
-                Err(CloudflareSignalingError::ServerError(format!("{}: {}", code, message)))
-            }
-            _ => Err(CloudflareSignalingError::UnexpectedMessage("Expected Peers response")),
+            CloudflareSignalingMessage::Error { code, message } => Err(
+                CloudflareSignalingError::ServerError(format!("{}: {}", code, message)),
+            ),
+            _ => Err(CloudflareSignalingError::UnexpectedMessage(
+                "Expected Peers response",
+            )),
         }
     }
 
     /// Request entropy from the swarm with cryptographic verification
-    pub async fn get_swarm_entropy(&self, room_id: &str) -> Result<Vec<u8>, CloudflareSignalingError> {
+    pub async fn get_swarm_entropy(
+        &self,
+        room_id: &str,
+    ) -> Result<Vec<u8>, CloudflareSignalingError> {
         let request_id = uuid::Uuid::new_v4().to_string();
 
         let message = CloudflareSignalingMessage::EntropyRequest {
@@ -220,30 +246,43 @@ impl CloudflareSignalingClient {
         self.send_message(message).await?;
 
         // Wait for entropy response with timeout
-        let response = timeout(self.config.message_timeout, self.receive_message()).await
+        let response = timeout(self.config.message_timeout, self.receive_message())
+            .await
             .map_err(|_| CloudflareSignalingError::ResponseTimeout)??;
 
         match response {
-            CloudflareSignalingMessage::EntropyResponse { request_id: resp_id, entropy, signature } => {
+            CloudflareSignalingMessage::EntropyResponse {
+                request_id: resp_id,
+                entropy,
+                signature,
+            } => {
                 if resp_id != request_id {
-                    return Err(CloudflareSignalingError::UnexpectedMessage("Request ID mismatch"));
+                    return Err(CloudflareSignalingError::UnexpectedMessage(
+                        "Request ID mismatch",
+                    ));
                 }
 
                 if entropy.len() != 32 {
-                    return Err(CloudflareSignalingError::InvalidEntropy("Entropy must be 32 bytes"));
+                    return Err(CloudflareSignalingError::InvalidEntropy(
+                        "Entropy must be 32 bytes",
+                    ));
                 }
 
                 // Verify signature (simplified - in production use proper crypto verification)
                 if signature.len() < 32 {
-                    return Err(CloudflareSignalingError::InvalidEntropy("Invalid signature length"));
+                    return Err(CloudflareSignalingError::InvalidEntropy(
+                        "Invalid signature length",
+                    ));
                 }
 
                 Ok(entropy)
             }
-            CloudflareSignalingMessage::Error { code, message } => {
-                Err(CloudflareSignalingError::ServerError(format!("{}: {}", code, message)))
-            }
-            _ => Err(CloudflareSignalingError::UnexpectedMessage("Expected EntropyResponse")),
+            CloudflareSignalingMessage::Error { code, message } => Err(
+                CloudflareSignalingError::ServerError(format!("{}: {}", code, message)),
+            ),
+            _ => Err(CloudflareSignalingError::UnexpectedMessage(
+                "Expected EntropyResponse",
+            )),
         }
     }
 
@@ -259,7 +298,10 @@ impl CloudflareSignalingClient {
     }
 
     /// Send message with automatic retry on connection issues
-    async fn send_message_with_retry(&self, message: CloudflareSignalingMessage) -> Result<(), CloudflareSignalingError> {
+    async fn send_message_with_retry(
+        &self,
+        message: CloudflareSignalingMessage,
+    ) -> Result<(), CloudflareSignalingError> {
         let mut attempts = 0;
         let max_attempts = self.config.max_reconnect_attempts;
 
@@ -272,12 +314,15 @@ impl CloudflareSignalingClient {
                         return Err(e);
                     }
 
-                    warn!("Message send failed (attempt {}/{}): {}", attempts, max_attempts, e);
-                    
+                    warn!(
+                        "Message send failed (attempt {}/{}): {}",
+                        attempts, max_attempts, e
+                    );
+
                     // Wait before retry with exponential backoff
                     let wait_time = Duration::from_millis(100 * 2_u64.pow(attempts - 1));
                     tokio::time::sleep(wait_time).await;
-                    
+
                     continue;
                 }
             }
@@ -285,29 +330,46 @@ impl CloudflareSignalingClient {
     }
 
     /// Send a signaling message with timeout
-    async fn send_message(&self, message: CloudflareSignalingMessage) -> Result<(), CloudflareSignalingError> {
-        let json = serde_json::to_string(&message)
-            .map_err(|e| CloudflareSignalingError::SerializationFailed(format!("Failed to serialize message: {}", e)))?;
+    async fn send_message(
+        &self,
+        message: CloudflareSignalingMessage,
+    ) -> Result<(), CloudflareSignalingError> {
+        let json = serde_json::to_string(&message).map_err(|e| {
+            CloudflareSignalingError::SerializationFailed(format!(
+                "Failed to serialize message: {}",
+                e
+            ))
+        })?;
 
         let ws_message = Message::Text(json);
 
         let mut stream = self.ws_stream.lock().await;
-        timeout(self.config.message_timeout, stream.send(ws_message)).await
+        timeout(self.config.message_timeout, stream.send(ws_message))
+            .await
             .map_err(|_| CloudflareSignalingError::SendTimeout)?
-            .map_err(|e| CloudflareSignalingError::SendFailed(format!("Failed to send message: {}", e)))?;
+            .map_err(|e| {
+                CloudflareSignalingError::SendFailed(format!("Failed to send message: {}", e))
+            })?;
 
         Ok(())
     }
 
     /// Receive a signaling message with timeout
-    async fn receive_message(&self) -> Result<CloudflareSignalingMessage, CloudflareSignalingError> {
+    async fn receive_message(
+        &self,
+    ) -> Result<CloudflareSignalingMessage, CloudflareSignalingError> {
         let mut stream = self.ws_stream.lock().await;
 
         loop {
             match timeout(self.config.message_timeout, stream.try_next()).await {
                 Ok(Ok(Some(Message::Text(text)))) => {
-                    let message: CloudflareSignalingMessage = serde_json::from_str(&text)
-                        .map_err(|e| CloudflareSignalingError::DeserializationFailed(format!("Failed to deserialize message: {}", e)))?;
+                    let message: CloudflareSignalingMessage =
+                        serde_json::from_str(&text).map_err(|e| {
+                            CloudflareSignalingError::DeserializationFailed(format!(
+                                "Failed to deserialize message: {}",
+                                e
+                            ))
+                        })?;
                     return Ok(message);
                 }
                 Ok(Ok(Some(Message::Close(_)))) => {
@@ -319,7 +381,10 @@ impl CloudflareSignalingClient {
                     return Err(CloudflareSignalingError::ConnectionClosed);
                 }
                 Ok(Err(e)) => {
-                    return Err(CloudflareSignalingError::ReceiveFailed(format!("WebSocket error: {}", e)));
+                    return Err(CloudflareSignalingError::ReceiveFailed(format!(
+                        "WebSocket error: {}",
+                        e
+                    )));
                 }
                 Err(_) => {
                     return Err(CloudflareSignalingError::ReceiveTimeout);
@@ -348,24 +413,23 @@ impl CloudflareSignalingClient {
     pub async fn close(&mut self) -> Result<(), CloudflareSignalingError> {
         let message = Message::Close(None);
         let mut stream = self.ws_stream.lock().await;
-        
+
         match timeout(self.config.message_timeout, stream.send(message)).await {
             Ok(Ok(())) => {
                 *self.is_connected.lock().await = false;
                 Ok(())
             }
-            Ok(Err(e)) => {
-                Err(CloudflareSignalingError::SendFailed(format!("Failed to send close message: {}", e)))
-            }
-            Err(_) => {
-                Err(CloudflareSignalingError::SendTimeout)
-            }
+            Ok(Err(e)) => Err(CloudflareSignalingError::SendFailed(format!(
+                "Failed to send close message: {}",
+                e
+            ))),
+            Err(_) => Err(CloudflareSignalingError::SendTimeout),
         }
     }
 }
 
 /// Connection statistics for Cloudflare signaling client
-/// 
+///
 /// Tracks the current state of the signaling connection including
 /// connection status, active endpoint, peer identity, and retry attempts.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -381,7 +445,7 @@ pub struct ConnectionStats {
 }
 
 /// Production-ready signaling messages for Cloudflare Workers
-/// 
+///
 /// Defines the protocol messages exchanged between clients and the Cloudflare
 /// signaling server for peer discovery, room management, and cryptographic
 /// operations in the ZKS Protocol network.
@@ -394,22 +458,13 @@ pub enum CloudflareSignalingMessage {
         peer_info: PeerInfo,
     },
     /// Leave a swarm room
-    Leave {
-        room_id: String,
-    },
+    Leave { room_id: String },
     /// Discover peers in a room
-    Discover {
-        room_id: String,
-    },
+    Discover { room_id: String },
     /// Response with peer list
-    Peers {
-        peers: Vec<PeerInfo>,
-    },
+    Peers { peers: Vec<PeerInfo> },
     /// Request entropy from swarm
-    EntropyRequest {
-        room_id: String,
-        request_id: String,
-    },
+    EntropyRequest { room_id: String, request_id: String },
     /// Response with entropy
     EntropyResponse {
         request_id: String,
@@ -418,27 +473,15 @@ pub enum CloudflareSignalingMessage {
     },
     /// Error message
     #[serde(rename = "error")]
-    Error {
-        code: String,
-        message: String,
-    },
+    Error { code: String, message: String },
     /// Join success response
-    JoinSuccess {
-        room_id: String,
-        peer_count: usize,
-    },
+    JoinSuccess { room_id: String, peer_count: usize },
     /// Leave success response
-    LeaveSuccess {
-        room_id: String,
-    },
+    LeaveSuccess { room_id: String },
     /// Peer joined notification
-    PeerJoined {
-        peer_info: PeerInfo,
-    },
+    PeerJoined { peer_info: PeerInfo },
     /// Peer left notification
-    PeerLeft {
-        peer_id: String,
-    },
+    PeerLeft { peer_id: String },
 }
 
 /// Production errors for Cloudflare Workers signaling
@@ -446,49 +489,49 @@ pub enum CloudflareSignalingMessage {
 pub enum CloudflareSignalingError {
     #[error("Connection failed: {0}")]
     ConnectionFailed(String),
-    
+
     #[error("Connection timeout")]
     ConnectionTimeout,
-    
+
     #[error("Connection closed")]
     ConnectionClosed,
-    
+
     #[error("Send failed: {0}")]
     SendFailed(String),
-    
+
     #[error("Send timeout")]
     SendTimeout,
-    
+
     #[error("Connection error: {0}")]
     ConnectionError(String),
-    
+
     #[error("Receive failed: {0}")]
     ReceiveFailed(String),
-    
+
     #[error("Receive timeout")]
     ReceiveTimeout,
-    
+
     #[error("Response timeout")]
     ResponseTimeout,
-    
+
     #[error("Serialization failed: {0}")]
     SerializationFailed(String),
-    
+
     #[error("Deserialization failed: {0}")]
     DeserializationFailed(String),
-    
+
     #[error("Server error: {0}")]
     ServerError(String),
-    
+
     #[error("Unexpected message: {0}")]
     UnexpectedMessage(&'static str),
-    
+
     #[error("Invalid entropy: {0}")]
     InvalidEntropy(&'static str),
-    
+
     #[error("No available endpoints")]
     NoAvailableEndpoints,
-    
+
     #[error("HTTP request error: {0}")]
     HttpRequestError(String),
 }
@@ -501,30 +544,43 @@ impl From<tokio_tungstenite::tungstenite::error::Error> for CloudflareSignalingE
 
 #[async_trait::async_trait]
 impl crate::signaling::SignalingClientTrait for CloudflareSignalingClient {
-    async fn discover_peers(&self, room_id: &str) -> Result<Vec<crate::signaling::PeerInfo>, Box<dyn std::error::Error + Send + Sync>> {
+    async fn discover_peers(
+        &self,
+        room_id: &str,
+    ) -> Result<Vec<crate::signaling::PeerInfo>, Box<dyn std::error::Error + Send + Sync>> {
         CloudflareSignalingClient::discover_peers(self, room_id)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
-    
-    async fn join_room(&mut self, room_id: &str, capabilities: crate::signaling::PeerCapabilities) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
+    async fn join_room(
+        &mut self,
+        room_id: &str,
+        capabilities: crate::signaling::PeerCapabilities,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         CloudflareSignalingClient::join_room(self, room_id, capabilities)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
-    
-    async fn leave_room(&mut self, room_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
+    async fn leave_room(
+        &mut self,
+        room_id: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         CloudflareSignalingClient::leave_room(self, room_id)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
-    
-    async fn get_swarm_entropy(&mut self, room_id: &str) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+
+    async fn get_swarm_entropy(
+        &mut self,
+        room_id: &str,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
         CloudflareSignalingClient::get_swarm_entropy(self, room_id)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
-    
+
     async fn close(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         CloudflareSignalingClient::close(self)
             .await

@@ -15,9 +15,9 @@ use zks_crypt::session_rotation::{RotatingSession, SessionRotationConfig};
 /// Benchmark session creation
 fn benchmark_session_creation(c: &mut Criterion) {
     let mut group = c.benchmark_group("SessionRotation-Create");
-    
+
     let initial_secret = [0x42u8; 32];
-    
+
     group.bench_function("default-config", |b| {
         b.iter(|| {
             let session = RotatingSession::new(
@@ -28,7 +28,7 @@ fn benchmark_session_creation(c: &mut Criterion) {
             black_box(session)
         })
     });
-    
+
     group.bench_function("custom-interval-60s", |b| {
         b.iter(|| {
             let session = RotatingSession::new(
@@ -39,7 +39,7 @@ fn benchmark_session_creation(c: &mut Criterion) {
             black_box(session)
         })
     });
-    
+
     group.bench_function("manual-only", |b| {
         b.iter(|| {
             let session = RotatingSession::new(
@@ -50,21 +50,18 @@ fn benchmark_session_creation(c: &mut Criterion) {
             black_box(session)
         })
     });
-    
+
     group.finish();
 }
 
 /// Benchmark session rotation (paper claim: 8.4ms)
 fn benchmark_rotation(c: &mut Criterion) {
     let mut group = c.benchmark_group("SessionRotation-Rotate");
-    
+
     let initial_secret = [0x42u8; 32];
-    let mut session = RotatingSession::new(
-        initial_secret,
-        1000000,
-        SessionRotationConfig::default(),
-    );
-    
+    let mut session =
+        RotatingSession::new(initial_secret, 1000000, SessionRotationConfig::default());
+
     // Pre-generate new secrets for rotation
     let new_secrets: Vec<[u8; 32]> = (0..1000u64)
         .map(|i| {
@@ -74,9 +71,9 @@ fn benchmark_rotation(c: &mut Criterion) {
             s
         })
         .collect();
-    
+
     let mut idx = 0;
-    
+
     group.bench_function("rotate-with-new-secret", |b| {
         b.iter(|| {
             let secret = new_secrets[idx % new_secrets.len()];
@@ -84,20 +81,16 @@ fn benchmark_rotation(c: &mut Criterion) {
             idx += 1;
         })
     });
-    
+
     group.finish();
 }
 
 /// Benchmark message key derivation
 fn benchmark_message_key_derivation(c: &mut Criterion) {
     let mut group = c.benchmark_group("SessionRotation-KeyDerivation");
-    
-    let session = RotatingSession::new(
-        [0x42u8; 32],
-        1000000,
-        SessionRotationConfig::default(),
-    );
-    
+
+    let session = RotatingSession::new([0x42u8; 32], 1000000, SessionRotationConfig::default());
+
     group.bench_function("derive-single-key", |b| {
         let mut msg_num = 0u64;
         b.iter(|| {
@@ -106,7 +99,7 @@ fn benchmark_message_key_derivation(c: &mut Criterion) {
             black_box(key)
         })
     });
-    
+
     // Throughput: derive 1000 message keys
     group.throughput(Throughput::Elements(1000));
     group.bench_function("derive-1000-keys", |b| {
@@ -117,48 +110,41 @@ fn benchmark_message_key_derivation(c: &mut Criterion) {
             }
         })
     });
-    
+
     group.finish();
 }
 
 /// Benchmark rotation check overhead
 fn benchmark_rotation_check(c: &mut Criterion) {
     let mut group = c.benchmark_group("SessionRotation-CheckOverhead");
-    
-    let session = RotatingSession::new(
-        [0x42u8; 32],
-        1000000,
-        SessionRotationConfig::default(),
-    );
-    
+
+    let session = RotatingSession::new([0x42u8; 32], 1000000, SessionRotationConfig::default());
+
     group.bench_function("needs-rotation-check", |b| {
         b.iter(|| {
             let needs = session.needs_rotation();
             black_box(needs)
         })
     });
-    
+
     group.bench_function("check-rotation", |b| {
         b.iter(|| {
             let rotated = session.check_rotation();
             black_box(rotated)
         })
     });
-    
+
     group.finish();
 }
 
 /// Paper claims validation benchmark
 fn benchmark_paper_claims(c: &mut Criterion) {
     let mut group = c.benchmark_group("Paper-Claims-SessionRotation");
-    
+
     let initial_secret = [0x42u8; 32];
-    let mut session = RotatingSession::new(
-        initial_secret,
-        1000000,
-        SessionRotationConfig::default(),
-    );
-    
+    let mut session =
+        RotatingSession::new(initial_secret, 1000000, SessionRotationConfig::default());
+
     // Paper claim: "8.4ms Session Rotation"
     // This should match the full rotation including zeroization and re-keying
     group.bench_function("session-rotation-full", |b| {
@@ -170,7 +156,7 @@ fn benchmark_paper_claims(c: &mut Criterion) {
             round += 1;
         })
     });
-    
+
     group.finish();
 }
 

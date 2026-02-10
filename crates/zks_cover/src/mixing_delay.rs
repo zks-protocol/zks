@@ -43,9 +43,9 @@
 //! | Integration | Faisal Swarm | Nym Mixnet |
 //! | Configurable | ✅ Per-hop | ✅ Per-hop |
 
-use std::time::Duration;
 use rand::Rng;
-use rand_distr::{Exp, Distribution};
+use rand_distr::{Distribution, Exp};
+use std::time::Duration;
 use tokio::time::sleep;
 
 /// Error type for mixing delay operations
@@ -99,7 +99,7 @@ impl MixingDelayConfig {
     /// Mean delay: 500ms, suitable for high-security applications
     pub fn max_anonymity() -> Self {
         Self {
-            rate: 2.0,       // Mean = 500ms
+            rate: 2.0, // Mean = 500ms
             max_delay: Duration::from_secs(5),
             min_delay: Duration::from_millis(50),
             enabled: true,
@@ -111,7 +111,7 @@ impl MixingDelayConfig {
     /// Mean delay: 100ms, good tradeoff between privacy and latency
     pub fn balanced() -> Self {
         Self {
-            rate: 10.0,      // Mean = 100ms
+            rate: 10.0, // Mean = 100ms
             max_delay: Duration::from_secs(2),
             min_delay: Duration::from_millis(10),
             enabled: true,
@@ -123,7 +123,7 @@ impl MixingDelayConfig {
     /// Mean delay: 20ms, suitable for interactive applications
     pub fn low_latency() -> Self {
         Self {
-            rate: 50.0,      // Mean = 20ms
+            rate: 50.0, // Mean = 20ms
             max_delay: Duration::from_millis(500),
             min_delay: Duration::from_millis(5),
             enabled: true,
@@ -145,12 +145,16 @@ impl MixingDelayConfig {
     /// Create custom configuration
     pub fn custom(rate: f64, max_delay: Duration, min_delay: Duration, hops: u8) -> Result<Self> {
         if rate <= 0.0 {
-            return Err(MixingDelayError::InvalidRate("Rate must be positive".to_string()));
+            return Err(MixingDelayError::InvalidRate(
+                "Rate must be positive".to_string(),
+            ));
         }
         if min_delay > max_delay {
-            return Err(MixingDelayError::InvalidRate("min_delay cannot exceed max_delay".to_string()));
+            return Err(MixingDelayError::InvalidRate(
+                "min_delay cannot exceed max_delay".to_string(),
+            ));
         }
-        
+
         Ok(Self {
             rate,
             max_delay,
@@ -185,9 +189,9 @@ pub struct MixingDelay {
 impl MixingDelay {
     /// Create a new mixing delay generator
     pub fn new(config: MixingDelayConfig) -> Result<Self> {
-        let exp_dist = Exp::new(config.rate)
-            .map_err(|e| MixingDelayError::InvalidRate(e.to_string()))?;
-        
+        let exp_dist =
+            Exp::new(config.rate).map_err(|e| MixingDelayError::InvalidRate(e.to_string()))?;
+
         Ok(Self {
             config,
             exp_dist,
@@ -214,9 +218,7 @@ impl MixingDelay {
 
     /// Sample delays for all hops
     pub fn sample_hop_delays(&self) -> Vec<Duration> {
-        (0..self.config.hops)
-            .map(|_| self.sample_delay())
-            .collect()
+        (0..self.config.hops).map(|_| self.sample_delay()).collect()
     }
 
     /// Apply delay (blocking version for sync contexts)
@@ -229,7 +231,8 @@ impl MixingDelay {
         std::thread::sleep(delay);
 
         // Update statistics
-        self.delays_applied.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.delays_applied
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.total_delay_ms.fetch_add(
             delay.as_millis() as u64,
             std::sync::atomic::Ordering::Relaxed,
@@ -246,7 +249,8 @@ impl MixingDelay {
         sleep(delay).await;
 
         // Update statistics
-        self.delays_applied.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.delays_applied
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.total_delay_ms.fetch_add(
             delay.as_millis() as u64,
             std::sync::atomic::Ordering::Relaxed,
@@ -281,9 +285,13 @@ impl MixingDelay {
 
     /// Get statistics
     pub fn statistics(&self) -> MixingDelayStats {
-        let count = self.delays_applied.load(std::sync::atomic::Ordering::Relaxed);
-        let total_ms = self.total_delay_ms.load(std::sync::atomic::Ordering::Relaxed);
-        
+        let count = self
+            .delays_applied
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let total_ms = self
+            .total_delay_ms
+            .load(std::sync::atomic::Ordering::Relaxed);
+
         MixingDelayStats {
             delays_applied: count,
             total_delay: Duration::from_millis(total_ms),
@@ -321,7 +329,7 @@ pub struct MixingDelayStats {
 }
 
 /// Per-hop mixing delay tracker
-/// 
+///
 /// Tracks delays at each hop in a multi-hop route for
 /// debugging and analysis purposes.
 #[derive(Debug, Clone)]
@@ -397,7 +405,7 @@ mod tests {
         for _ in 0..100 {
             let delay = mixer.sample_delay();
             assert!(delay >= Duration::from_millis(10)); // min_delay
-            assert!(delay <= Duration::from_secs(2));     // max_delay
+            assert!(delay <= Duration::from_secs(2)); // max_delay
         }
     }
 
@@ -430,7 +438,7 @@ mod tests {
 
         // Should have applied at least min_delay
         assert!(elapsed >= Duration::from_millis(5));
-        
+
         // Check statistics updated
         let stats = mixer.statistics();
         assert_eq!(stats.delays_applied, 1);
@@ -443,7 +451,8 @@ mod tests {
             Duration::from_secs(1),
             Duration::from_millis(20),
             4, // 4 hops
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(config.mean_delay(), Duration::from_millis(200));
         assert_eq!(config.hops, 4);

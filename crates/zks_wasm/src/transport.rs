@@ -1,15 +1,13 @@
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::{WebSocket, MessageEvent, CloseEvent, ErrorEvent};
-use std::sync::{Arc, Mutex};
-use std::collections::VecDeque;
+use web_sys::{CloseEvent, ErrorEvent, MessageEvent, WebSocket};
 
 // Helper macro for console logging
 macro_rules! console_log {
     ($($t:tt)*) => (web_sys::console::log_1(&format!($($t)*).into()))
 }
-
-
 
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -31,11 +29,11 @@ impl TransportConfig {
     pub fn url(&self) -> &str {
         &self.url
     }
-    
+
     pub fn max_reconnect_attempts(&self) -> u32 {
         self.max_reconnect_attempts
     }
-    
+
     pub fn reconnect_delay_ms(&self) -> u32 {
         self.reconnect_delay_ms
     }
@@ -80,19 +78,19 @@ impl WebSocketTransport {
     #[wasm_bindgen]
     pub async fn connect(&mut self) -> Result<(), JsValue> {
         console_log!("Connecting to: {}", self.config.url);
-        
+
         // Convert zk:// to ws:// for WebSocket compatibility
         let ws_url = convert_zk_url(&self.config.url);
-        
+
         let websocket = WebSocket::new(&ws_url)?;
         websocket.set_binary_type(web_sys::BinaryType::Arraybuffer);
-        
+
         // Setup event handlers
         self.setup_event_handlers(&websocket)?;
-        
+
         *self.state.lock().unwrap() = TransportState::Connecting;
         self.websocket = Some(websocket);
-        
+
         Ok(())
     }
 
@@ -159,7 +157,7 @@ impl WebSocketTransport {
                 let uint8_array = js_sys::Uint8Array::new(&array_buffer);
                 let mut data = vec![0u8; uint8_array.length() as usize];
                 uint8_array.copy_to(&mut data);
-                
+
                 console_log!("Received {} bytes", data.len());
                 message_queue.lock().unwrap().push_back(data);
             }
@@ -180,27 +178,38 @@ impl WebSocketTransport {
         let state = Arc::clone(&self.state);
         let reconnect_attempts_clone = Arc::clone(&self.reconnect_attempts);
         let onclose = Closure::wrap(Box::new(move |event: CloseEvent| {
-            console_log!("WebSocket closed: code={}, reason={}", event.code(), event.reason());
+            console_log!(
+                "WebSocket closed: code={}, reason={}",
+                event.code(),
+                event.reason()
+            );
             *state.lock().unwrap() = TransportState::Disconnected;
-            
+
             // Attempt reconnection if configured
             let attempts = *reconnect_attempts_clone.lock().unwrap();
             if attempts < config.max_reconnect_attempts {
                 *reconnect_attempts_clone.lock().unwrap() += 1;
-                console_log!("Attempting reconnection {} of {}", attempts + 1, config.max_reconnect_attempts);
-                
+                console_log!(
+                    "Attempting reconnection {} of {}",
+                    attempts + 1,
+                    config.max_reconnect_attempts
+                );
+
                 // Schedule reconnection attempt
                 let _state = Arc::clone(&state);
                 let delay = config.reconnect_delay_ms;
                 spawn_local(async move {
-                    let _ = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, _| {
-                        let window = web_sys::window().unwrap();
-                        let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
-                            &resolve,
-                            delay as i32,
-                        );
-                    })).await;
-                    
+                    let _ = wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(
+                        &mut |resolve, _| {
+                            let window = web_sys::window().unwrap();
+                            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                &resolve,
+                                delay as i32,
+                            );
+                        },
+                    ))
+                    .await;
+
                     // Note: In a real implementation, we would attempt reconnection here
                     console_log!("Reconnection would be attempted here");
                 });
@@ -215,7 +224,5 @@ impl WebSocketTransport {
 
 #[wasm_bindgen]
 pub fn convert_zk_url(url: &str) -> String {
-    url.replace("zk://", "ws://")
-       .replace("zks://", "wss://")
+    url.replace("zk://", "ws://").replace("zks://", "wss://")
 }
-

@@ -75,7 +75,7 @@ impl SessionRotationConfig {
             ..Default::default()
         }
     }
-    
+
     /// Disable automatic rotation (manual only)
     pub fn manual_only() -> Self {
         Self {
@@ -89,22 +89,22 @@ impl SessionRotationConfig {
 pub struct RotatingSession {
     /// Current session ID (random, changes on rotation)
     session_id: [u8; 32],
-    
+
     /// Current shared secret (changes on rotation)
     shared_secret: Zeroizing<[u8; 32]>,
-    
+
     /// Current drand starting round
     drand_starting_round: u64,
-    
+
     /// Session creation time
     created_at: Instant,
-    
+
     /// Number of rotations performed
     rotation_count: u64,
-    
+
     /// Configuration
     config: SessionRotationConfig,
-    
+
     /// Position within current session (bytes consumed)
     position: u64,
 }
@@ -127,9 +127,12 @@ impl RotatingSession {
     ) -> Self {
         let mut session_id = [0u8; 32];
         let _ = getrandom::getrandom(&mut session_id);
-        
-        info!("🔄 Created new rotating session (interval: {:?})", config.rotation_interval);
-        
+
+        info!(
+            "🔄 Created new rotating session (interval: {:?})",
+            config.rotation_interval
+        );
+
         Self {
             session_id,
             shared_secret: Zeroizing::new(initial_secret),
@@ -140,7 +143,7 @@ impl RotatingSession {
             position: 0,
         }
     }
-    
+
     /// Check if session needs rotation
     pub fn needs_rotation(&self) -> bool {
         if !self.config.auto_rotate {
@@ -148,93 +151,93 @@ impl RotatingSession {
         }
         self.session_age() >= self.config.rotation_interval
     }
-    
+
     /// Get session age
     pub fn session_age(&self) -> Duration {
         self.created_at.elapsed()
     }
-    
+
     /// Get current session ID
     pub fn session_id(&self) -> &[u8; 32] {
         &self.session_id
     }
-    
+
     /// Get current shared secret
     pub fn shared_secret(&self) -> &[u8; 32] {
         &self.shared_secret
     }
-    
+
     /// Get current drand starting round
     pub fn drand_starting_round(&self) -> u64 {
         self.drand_starting_round
     }
-    
+
     /// Get current position in session
     pub fn position(&self) -> u64 {
         self.position
     }
-    
+
     /// Advance position (after encrypting/decrypting)
     pub fn advance_position(&mut self, bytes: u64) {
         self.position += bytes;
     }
-    
+
     /// Get total rotation count
     pub fn rotation_count(&self) -> u64 {
         self.rotation_count
     }
-    
+
     /// Manually trigger rotation with new shared secret
-    /// 
+    ///
     /// In practice, this would be called after an ML-KEM re-handshake
     /// with the peer. Both parties must rotate simultaneously.
     pub fn rotate(&mut self, new_shared_secret: [u8; 32], new_drand_round: u64) {
         // Zeroize old session state
         self.session_id.zeroize();
-        
+
         // Generate new session ID
         let _ = getrandom::getrandom(&mut self.session_id);
-        
+
         // Update secret
         self.shared_secret = Zeroizing::new(new_shared_secret);
-        
+
         // Update drand round if configured
         if self.config.rotate_drand_round {
             self.drand_starting_round = new_drand_round;
         }
-        
+
         // Reset session state
         self.created_at = Instant::now();
         self.rotation_count += 1;
         self.position = 0;
-        
+
         info!(
             "🔄 Session rotated (count: {}, new round: {})",
             self.rotation_count, self.drand_starting_round
         );
     }
-    
+
     /// Derive a message-specific key (for per-message unlinkability)
-    /// 
+    ///
     /// Uses HKDF to derive a unique key for each message position.
     /// This provides forward secrecy within a session.
     pub fn derive_message_key(&self, message_number: u64) -> Zeroizing<[u8; 32]> {
-        use sha2::{Sha256, Digest};
-        
+        use sha2::{Digest, Sha256};
+
         let mut hasher = Sha256::new();
         hasher.update(&*self.shared_secret);
         hasher.update(&self.session_id);
         hasher.update(&message_number.to_le_bytes());
         hasher.update(b"message_key");
-        
+
         let result = hasher.finalize();
         let mut key = Zeroizing::new([0u8; 32]);
         key.copy_from_slice(&result);
         key
     }
-    
+
     /// Check and auto-rotate if needed
-    /// 
+    ///
     /// Returns true if rotation occurred.
     /// Note: In practice, rotation requires coordination with peer.
     /// This method only checks if rotation is needed.
@@ -280,59 +283,59 @@ impl RotatingSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_session_creation() {
         let secret = [0x42u8; 32];
         let session = RotatingSession::new(secret, 1000000, SessionRotationConfig::default());
-        
+
         assert_eq!(session.drand_starting_round(), 1000000);
         assert_eq!(session.rotation_count(), 0);
         assert_eq!(session.position(), 0);
     }
-    
+
     #[test]
     fn test_session_rotation() {
         let secret1 = [0x42u8; 32];
         let mut session = RotatingSession::new(secret1, 1000000, SessionRotationConfig::default());
-        
+
         // Simulate some usage
         session.advance_position(1000);
-        
+
         // Rotate
         let secret2 = [0x43u8; 32];
         session.rotate(secret2, 2000000);
-        
+
         assert_eq!(session.rotation_count(), 1);
         assert_eq!(session.position(), 0); // Reset on rotation
         assert_eq!(session.drand_starting_round(), 2000000);
     }
-    
+
     #[test]
     fn test_message_key_derivation() {
         let secret = [0x42u8; 32];
         let session = RotatingSession::new(secret, 1000000, SessionRotationConfig::default());
-        
+
         let key1 = session.derive_message_key(0);
         let key2 = session.derive_message_key(1);
-        
+
         // Different message numbers should produce different keys
         assert_ne!(AsRef::<[u8]>::as_ref(&*key1), AsRef::<[u8]>::as_ref(&*key2));
     }
-    
+
     #[test]
     fn test_needs_rotation() {
         let secret = [0x42u8; 32];
-        
+
         // Create a test configuration that bypasses the minimum interval
         let mut config = SessionRotationConfig::default();
         config.rotation_interval = Duration::from_millis(100);
-        
+
         let session = RotatingSession::new(secret, 1000000, config);
-        
+
         // Should not need rotation immediately
         assert!(!session.needs_rotation());
-        
+
         // After waiting, should need rotation
         std::thread::sleep(Duration::from_millis(150));
         assert!(session.needs_rotation());

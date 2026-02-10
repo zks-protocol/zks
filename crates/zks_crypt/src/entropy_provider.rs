@@ -3,18 +3,22 @@
 //! This module defines the trait that allows TrueVernam to use different
 //! entropy sources (including Entropy Grid) without creating cyclic dependencies.
 
-use async_trait::async_trait;
-use crate::entropy_block::DrandRound;
 use crate::drand::DrandError;
+use crate::entropy_block::DrandRound;
+use async_trait::async_trait;
 
 /// Interface for entropy providers that can fetch drand rounds
 #[async_trait]
 pub trait EntropyProvider: Send + Sync {
     /// Fetch a specific drand round
     async fn fetch_round(&self, round_number: u64) -> Result<DrandRound, DrandError>;
-    
+
     /// Fetch multiple consecutive rounds
-    async fn fetch_range(&self, start_round: u64, count: u32) -> Result<Vec<DrandRound>, DrandError>;
+    async fn fetch_range(
+        &self,
+        start_round: u64,
+        count: u32,
+    ) -> Result<Vec<DrandRound>, DrandError>;
 }
 
 /// Simple entropy provider that uses the drand client directly
@@ -40,8 +44,12 @@ impl EntropyProvider for DirectDrandProvider {
             previous_signature: vec![0u8; 96], // We don't have previous signature
         })
     }
-    
-    async fn fetch_range(&self, start_round: u64, count: u32) -> Result<Vec<DrandRound>, DrandError> {
+
+    async fn fetch_range(
+        &self,
+        start_round: u64,
+        count: u32,
+    ) -> Result<Vec<DrandRound>, DrandError> {
         let mut rounds = Vec::new();
         for i in 0..count {
             let round_number = start_round + i as u64;

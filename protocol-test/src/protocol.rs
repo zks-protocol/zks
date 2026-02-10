@@ -8,13 +8,13 @@
 //!
 //! Uses `zks::stream::EncryptedStream` for the authenticated handshake.
 
-use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use zks::stream::EncryptedStream;
+use tokio::net::{TcpListener, TcpStream};
+use tracing::{debug, info};
 use zks::config::ConnectionConfig;
-use zks::proto::HandshakeRole;
 use zks::pqcrypto::ml_dsa::MlDsaKeypair;
-use tracing::{info, debug};
+use zks::proto::HandshakeRole;
+use zks::stream::EncryptedStream;
 
 /// ZKS Protocol error types
 #[derive(Debug)]
@@ -61,33 +61,37 @@ impl ZksProtocolServer {
     pub async fn bind(addr: &str) -> Result<Self> {
         info!("🚀 Initializing ZKS Protocol Server");
         info!("📡 Binding to: {}", addr);
-        
+
         // Generate real ML-DSA-87 keypair for server identity
         let (vk, sk) = zks::sdk_crypto::ml_dsa_keypair().await?;
         let signing_key = MlDsaKeypair::from_bytes(vk.clone(), sk)
             .map_err(|e| ProtocolError::Protocol(format!("Failed to load signing key: {}", e)))?;
-        
+
         let vk_base64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &vk);
         info!("🔑 Server Identity (ML-DSA-87 VK): {}", vk_base64);
-        
+
         let listener = TcpListener::bind(addr).await?;
-        
-        Ok(Self { listener, signing_key })
+
+        Ok(Self {
+            listener,
+            signing_key,
+        })
     }
-    
+
     /// Get server public key
     pub fn public_key(&self) -> Vec<u8> {
         self.signing_key.verifying_key.clone()
     }
-    
+
     /// Accept a new client connection
     pub async fn accept(&mut self) -> Result<ZksProtocolConnection> {
         let (socket, addr) = self.listener.accept().await?;
         info!("🔌 Incoming connection from: {}", addr);
-        
+
         // Server role handshake with persistent signing key
-        let conn = ZksProtocolConnection::accept_handshake(socket, self.signing_key.clone()).await?;
-        
+        let conn =
+            ZksProtocolConnection::accept_handshake(socket, self.signing_key.clone()).await?;
+
         info!("✅ Client {} authenticated and encrypted (via SDK)", addr);
         Ok(conn)
     }
@@ -98,15 +102,18 @@ pub struct ZksProtocolClient;
 
 impl ZksProtocolClient {
     /// Connect to a ZKS Protocol server
-    pub async fn connect(addr: &str, trusted_key: Option<Vec<u8>>) -> Result<ZksProtocolConnection> {
+    pub async fn connect(
+        addr: &str,
+        trusted_key: Option<Vec<u8>>,
+    ) -> Result<ZksProtocolConnection> {
         info!("🔌 Connecting to ZKS Protocol server: {}", addr);
-        
+
         let socket = TcpStream::connect(addr).await?;
         info!("✅ TCP connection established");
-        
+
         // Client role handshake
         let conn = ZksProtocolConnection::initiate_handshake(socket, trusted_key).await?;
-        
+
         info!("✅ ZKS Protocol handshake complete (via SDK)");
         Ok(conn)
     }
@@ -122,13 +129,14 @@ impl ZksProtocolConnection {
     /// Initiate handshake as client
     async fn initiate_handshake(socket: TcpStream, trusted_key: Option<Vec<u8>>) -> Result<Self> {
         debug!("📝 Starting SDK Handshake (initiator)...");
-        
-        let peer_addr = socket.peer_addr()
+
+        let peer_addr = socket
+            .peer_addr()
             .map_err(|e| ProtocolError::Io(e))?
             .to_string();
-            
+
         let config = ConnectionConfig::default();
-        
+
         // Perform SDK handshake
         // Note: For this test, we can pin the server key if provided
         let stream = EncryptedStream::handshake(
@@ -139,24 +147,23 @@ impl ZksProtocolConnection {
             "protocol-test-room".to_string(),
             trusted_key, // Real trusted key if provided
             None,
-        ).await?;
-        
-        Ok(Self {
-            stream,
-            peer_addr,
-        })
+        )
+        .await?;
+
+        Ok(Self { stream, peer_addr })
     }
-    
+
     /// Accept handshake as server
     async fn accept_handshake(socket: TcpStream, signing_key: MlDsaKeypair) -> Result<Self> {
         debug!("📝 Starting SDK Handshake (responder)...");
-        
-        let peer_addr = socket.peer_addr()
+
+        let peer_addr = socket
+            .peer_addr()
             .map_err(|e| ProtocolError::Io(e))?
             .to_string();
-            
+
         let config = ConnectionConfig::default();
-        
+
         // Perform SDK handshake with our persistent signing key
         let stream = EncryptedStream::handshake(
             socket,
@@ -164,42 +171,40 @@ impl ZksProtocolConnection {
             false, // is_swarm
             HandshakeRole::Responder,
             "protocol-test-room".to_string(),
-            None, // Responder doesn't need trusted key
+            None,              // Responder doesn't need trusted key
             Some(signing_key), // Use the server's persistent identity key
-        ).await?;
-        
-        Ok(Self {
-            stream,
-            peer_addr,
-        })
+        )
+        .await?;
+
+        Ok(Self { stream, peer_addr })
     }
-    
+
     /// Send data
     pub async fn send(&mut self, data: &[u8]) -> Result<()> {
         self.stream.write_all(data).await?;
         self.stream.flush().await?;
         Ok(())
     }
-    
+
     /// Receive data
     pub async fn recv(&mut self) -> Result<Vec<u8>> {
         let mut buf = vec![0u8; 4096];
         let n = self.stream.read(&mut buf).await?;
         if n == 0 {
-             return Err(ProtocolError::Io(std::io::Error::new(
-                std::io::ErrorKind::UnexpectedEof, 
-                "Connection closed"
+            return Err(ProtocolError::Io(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "Connection closed",
             )));
         }
         buf.truncate(n);
         Ok(buf)
     }
-    
+
     /// Get peer address
     pub fn peer_addr(&self) -> &str {
         &self.peer_addr
     }
-    
+
     /// Close connection gracefully
     pub async fn close(mut self) -> Result<()> {
         info!("👋 Closing connection to {}", self.peer_addr);

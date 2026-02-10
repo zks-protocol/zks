@@ -31,7 +31,12 @@ pub struct EntropyBlock {
 
 impl DrandRound {
     /// Create a new DrandRound with all required fields
-    pub fn new(round: u64, randomness: [u8; 32], signature: Vec<u8>, previous_signature: Vec<u8>) -> Self {
+    pub fn new(
+        round: u64,
+        randomness: [u8; 32],
+        signature: Vec<u8>,
+        previous_signature: Vec<u8>,
+    ) -> Self {
         Self {
             round,
             randomness,
@@ -46,17 +51,17 @@ impl DrandRound {
         if self.round == 0 {
             return false;
         }
-        
+
         // Randomness should be exactly 32 bytes
         if self.randomness.len() != 32 {
             return false;
         }
-        
+
         // Signature should not be empty
         if self.signature.is_empty() {
             return false;
         }
-        
+
         true
     }
 
@@ -92,16 +97,16 @@ impl EntropyBlock {
                 self.end_round + 1
             ));
         }
-        
+
         // Verify basic integrity of the round
         if !round.verify_basic() {
             return Err("Invalid round data".to_string());
         }
-        
+
         self.rounds.push(round);
         self.end_round = self.start_round + self.rounds.len() as u64 - 1;
         self.update_block_hash();
-        
+
         Ok(())
     }
 
@@ -119,7 +124,7 @@ impl EntropyBlock {
     }
 
     /// Calculate the block hash without modifying the block
-    /// 
+    ///
     /// # Security
     /// This computes SHA-256 over all block contents for integrity verification.
     /// The hash covers: start_round, end_round, and all round hashes.
@@ -127,17 +132,17 @@ impl EntropyBlock {
         let mut hasher = Sha256::new();
         hasher.update(self.start_round.to_be_bytes());
         hasher.update(self.end_round.to_be_bytes());
-        
+
         for round in &self.rounds {
             let round_hash = round.calculate_hash();
             hasher.update(&round_hash);
         }
-        
+
         hasher.finalize().into()
     }
 
     /// Create a block with properly calculated hash
-    /// 
+    ///
     /// # Security  
     /// This is the RECOMMENDED way to create blocks as it ensures
     /// the block_hash is properly computed.
@@ -147,7 +152,7 @@ impl EntropyBlock {
         } else {
             start_round + rounds.len() as u64 - 1
         };
-        
+
         let mut block = Self {
             start_round,
             end_round,
@@ -165,19 +170,19 @@ impl EntropyBlock {
         if self.rounds.len() != expected_rounds {
             return false;
         }
-        
+
         // Verify each round is sequential and valid
         for (i, round) in self.rounds.iter().enumerate() {
             let expected_round = self.start_round + i as u64;
             if round.round != expected_round {
                 return false;
             }
-            
+
             if !round.verify_basic() {
                 return false;
             }
         }
-        
+
         // Verify the block hash matches
         let mut temp_block = self.clone();
         temp_block.update_block_hash();
@@ -201,24 +206,27 @@ impl EntropyBlock {
 
     /// Save the block to a file
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), String> {
-        let bytes = self.to_bytes().map_err(|e| format!("Serialization error: {}", e))?;
-        
+        let bytes = self
+            .to_bytes()
+            .map_err(|e| format!("Serialization error: {}", e))?;
+
         fs::write(&path, bytes).map_err(|e| format!("File write error: {}", e))?;
-        
+
         Ok(())
     }
 
     /// Load the block from a file
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self, String> {
         let bytes = fs::read(&path).map_err(|e| format!("File read error: {}", e))?;
-        
-        let block = Self::from_bytes(&bytes).map_err(|e| format!("Deserialization error: {}", e))?;
-        
+
+        let block =
+            Self::from_bytes(&bytes).map_err(|e| format!("Deserialization error: {}", e))?;
+
         // Verify integrity after loading
         if !block.verify_integrity() {
             return Err("Block integrity verification failed".to_string());
         }
-        
+
         Ok(block)
     }
 
@@ -227,7 +235,7 @@ impl EntropyBlock {
         if round_number < self.start_round || round_number > self.end_round {
             return None;
         }
-        
+
         let index = (round_number - self.start_round) as usize;
         self.rounds.get(index)
     }
@@ -252,11 +260,11 @@ impl EntropyBlock {
         if rounds.is_empty() {
             return Err("Cannot create block from empty rounds".to_string());
         }
-        
+
         let start_round = rounds[0].round;
         let mut block = Self::new(start_round);
         block.add_rounds(rounds)?;
-        
+
         Ok(block)
     }
 }
@@ -294,11 +302,11 @@ mod tests {
         let mut block = EntropyBlock::new(1000);
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
-        
+
         assert!(block.add_round(round1).is_ok());
         assert_eq!(block.len(), 1);
         assert_eq!(block.end_round, 1000);
-        
+
         assert!(block.add_round(round2).is_ok());
         assert_eq!(block.len(), 2);
         assert_eq!(block.end_round, 1001);
@@ -309,7 +317,7 @@ mod tests {
         let mut block = EntropyBlock::new(1000);
         let round1 = create_test_round(1000);
         let round3 = create_test_round(1002); // Skip round 1001
-        
+
         assert!(block.add_round(round1).is_ok());
         assert!(block.add_round(round3).is_err()); // Should fail
     }
@@ -319,20 +327,20 @@ mod tests {
         let mut block = EntropyBlock::new(1000);
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
-        
+
         block.add_round(round1).unwrap();
         block.add_round(round2).unwrap();
-        
+
         // Test serialization
         let bytes = block.to_bytes().unwrap();
         assert!(bytes.len() > 0);
-        
+
         // Test deserialization
         let deserialized = EntropyBlock::from_bytes(&bytes).unwrap();
         assert_eq!(deserialized.start_round, block.start_round);
         assert_eq!(deserialized.end_round, block.end_round);
         assert_eq!(deserialized.len(), block.len());
-        
+
         // Test integrity verification
         assert!(deserialized.verify_integrity());
     }
@@ -342,21 +350,21 @@ mod tests {
         let mut block = EntropyBlock::new(1000);
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
-        
+
         block.add_round(round1).unwrap();
         block.add_round(round2).unwrap();
-        
+
         let test_path = "test_entropy_block.bin";
-        
+
         // Test save
         assert!(block.save_to_file(test_path).is_ok());
-        
+
         // Test load
         let loaded = EntropyBlock::load_from_file(test_path).unwrap();
         assert_eq!(loaded.start_round, block.start_round);
         assert_eq!(loaded.end_round, block.end_round);
         assert_eq!(loaded.len(), block.len());
-        
+
         // Cleanup
         std::fs::remove_file(test_path).unwrap();
     }
@@ -367,11 +375,11 @@ mod tests {
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
         let round3 = create_test_round(1002);
-        
+
         block.add_round(round1.clone()).unwrap();
         block.add_round(round2.clone()).unwrap();
         block.add_round(round3.clone()).unwrap();
-        
+
         assert!(block.get_round(1000).is_some());
         assert!(block.get_round(1001).is_some());
         assert!(block.get_round(1002).is_some());
@@ -384,12 +392,12 @@ mod tests {
         let mut block = EntropyBlock::new(1000);
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
-        
+
         block.add_round(round1).unwrap();
         block.add_round(round2).unwrap();
-        
+
         assert!(block.verify_integrity());
-        
+
         // Tamper with the block
         let mut tampered = block.clone();
         tampered.start_round = 999; // Invalid start round
@@ -406,7 +414,7 @@ mod tests {
     fn test_single_round_block() {
         let mut block = EntropyBlock::new(1000);
         let round = create_test_round(1000);
-        
+
         block.add_round(round).unwrap();
         assert_eq!(block.len(), 1);
         assert_eq!(block.start_round, 1000);
@@ -417,18 +425,18 @@ mod tests {
     #[test]
     fn test_large_block() {
         let mut block = EntropyBlock::new(1);
-        
+
         // Add 100 rounds
         for i in 1..=100 {
             let round = create_test_round(i);
             block.add_round(round).unwrap();
         }
-        
+
         assert_eq!(block.len(), 100);
         assert_eq!(block.start_round, 1);
         assert_eq!(block.end_round, 100);
         assert!(block.verify_integrity());
-        
+
         // Test serialization of large block
         let bytes = block.to_bytes().unwrap();
         let deserialized = EntropyBlock::from_bytes(&bytes).unwrap();
@@ -440,16 +448,16 @@ mod tests {
     fn test_block_hash_consistency() {
         let mut block1 = EntropyBlock::new(1000);
         let mut block2 = EntropyBlock::new(1000);
-        
+
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
-        
+
         block1.add_round(round1.clone()).unwrap();
         block1.add_round(round2.clone()).unwrap();
-        
+
         block2.add_round(round1).unwrap();
         block2.add_round(round2).unwrap();
-        
+
         // Blocks with same rounds should have same hash
         assert_eq!(block1.block_hash, block2.block_hash);
     }
@@ -459,10 +467,10 @@ mod tests {
         let mut block = EntropyBlock::new(1000);
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
-        
+
         block.add_round(round1).unwrap();
         block.add_round(round2).unwrap();
-        
+
         assert!(block.contains_round(1000));
         assert!(block.contains_round(1001));
         assert!(!block.contains_round(999));
@@ -476,7 +484,7 @@ mod tests {
             create_test_round(1001),
             create_test_round(1002),
         ];
-        
+
         let block = EntropyBlock::from_rounds(rounds).unwrap();
         assert_eq!(block.len(), 3);
         assert_eq!(block.start_round, 1000);
@@ -496,10 +504,10 @@ mod tests {
         let mut block = EntropyBlock::new(1000);
         let round = create_test_round(1000);
         block.add_round(round).unwrap();
-        
+
         let size = block.serialized_size().unwrap();
         assert!(size > 0);
-        
+
         let bytes = block.to_bytes().unwrap();
         assert_eq!(size, bytes.len());
     }
@@ -509,10 +517,10 @@ mod tests {
         let round = DrandRound::new(
             1000,
             [0u8; 32], // Valid randomness
-            vec![],   // Empty signature - invalid
+            vec![],    // Empty signature - invalid
             vec![0u8; 96],
         );
-        
+
         assert!(!round.verify_basic()); // Should fail basic verification
     }
 
@@ -521,22 +529,22 @@ mod tests {
         let mut block = EntropyBlock::new(1000);
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
-        
+
         block.add_round(round1).unwrap();
         block.add_round(round2).unwrap();
-        
+
         // Test various corruption scenarios
         let mut corrupted = block.clone();
-        
+
         // Corrupt end round
         corrupted.end_round = 1002;
         assert!(!corrupted.verify_integrity());
-        
+
         // Corrupt by removing a round
         let mut corrupted2 = block.clone();
         corrupted2.rounds.pop();
         assert!(!corrupted2.verify_integrity());
-        
+
         // Corrupt by changing round data
         let mut corrupted3 = block.clone();
         if let Some(round) = corrupted3.rounds.get_mut(0) {
@@ -548,11 +556,11 @@ mod tests {
     #[test]
     fn test_file_operations_error_handling() {
         let block = EntropyBlock::new(1000);
-        
+
         // Test saving to invalid path
         let invalid_path = "/invalid/path/that/does/not/exist.bin";
         assert!(block.save_to_file(invalid_path).is_err());
-        
+
         // Test loading from non-existent file
         let non_existent = "this_file_does_not_exist.bin";
         assert!(EntropyBlock::load_from_file(non_existent).is_err());

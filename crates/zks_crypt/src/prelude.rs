@@ -1,21 +1,26 @@
 //! zks_crypt Prelude
-//! 
+//!
 //! This module provides convenient access to the most commonly used types and functions
 //! from the zks_crypt crate.
 
 // Core cryptographic modules
 pub use crate::anti_replay::AntiReplayContainer;
-pub use crate::constant_time::{ct_eq, ct_eq_fixed, ct_compare, ct_copy, ct_swap, ct_is_zero, ct_assign, ct_select_bytes, ct_xor};
-pub use crate::drand::{DrandEntropy, DrandConfig, DrandError, get_drand_entropy, get_unique_entropy};
+pub use crate::constant_time::{
+    ct_assign, ct_compare, ct_copy, ct_eq, ct_eq_fixed, ct_is_zero, ct_select_bytes, ct_swap,
+    ct_xor,
+};
+pub use crate::drand::{
+    get_drand_entropy, get_unique_entropy, DrandConfig, DrandEntropy, DrandError,
+};
+pub use crate::high_entropy_cipher::{TrueVernamBuffer, TrueVernamFetcher};
 pub use crate::recursive_chain::RecursiveChain;
 pub use crate::scramble::CiphertextScrambler;
-pub use crate::high_entropy_cipher::{TrueVernamBuffer, TrueVernamFetcher};
-pub use crate::wasif_vernam::{WasifVernam, ContinuousEntropyRefresher};
+pub use crate::wasif_vernam::{ContinuousEntropyRefresher, WasifVernam};
 
 // Re-export common dependencies for convenience
 pub use chacha20poly1305;
-pub use sha2;
 pub use hkdf;
+pub use sha2;
 pub use zeroize;
 
 // Type aliases for common use cases

@@ -1,18 +1,18 @@
 //! # zks_wire
-//! 
+//!
 //! Network primitives for ZK Protocol - NAT traversal, STUN, and swarm networking.
-//! 
+//!
 //! This crate provides low-level networking primitives for the ZK Protocol:
 //! - **NAT Traversal**: Hole punching and UPnP/NAT-PMP support
 //! - **STUN/TURN**: ICE-like connection establishment  
 //! - **Swarm Networking**: Peer discovery and mesh formation
 //! - **Wire Protocol**: Binary message framing and encryption
-//! 
+//!
 //! # Example
-//! 
+//!
 //! ```rust,no_run
 //! use zks_wire::{Swarm, StunClient, NatTraversal};
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     // Create a swarm for peer discovery
@@ -33,47 +33,58 @@
 #![warn(missing_docs)]
 #![deny(unsafe_code)]
 
+pub mod circuit;
+pub mod cloudflare_signaling;
+pub mod dht_lookup;
+pub mod entropy_cache;
+pub mod entropy_grid;
+pub mod entropy_swarm;
 pub mod error;
+pub mod faisal_swarm;
 pub mod nat;
+pub mod p2p;
 pub mod relay;
+pub mod seeder;
+pub mod signaling;
 pub mod stun;
 pub mod swarm;
-pub mod circuit;
-pub mod wire;
-pub mod signaling;
-pub mod cloudflare_signaling;
-pub mod p2p;
 pub mod swarm_controller;
-pub mod faisal_swarm;
-pub mod entropy_swarm;
-pub mod entropy_cache;
-pub mod dht_lookup;
-pub mod seeder;
-pub mod entropy_grid;
+pub mod wire;
 
-pub use error::{WireError, Result};
-pub use nat::{NatTraversal, NatType};
-pub use relay::{RelayServer, RelayClient, RelayId, RelayConfig, RelayCredentials};
-pub use stun::{StunClient, StunServer, IceCandidate};
-pub use swarm::{Swarm, Peer, PeerId, SwarmEvent};
-pub use circuit::{SwarmCircuit, CircuitBuilder};
-pub use wire::{WireMessage, WireProtocol, MessageType};
-pub use signaling::{SignalingClient, SignalingMessage, PeerInfo, PeerCapabilities};
-pub use cloudflare_signaling::{CloudflareSignalingClient, CloudflareSignalingConfig, CloudflareSignalingMessage, ConnectionStats};
-pub use p2p::{NativeP2PTransport, NativeP2PError};
-pub use swarm_controller::{SwarmController, SwarmControllerError, Platform, TransportCapabilities, OnionStream};
-pub use faisal_swarm::{FaisalSwarmCircuit, FaisalSwarmManager, CircuitState, SwarmHop, HopRole};
-pub use entropy_swarm::{EntropySwarm, EntropySwarmConfig, EntropyRequest, EntropyResponse, ENTROPY_TOPIC};
+pub use circuit::{CircuitBuilder, SwarmCircuit};
+pub use cloudflare_signaling::{
+    CloudflareSignalingClient, CloudflareSignalingConfig, CloudflareSignalingMessage,
+    ConnectionStats,
+};
+pub use dht_lookup::{
+    DHTLookupConfig, DHTLookupError, DHTLookupManager, DHTLookupResult, DHTLookupService,
+};
 pub use entropy_cache::{EntropyCache, EntropyCacheConfig, EntropyCacheStats};
-pub use dht_lookup::{DHTLookupManager, DHTLookupService, DHTLookupConfig, DHTLookupResult, DHTLookupError};
+pub use entropy_grid::{
+    EntropyCacheInterface, EntropyGrid, EntropyGridConfig, EntropySwarmInterface, IpfsInterface,
+};
+pub use entropy_swarm::{
+    EntropyRequest, EntropyResponse, EntropySwarm, EntropySwarmConfig, ENTROPY_TOPIC,
+};
+pub use error::{Result, WireError};
+pub use faisal_swarm::{CircuitState, FaisalSwarmCircuit, FaisalSwarmManager, HopRole, SwarmHop};
+pub use nat::{NatTraversal, NatType};
+pub use p2p::{NativeP2PError, NativeP2PTransport};
+pub use relay::{RelayClient, RelayConfig, RelayCredentials, RelayId, RelayServer};
 pub use seeder::{EntropySeeder, SeederConfig, SeederError};
-pub use entropy_grid::{EntropyGrid, EntropyGridConfig, EntropyCacheInterface, EntropySwarmInterface, IpfsInterface};
+pub use signaling::{PeerCapabilities, PeerInfo, SignalingClient, SignalingMessage};
+pub use stun::{IceCandidate, StunClient, StunServer};
+pub use swarm::{Peer, PeerId, Swarm, SwarmEvent};
+pub use swarm_controller::{
+    OnionStream, Platform, SwarmController, SwarmControllerError, TransportCapabilities,
+};
+pub use wire::{MessageType, WireMessage, WireProtocol};
 
 /// Re-export commonly used types
 pub mod prelude {
-    pub use crate::{Swarm, StunClient, NatTraversal, WireProtocol, Result};
-    pub use crate::{PeerId, Peer, SwarmEvent};
-    pub use crate::{SwarmCircuit, CircuitBuilder};
-    pub use crate::{RelayServer, RelayClient, RelayId, RelayConfig};
-    pub use crate::{FaisalSwarmCircuit, FaisalSwarmManager, CircuitState, SwarmHop, HopRole};
+    pub use crate::{CircuitBuilder, SwarmCircuit};
+    pub use crate::{CircuitState, FaisalSwarmCircuit, FaisalSwarmManager, HopRole, SwarmHop};
+    pub use crate::{NatTraversal, Result, StunClient, Swarm, WireProtocol};
+    pub use crate::{Peer, PeerId, SwarmEvent};
+    pub use crate::{RelayClient, RelayConfig, RelayId, RelayServer};
 }

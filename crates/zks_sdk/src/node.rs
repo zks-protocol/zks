@@ -1,11 +1,11 @@
+use crate::error::{Result, SdkError};
+use crate::identity::ZksIdentity;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::task::JoinHandle;
 use tokio::sync::broadcast;
-use tracing::{info, error, debug};
-use crate::error::{Result, SdkError};
-use crate::identity::ZksIdentity;
+use tokio::task::JoinHandle;
+use tracing::{debug, error, info};
 
 /// Configuration for a ZKS Node
 #[derive(Debug, Clone)]
@@ -82,7 +82,8 @@ impl ZksNode {
             info!("⚠️ No identity provided - running in anonymous mode");
         }
 
-        let listener = TcpListener::bind(config.bind_addr).await
+        let listener = TcpListener::bind(config.bind_addr)
+            .await
             .map_err(|e| SdkError::IoError(e))?;
 
         let task = tokio::spawn(async move {
@@ -120,127 +121,162 @@ impl ZksNode {
 
     async fn handle_connection(mut socket: TcpStream, config: NodeConfig) -> Result<()> {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
-        use zks_proto::handshake::{Handshake, HandshakeInit, HandshakeFinish};
-        
+        use zks_proto::handshake::{Handshake, HandshakeFinish, HandshakeInit};
+
         info!("🔐 Starting ZKS post-quantum handshake with peer");
-        
+
         // Get node identity for handshake
-        let identity = config.identity.as_ref().ok_or_else(|| SdkError::ConfigError("No identity provided for handshake".into()))?;
-        
+        let identity = config
+            .identity
+            .as_ref()
+            .ok_or_else(|| SdkError::ConfigError("No identity provided for handshake".into()))?;
+
         // Create responder handshake with node's identity
         let mut handshake = Handshake::new_responder(config.network_name.clone());
-        
+
         // Read HandshakeInit (Message 1)
         let mut buf = vec![0u8; 4096]; // Large buffer for handshake messages
-        let n = socket.read(&mut buf).await.map_err(|e| SdkError::IoError(e))?;
-        
-        if n == 0 { 
+        let n = socket
+            .read(&mut buf)
+            .await
+            .map_err(|e| SdkError::IoError(e))?;
+
+        if n == 0 {
             info!("Connection closed by peer before handshake");
-            return Ok(()); 
+            return Ok(());
         }
-        
+
         // Deserialize HandshakeInit message
-        let init_msg: HandshakeInit = serde_json::from_slice(&buf[..n])
-            .map_err(|e| SdkError::SerializationError(format!("Failed to deserialize HandshakeInit: {}", e)))?;
-        
+        let init_msg: HandshakeInit = serde_json::from_slice(&buf[..n]).map_err(|e| {
+            SdkError::SerializationError(format!("Failed to deserialize HandshakeInit: {}", e))
+        })?;
+
         info!("📨 Received HandshakeInit from peer");
-        
+
         // Process init message
-        handshake.process_init(&init_msg)
-            .map_err(|e| SdkError::HandshakeFailed(format!("Failed to process HandshakeInit: {}", e)))?;
-        
+        handshake.process_init(&init_msg).map_err(|e| {
+            SdkError::HandshakeFailed(format!("Failed to process HandshakeInit: {}", e))
+        })?;
+
         // Set signing keypair for responder
-        let keypair = identity.to_keypair()
+        let keypair = identity
+            .to_keypair()
             .map_err(|e| SdkError::CryptoError(format!("Failed to get keypair: {}", e)))?;
-        handshake.set_signing_keypair(keypair)
-            .map_err(|e| SdkError::HandshakeFailed(format!("Failed to set signing keypair: {}", e)))?;
-        
+        handshake.set_signing_keypair(keypair).map_err(|e| {
+            SdkError::HandshakeFailed(format!("Failed to set signing keypair: {}", e))
+        })?;
+
         // Create and send HandshakeResponse (Message 2)
-        let response = handshake.create_response()
-            .map_err(|e| SdkError::HandshakeFailed(format!("Failed to create HandshakeResponse: {}", e)))?;
-        
-        let response_bytes = serde_json::to_vec(&response)
-            .map_err(|e| SdkError::SerializationError(format!("Failed to serialize HandshakeResponse: {}", e)))?;
-        
-        socket.write_all(&response_bytes).await.map_err(|e| SdkError::IoError(e))?;
+        let response = handshake.create_response().map_err(|e| {
+            SdkError::HandshakeFailed(format!("Failed to create HandshakeResponse: {}", e))
+        })?;
+
+        let response_bytes = serde_json::to_vec(&response).map_err(|e| {
+            SdkError::SerializationError(format!("Failed to serialize HandshakeResponse: {}", e))
+        })?;
+
+        socket
+            .write_all(&response_bytes)
+            .await
+            .map_err(|e| SdkError::IoError(e))?;
         info!("📤 Sent HandshakeResponse to peer");
-        
+
         // Read HandshakeFinish (Message 3)
-        let n = socket.read(&mut buf).await.map_err(|e| SdkError::IoError(e))?;
-        
-        if n == 0 { 
+        let n = socket
+            .read(&mut buf)
+            .await
+            .map_err(|e| SdkError::IoError(e))?;
+
+        if n == 0 {
             info!("Connection closed by peer during handshake");
-            return Ok(()); 
+            return Ok(());
         }
-        
+
         // Deserialize HandshakeFinish message
-        let finish_msg: HandshakeFinish = serde_json::from_slice(&buf[..n])
-            .map_err(|e| SdkError::SerializationError(format!("Failed to deserialize HandshakeFinish: {}", e)))?;
-        
+        let finish_msg: HandshakeFinish = serde_json::from_slice(&buf[..n]).map_err(|e| {
+            SdkError::SerializationError(format!("Failed to deserialize HandshakeFinish: {}", e))
+        })?;
+
         info!("📨 Received HandshakeFinish from peer");
-        
+
         // Process finish message
-        handshake.process_finish(&finish_msg)
-            .map_err(|e| SdkError::HandshakeFailed(format!("Failed to process HandshakeFinish: {}", e)))?;
-        
+        handshake.process_finish(&finish_msg).map_err(|e| {
+            SdkError::HandshakeFailed(format!("Failed to process HandshakeFinish: {}", e))
+        })?;
+
         // Handshake complete - get shared secret for session encryption
-        let shared_secret = handshake.shared_secret()
-            .ok_or_else(|| SdkError::HandshakeFailed("No shared secret derived from handshake".into()))?;
-        
+        let shared_secret = handshake.shared_secret().ok_or_else(|| {
+            SdkError::HandshakeFailed("No shared secret derived from handshake".into())
+        })?;
+
         info!("✅ Post-quantum handshake complete, session established");
         info!("🔑 Shared secret derived: {} bytes", shared_secret.len());
-        
+
         // Initialize WasifVernam cipher for encrypted traffic
         let mut cipher = zks_crypt::wasif_vernam::WasifVernam::new(shared_secret)
             .map_err(|e| SdkError::CryptoError(format!("Failed to initialize cipher: {:?}", e)))?;
-        
+
         // Derive base IV for responder (we're the responder in this connection)
         cipher.derive_base_iv(&shared_secret, false);
-        
+
         // Enable sequenced Vernam mode for 256-bit post-quantum computational security
         cipher.enable_sequenced_vernam(shared_secret);
-        
+
         info!("🔒 Encrypted session established with WasifVernam");
-        
+
         // Handle encrypted traffic
         let mut buf = vec![0u8; 4096];
-        
+
         loop {
             // Read encrypted message (4-byte length prefix + encrypted data)
             let mut len_buf = [0u8; 4];
             match socket.read_exact(&mut len_buf).await {
-                Ok(_) => {},
+                Ok(_) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
                     info!("🔌 Connection closed by peer");
                     break;
                 }
                 Err(e) => return Err(SdkError::IoError(e)),
             }
-            
+
             let msg_len = u32::from_be_bytes(len_buf) as usize;
             if msg_len > buf.len() {
                 buf.resize(msg_len, 0);
             }
-            
-            socket.read_exact(&mut buf[..msg_len]).await.map_err(|e| SdkError::IoError(e))?;
-            
+
+            socket
+                .read_exact(&mut buf[..msg_len])
+                .await
+                .map_err(|e| SdkError::IoError(e))?;
+
             // Decrypt message
-            let decrypted = cipher.decrypt_sequenced(&buf[..msg_len])
+            let decrypted = cipher
+                .decrypt_sequenced(&buf[..msg_len])
                 .map_err(|e| SdkError::CryptoError(format!("Decryption failed: {:?}", e)))?;
-            
+
             info!("📨 Received encrypted message: {} bytes", decrypted.len());
-            
+
             // Echo back the decrypted message (for testing)
-            let encrypted_response = cipher.encrypt_sequenced(&decrypted)
+            let encrypted_response = cipher
+                .encrypt_sequenced(&decrypted)
                 .map_err(|e| SdkError::CryptoError(format!("Encryption failed: {:?}", e)))?;
-            
+
             let response_len = (encrypted_response.len() as u32).to_be_bytes();
-            socket.write_all(&response_len).await.map_err(|e| SdkError::IoError(e))?;
-            socket.write_all(&encrypted_response).await.map_err(|e| SdkError::IoError(e))?;
-            
-            info!("📤 Sent encrypted response: {} bytes", encrypted_response.len());
+            socket
+                .write_all(&response_len)
+                .await
+                .map_err(|e| SdkError::IoError(e))?;
+            socket
+                .write_all(&encrypted_response)
+                .await
+                .map_err(|e| SdkError::IoError(e))?;
+
+            info!(
+                "📤 Sent encrypted response: {} bytes",
+                encrypted_response.len()
+            );
         }
-        
+
         info!("🔌 Connection closed");
         Ok(())
     }

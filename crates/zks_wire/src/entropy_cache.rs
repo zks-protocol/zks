@@ -3,15 +3,15 @@
 //! This module provides efficient caching of entropy blocks with automatic cleanup
 //! and Kademlia DHT integration for distributed discovery.
 
+use lru::LruCache;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use lru::LruCache;
-use serde::{Serialize, Deserialize};
 use tracing::{debug, info};
 
-use zks_crypt::entropy_block::EntropyBlock;
 use crate::{Result, WireError};
+use zks_crypt::entropy_block::EntropyBlock;
 
 /// Configuration for the entropy block cache
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,11 +31,11 @@ pub struct EntropyCacheConfig {
 impl Default for EntropyCacheConfig {
     fn default() -> Self {
         Self {
-            max_blocks: 100,              // 100 blocks = ~3.2 GB max
+            max_blocks: 100,                  // 100 blocks = ~3.2 GB max
             max_block_size: 32 * 1024 * 1024, // 32 MB per block
-            ttl_seconds: 3600,            // 1 hour TTL
-            auto_cleanup: true,           // Auto cleanup expired blocks
-            cleanup_interval_seconds: 300, // 5 minutes cleanup interval
+            ttl_seconds: 3600,                // 1 hour TTL
+            auto_cleanup: true,               // Auto cleanup expired blocks
+            cleanup_interval_seconds: 300,    // 5 minutes cleanup interval
         }
     }
 }
@@ -144,7 +144,8 @@ impl EntropyCache {
     /// Create a new entropy cache with the given configuration
     pub fn new(config: EntropyCacheConfig) -> Self {
         let blocks = Arc::new(RwLock::new(LruCache::new(
-            std::num::NonZeroUsize::new(config.max_blocks).unwrap_or(std::num::NonZeroUsize::new(100).unwrap())
+            std::num::NonZeroUsize::new(config.max_blocks)
+                .unwrap_or(std::num::NonZeroUsize::new(100).unwrap()),
         )));
 
         let stats = Arc::new(RwLock::new(CacheStatsInternal::default()));
@@ -166,7 +167,8 @@ impl EntropyCache {
     /// Store an entropy block in the cache
     pub async fn store_block(&self, block: EntropyBlock) -> Result<()> {
         // Validate block size
-        let block_size = std::mem::size_of_val(&block) + (block.rounds.len() * std::mem::size_of::<zks_crypt::entropy_block::DrandRound>());
+        let block_size = std::mem::size_of_val(&block)
+            + (block.rounds.len() * std::mem::size_of::<zks_crypt::entropy_block::DrandRound>());
         if block_size > self.config.max_block_size {
             return Err(WireError::other(&format!(
                 "Block size {} exceeds maximum allowed size {}",
@@ -175,7 +177,7 @@ impl EntropyCache {
         }
 
         let start_round = block.start_round;
-        
+
         // Create cached block
         let cached_block = CachedEntropyBlock::new(block);
 
@@ -196,7 +198,7 @@ impl EntropyCache {
     /// Retrieve an entropy block from the cache
     pub async fn get_block(&self, start_round: u64) -> Result<Option<EntropyBlock>> {
         let mut blocks = self.blocks.write().await;
-        
+
         // Update stats
         let mut stats = self.stats.write().await;
         stats.total_requests += 1;
@@ -225,7 +227,11 @@ impl EntropyCache {
     }
 
     /// Get multiple blocks by range
-    pub async fn get_blocks_range(&self, start_round: u64, end_round: u64) -> Result<Vec<EntropyBlock>> {
+    pub async fn get_blocks_range(
+        &self,
+        start_round: u64,
+        end_round: u64,
+    ) -> Result<Vec<EntropyBlock>> {
         let mut result = Vec::new();
         let blocks = self.blocks.read().await;
 
@@ -244,7 +250,7 @@ impl EntropyCache {
     /// Check if we have a specific block
     pub async fn has_block(&self, start_round: u64) -> bool {
         let blocks = self.blocks.read().await;
-        
+
         if let Some(cached_block) = blocks.peek(&start_round) {
             !cached_block.is_expired(self.config.ttl_seconds)
         } else {
@@ -255,12 +261,15 @@ impl EntropyCache {
     /// Remove a block from the cache
     pub async fn remove_block(&self, start_round: u64) -> Result<bool> {
         let mut blocks = self.blocks.write().await;
-        
+
         if blocks.pop(&start_round).is_some() {
             info!("Removed entropy block {} from cache", start_round);
             Ok(true)
         } else {
-            debug!("Entropy block {} not found in cache for removal", start_round);
+            debug!(
+                "Entropy block {} not found in cache for removal",
+                start_round
+            );
             Ok(false)
         }
     }
@@ -269,7 +278,7 @@ impl EntropyCache {
     pub async fn clear(&self) -> Result<()> {
         let mut blocks = self.blocks.write().await;
         let mut stats = self.stats.write().await;
-        
+
         let removed_count = blocks.len();
         blocks.clear();
         stats.total_size_bytes = 0;
@@ -367,13 +376,12 @@ impl EntropyCache {
         let interval = self.config.cleanup_interval_seconds;
 
         let handle = tokio::spawn(async move {
-            let mut cleanup_interval = tokio::time::interval(
-                std::time::Duration::from_secs(interval)
-            );
+            let mut cleanup_interval =
+                tokio::time::interval(std::time::Duration::from_secs(interval));
 
             loop {
                 cleanup_interval.tick().await;
-                
+
                 let removed = cache.cleanup_expired().await;
                 if removed > 0 {
                     debug!("Auto cleanup removed {} expired blocks", removed);
@@ -381,16 +389,25 @@ impl EntropyCache {
             }
         });
 
-        info!("Started entropy cache cleanup task with {} second interval", interval);
+        info!(
+            "Started entropy cache cleanup task with {} second interval",
+            interval
+        );
         Ok(handle)
     }
 
     /// Add a provider record for an entropy block
     pub async fn add_provider_record(&self, start_round: u64, peer_id: String) -> Result<()> {
         let mut providers = self.provider_records.write().await;
-        providers.entry(start_round).or_insert_with(Vec::new).push(peer_id.clone());
-        
-        debug!("Added provider record for block {}: {}", start_round, peer_id);
+        providers
+            .entry(start_round)
+            .or_insert_with(Vec::new)
+            .push(peer_id.clone());
+
+        debug!(
+            "Added provider record for block {}: {}",
+            start_round, peer_id
+        );
         Ok(())
     }
 
@@ -403,16 +420,16 @@ impl EntropyCache {
     /// Remove a provider record
     pub async fn remove_provider_record(&self, start_round: u64, peer_id: &str) -> Result<bool> {
         let mut providers = self.provider_records.write().await;
-        
+
         if let Some(peer_list) = providers.get_mut(&start_round) {
             let initial_len = peer_list.len();
             peer_list.retain(|id| id != peer_id);
             let changed = initial_len != peer_list.len();
-            
+
             if peer_list.is_empty() {
                 providers.remove(&start_round);
             }
-            
+
             Ok(changed)
         } else {
             Ok(false)
@@ -422,7 +439,7 @@ impl EntropyCache {
     /// Mark a block as being served
     pub async fn mark_serving(&self, start_round: u64, is_serving: bool) -> Result<bool> {
         let mut blocks = self.blocks.write().await;
-        
+
         if let Some(cached_block) = blocks.get_mut(&start_round) {
             cached_block.is_serving = is_serving;
             debug!("Marked block {} as serving: {}", start_round, is_serving);
@@ -435,7 +452,7 @@ impl EntropyCache {
     /// Check if we're currently serving a block
     pub async fn is_serving(&self, start_round: u64) -> bool {
         let blocks = self.blocks.read().await;
-        
+
         if let Some(cached_block) = blocks.peek(&start_round) {
             cached_block.is_serving
         } else {
@@ -448,7 +465,8 @@ impl Clone for EntropyCache {
     fn clone(&self) -> Self {
         Self {
             blocks: Arc::new(RwLock::new(LruCache::new(
-                std::num::NonZeroUsize::new(self.config.max_blocks).unwrap_or(std::num::NonZeroUsize::new(100).unwrap())
+                std::num::NonZeroUsize::new(self.config.max_blocks)
+                    .unwrap_or(std::num::NonZeroUsize::new(100).unwrap()),
             ))),
             config: self.config.clone(),
             stats: Arc::new(RwLock::new(CacheStatsInternal::default())),
@@ -460,15 +478,17 @@ impl Clone for EntropyCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zks_crypt::entropy_block::{EntropyBlock, DrandRound};
+    use zks_crypt::entropy_block::{DrandRound, EntropyBlock};
 
     fn create_test_block(start_round: u64) -> EntropyBlock {
-        let rounds: Vec<DrandRound> = (0..1000).map(|i| DrandRound {
-            round: start_round + i,
-            randomness: [0u8; 32],
-            signature: vec![1, 2, 3, 4],
-            previous_signature: vec![0, 1, 2, 3],
-        }).collect();
+        let rounds: Vec<DrandRound> = (0..1000)
+            .map(|i| DrandRound {
+                round: start_round + i,
+                randomness: [0u8; 32],
+                signature: vec![1, 2, 3, 4],
+                previous_signature: vec![0, 1, 2, 3],
+            })
+            .collect();
 
         // Use with_rounds to ensure proper hash calculation
         EntropyBlock::with_rounds(start_round, rounds)
@@ -538,8 +558,14 @@ mod tests {
         let cache = EntropyCache::with_defaults();
 
         // Add provider records
-        cache.add_provider_record(1_000_000, "peer1".to_string()).await.unwrap();
-        cache.add_provider_record(1_000_000, "peer2".to_string()).await.unwrap();
+        cache
+            .add_provider_record(1_000_000, "peer1".to_string())
+            .await
+            .unwrap();
+        cache
+            .add_provider_record(1_000_000, "peer2".to_string())
+            .await
+            .unwrap();
 
         let providers = cache.get_providers(1_000_000).await;
         assert_eq!(providers.len(), 2);

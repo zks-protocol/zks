@@ -1,5 +1,5 @@
 //! Cryptographic types and parameters for ZKS Protocol
-//! 
+//!
 //! This module provides core cryptographic types including:
 //! - Security buffers for encrypted data
 //! - Cryptographic parameter configurations
@@ -10,12 +10,12 @@ use std::fmt;
 use zeroize::Zeroize;
 
 /// Security buffer for encrypted data
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```
 /// use zks_types::crypto::SecBuffer;
-/// 
+///
 /// let buffer = SecBuffer::new(vec![1, 2, 3, 4]);
 /// let empty = SecBuffer::empty();
 /// ```
@@ -30,27 +30,27 @@ impl SecBuffer {
     pub fn new(data: Vec<u8>) -> Self {
         Self { data }
     }
-    
+
     /// Create an empty security buffer
     pub fn empty() -> Self {
         Self { data: Vec::new() }
     }
-    
+
     /// Get the length of the data in this buffer
     pub fn len(&self) -> usize {
         self.data.len()
     }
-    
+
     /// Check if this buffer is empty
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
-    
+
     /// Get a reference to the data in this buffer
     pub fn as_slice(&self) -> &[u8] {
         &self.data
     }
-    
+
     /// Get a mutable reference to the data in this buffer
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         &mut self.data
@@ -94,7 +94,7 @@ impl Default for CryptoParameters {
 }
 
 /// Key Encapsulation Mechanism algorithms
-/// 
+///
 /// Note: ML-KEM is the NIST standardized version of Kyber, providing
 /// post-quantum key encapsulation with equivalent security properties.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

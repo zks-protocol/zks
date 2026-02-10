@@ -1,10 +1,10 @@
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
 use std::net::SocketAddr;
-use zks::prelude::*;
+use std::path::PathBuf;
+use tracing::{error, info};
 use zks::identity::ZksIdentity;
-use zks::node::{ZksNode, NodeConfig};
-use tracing::{info, error};
+use zks::node::{NodeConfig, ZksNode};
+use zks::prelude::*;
 
 #[derive(Parser)]
 #[command(name = "zks-admin")]
@@ -53,33 +53,38 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             id.save_to_file(&out)?;
             info!("✅ Identity generated and saved to {:?}", out);
             info!("🆔 Fingerprint: {}", id.fingerprint()?);
-        },
-        Commands::Start { role, bind, identity, network } => {
-            let mut config = NodeConfig::new()
-                .bind_addr(bind);
-                //.network_name(network); // Config builder might not have exposed public field setter, need to check
+        }
+        Commands::Start {
+            role,
+            bind,
+            identity,
+            network,
+        } => {
+            let mut config = NodeConfig::new().bind_addr(bind);
+            //.network_name(network); // Config builder might not have exposed public field setter, need to check
 
             // Manually set public fields if builder method missing or update NodeConfig
-            // Re-checking NodeConfig impl... 
+            // Re-checking NodeConfig impl...
             // It has public fields but methods are cleaner.
             // Let's assume network_name logic is handled or add it to builder if missing.
-            
+
             // Configure role
             match role.as_str() {
                 "relay" => {
                     config.is_relay = true;
                     config.is_hidden_service = false;
-                },
+                }
                 "hidden" | "service" => {
                     config.is_relay = false;
                     config.is_hidden_service = true;
-                },
-                _ => { // Client default
+                }
+                _ => {
+                    // Client default
                     config.is_relay = false;
                     config.is_hidden_service = false;
                 }
             }
-            
+
             if let Some(path) = identity {
                 let id = ZksIdentity::load_from_file(path)?;
                 config = config.identity(id);
@@ -90,10 +95,10 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             }
 
             info!("🚀 Starting ZKS Node ({}) on {}", role, bind);
-            
+
             let node = ZksNode::new(config);
             let handle = node.start().await?;
-            
+
             info!("Press Ctrl+C to stop");
             // Wait for shutdown (Ctrl+C)
             tokio::signal::ctrl_c().await?;

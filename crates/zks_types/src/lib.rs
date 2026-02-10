@@ -1,5 +1,5 @@
 //! ZKS Protocol Core Types
-//! 
+//!
 //! This crate provides fundamental types used across the ZKS Protocol ecosystem.
 
 #![forbid(unsafe_code)]

@@ -5,9 +5,9 @@ use url::Url;
 use zks_wire::signaling::SignalingClientTrait;
 
 use crate::{
+    config::{ConnectionConfig, SecurityLevel},
     connection::{ZkConnection, ZksConnection},
     error::{Result, SdkError},
-    config::{SecurityLevel, ConnectionConfig},
 };
 
 /// Builder for direct ZK connections (zk://)
@@ -55,14 +55,18 @@ impl ZkConnectionBuilder {
 
     /// Build the ZK connection
     pub async fn build(self) -> Result<ZkConnection> {
-        let url = self.url.ok_or_else(|| SdkError::InvalidUrl("URL is required".to_string()))?;
-        
+        let url = self
+            .url
+            .ok_or_else(|| SdkError::InvalidUrl("URL is required".to_string()))?;
+
         // Validate URL scheme
-        let parsed_url = Url::parse(&url)
-            .map_err(|e| SdkError::InvalidUrl(format!("Invalid URL: {}", e)))?;
-        
+        let parsed_url =
+            Url::parse(&url).map_err(|e| SdkError::InvalidUrl(format!("Invalid URL: {}", e)))?;
+
         if parsed_url.scheme() != "zk" {
-            return Err(SdkError::InvalidUrl("URL must use zk:// scheme".to_string()));
+            return Err(SdkError::InvalidUrl(
+                "URL must use zk:// scheme".to_string(),
+            ));
         }
 
         let config = ConnectionConfig {
@@ -158,15 +162,21 @@ impl ZksConnectionBuilder {
     }
 
     /// Build the ZKS connection
-    pub async fn build<S: SignalingClientTrait + From<zks_wire::signaling::SignalingClient>>(self) -> Result<ZksConnection<S>> {
-        let url = self.url.ok_or_else(|| SdkError::InvalidUrl("URL is required".to_string()))?;
-        
+    pub async fn build<S: SignalingClientTrait + From<zks_wire::signaling::SignalingClient>>(
+        self,
+    ) -> Result<ZksConnection<S>> {
+        let url = self
+            .url
+            .ok_or_else(|| SdkError::InvalidUrl("URL is required".to_string()))?;
+
         // Validate URL scheme
-        let parsed_url = Url::parse(&url)
-            .map_err(|e| SdkError::InvalidUrl(format!("Invalid URL: {}", e)))?;
-        
+        let parsed_url =
+            Url::parse(&url).map_err(|e| SdkError::InvalidUrl(format!("Invalid URL: {}", e)))?;
+
         if parsed_url.scheme() != "zks" {
-            return Err(SdkError::InvalidUrl("URL must use zks:// scheme".to_string()));
+            return Err(SdkError::InvalidUrl(
+                "URL must use zks:// scheme".to_string(),
+            ));
         }
 
         let config = ConnectionConfig {
@@ -174,9 +184,9 @@ impl ZksConnectionBuilder {
             timeout: self.timeout.unwrap_or_else(|| Duration::from_secs(30)),
             buffer_size: self.buffer_size.unwrap_or(64 * 1024),
             enable_scrambling: self.enable_scrambling.unwrap_or(true),
-            bootstrap_nodes: self.bootstrap_nodes.unwrap_or_else(|| vec![
-                "wss://signal.zks-protocol.org:8443".to_string()
-            ]),
+            bootstrap_nodes: self
+                .bootstrap_nodes
+                .unwrap_or_else(|| vec!["wss://signal.zks-protocol.org:8443".to_string()]),
             ..Default::default()
         };
 
@@ -184,7 +194,9 @@ impl ZksConnectionBuilder {
         let max_hops = self.max_hops.unwrap_or(5);
 
         if min_hops > max_hops {
-            return Err(SdkError::InvalidUrl("min_hops cannot be greater than max_hops".to_string()));
+            return Err(SdkError::InvalidUrl(
+                "min_hops cannot be greater than max_hops".to_string(),
+            ));
         }
 
         ZksConnection::connect(url, config, min_hops, max_hops).await

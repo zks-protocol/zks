@@ -4,23 +4,20 @@
 //! zks_pqcrypto crate for easy importing.
 
 // Core post-quantum cryptographic modules
-pub use crate::ml_kem::{MlKem, MlKemKeypair, MlKemEncapsulation};
 pub use crate::ml_dsa::{MlDsa, MlDsaKeypair};
+pub use crate::ml_kem::{MlKem, MlKemEncapsulation, MlKemKeypair};
 
 // Error handling
 pub use crate::errors::{PqcError, Result};
 
 // Constants
 pub use crate::ml_kem::{
-    PUBLIC_KEY_SIZE as ML_KEM_PUBLIC_KEY_SIZE,
-    SECRET_KEY_SIZE as ML_KEM_SECRET_KEY_SIZE,
-    CIPHERTEXT_SIZE as ML_KEM_CIPHERTEXT_SIZE,
-    SHARED_SECRET_SIZE as ML_KEM_SHARED_SECRET_SIZE,
+    CIPHERTEXT_SIZE as ML_KEM_CIPHERTEXT_SIZE, PUBLIC_KEY_SIZE as ML_KEM_PUBLIC_KEY_SIZE,
+    SECRET_KEY_SIZE as ML_KEM_SECRET_KEY_SIZE, SHARED_SECRET_SIZE as ML_KEM_SHARED_SECRET_SIZE,
 };
 
 pub use crate::ml_dsa::{
-    PUBLIC_KEY_SIZE as ML_DSA_PUBLIC_KEY_SIZE,
-    SECRET_KEY_SIZE as ML_DSA_SECRET_KEY_SIZE,
+    PUBLIC_KEY_SIZE as ML_DSA_PUBLIC_KEY_SIZE, SECRET_KEY_SIZE as ML_DSA_SECRET_KEY_SIZE,
     SIGNATURE_SIZE as ML_DSA_SIGNATURE_SIZE,
 };
 

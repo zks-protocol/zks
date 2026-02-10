@@ -91,17 +91,17 @@ pub fn ek_matches_header(ek: &EncapsulationKey, hdr: &Header) -> bool {
 }
 
 /// Generate a new keypair and associated header.
-/// 
+///
 /// Uses OS random number generator for seed.
 pub fn generate() -> Keys {
     let mut seed = [0u8; libcrux_ml_kem::KEY_GENERATION_SEED_SIZE];
     rand::rngs::OsRng.fill_bytes(&mut seed);
-    
+
     let key_pair = incremental::KeyPairCompressedBytes::from_seed(seed);
-    
+
     // Zeroize seed after use
     seed.zeroize();
-    
+
     Keys {
         hdr: key_pair.pk1().to_vec(),
         ek: key_pair.pk2().to_vec(),
@@ -112,7 +112,7 @@ pub fn generate() -> Keys {
 /// Generate a new keypair from a seed (for deterministic key generation).
 pub fn generate_from_seed(seed: &[u8; libcrux_ml_kem::KEY_GENERATION_SEED_SIZE]) -> Keys {
     let key_pair = incremental::KeyPairCompressedBytes::from_seed(*seed);
-    
+
     Keys {
         hdr: key_pair.pk1().to_vec(),
         ek: key_pair.pk2().to_vec(),
@@ -121,59 +121,59 @@ pub fn generate_from_seed(seed: &[u8; libcrux_ml_kem::KEY_GENERATION_SEED_SIZE])
 }
 
 /// Encapsulate phase 1: use header only.
-/// 
+///
 /// Uses OS random for encapsulation randomness.
 pub fn encaps1(hdr: &Header) -> Result<(Ciphertext1, EncapsulationState, Secret), &'static str> {
     // Generate random encapsulation seed
     let mut randomness = [0u8; SHARED_SECRET_SIZE];
     rand::rngs::OsRng.fill_bytes(&mut randomness);
-    
+
     let mut encaps_state = vec![0u8; ENCAPS_STATE_SIZE];
     let mut shared_secret = vec![0u8; SHARED_SECRET_SIZE];
-    
+
     // Use the non-rng version with explicit randomness
-    let ct1 = incremental::encapsulate1(
-        hdr,
-        randomness,
-        &mut encaps_state,
-        &mut shared_secret,
-    ).map_err(|_| "encapsulate1 failed")?;
-    
+    let ct1 = incremental::encapsulate1(hdr, randomness, &mut encaps_state, &mut shared_secret)
+        .map_err(|_| "encapsulate1 failed")?;
+
     // Zeroize randomness
     randomness.zeroize();
-    
+
     Ok((ct1.value.to_vec(), encaps_state, shared_secret))
 }
 
 /// Encapsulate phase 2: complete with full public key.
-pub fn encaps2(ek: &EncapsulationKey, es: &EncapsulationState) -> Result<Ciphertext2, &'static str> {
-    let es_arr: &[u8; ENCAPS_STATE_SIZE] = es.as_slice()
+pub fn encaps2(
+    ek: &EncapsulationKey,
+    es: &EncapsulationState,
+) -> Result<Ciphertext2, &'static str> {
+    let es_arr: &[u8; ENCAPS_STATE_SIZE] = es
+        .as_slice()
         .try_into()
         .map_err(|_| "invalid encaps state size")?;
-    let ek_arr: &[u8; ENCAPSULATION_KEY_SIZE] = ek.as_slice()
-        .try_into()
-        .map_err(|_| "invalid ek size")?;
-    
+    let ek_arr: &[u8; ENCAPSULATION_KEY_SIZE] =
+        ek.as_slice().try_into().map_err(|_| "invalid ek size")?;
+
     let ct2 = incremental::encapsulate2(es_arr, ek_arr);
     Ok(ct2.value.to_vec())
 }
 
 /// Decapsulate ciphertext to get shared secret.
-pub fn decaps(dk: &DecapsulationKey, ct1: &Ciphertext1, ct2: &Ciphertext2) -> Result<Secret, &'static str> {
-    let ct1_arr: [u8; CIPHERTEXT1_SIZE] = ct1.as_slice()
-        .try_into()
-        .map_err(|_| "invalid ct1 size")?;
-    let ct2_arr: [u8; CIPHERTEXT2_SIZE] = ct2.as_slice()
-        .try_into()
-        .map_err(|_| "invalid ct2 size")?;
-    
+pub fn decaps(
+    dk: &DecapsulationKey,
+    ct1: &Ciphertext1,
+    ct2: &Ciphertext2,
+) -> Result<Secret, &'static str> {
+    let ct1_arr: [u8; CIPHERTEXT1_SIZE] =
+        ct1.as_slice().try_into().map_err(|_| "invalid ct1 size")?;
+    let ct2_arr: [u8; CIPHERTEXT2_SIZE] =
+        ct2.as_slice().try_into().map_err(|_| "invalid ct2 size")?;
+
     let ct1 = incremental::Ciphertext1 { value: ct1_arr };
     let ct2 = incremental::Ciphertext2 { value: ct2_arr };
-    
-    let dk_arr: &[u8; incremental::COMPRESSED_KEYPAIR_LEN] = dk.as_slice()
-        .try_into()
-        .map_err(|_| "invalid dk size")?;
-    
+
+    let dk_arr: &[u8; incremental::COMPRESSED_KEYPAIR_LEN] =
+        dk.as_slice().try_into().map_err(|_| "invalid dk size")?;
+
     let ss = incremental::decapsulate_compressed_key(dk_arr, &ct1, &ct2);
     Ok(ss.to_vec())
 }
@@ -191,8 +191,11 @@ pub const fn total_ratchet_bytes() -> usize {
 pub fn bandwidth_savings_percent() -> f64 {
     const NAIVE_BYTES: usize = 1568 + 1568;
     let incremental = total_ratchet_bytes();
-    if incremental >= NAIVE_BYTES { 0.0 }
-    else { ((NAIVE_BYTES - incremental) as f64 / NAIVE_BYTES as f64) * 100.0 }
+    if incremental >= NAIVE_BYTES {
+        0.0
+    } else {
+        ((NAIVE_BYTES - incremental) as f64 / NAIVE_BYTES as f64) * 100.0
+    }
 }
 
 /// Print size information
@@ -214,7 +217,7 @@ pub fn print_sizes() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_sizes() {
         print_sizes();
@@ -223,14 +226,14 @@ mod tests {
         assert!(CIPHERTEXT1_SIZE > 0);
         assert!(CIPHERTEXT2_SIZE > 0);
     }
-    
+
     #[test]
     fn test_keypair() {
         let keys = generate();
         assert_eq!(keys.hdr.len(), HEADER_SIZE);
         assert_eq!(keys.ek.len(), ENCAPSULATION_KEY_SIZE);
     }
-    
+
     #[test]
     fn incremental_round_trip() {
         let keys = generate();
@@ -239,12 +242,12 @@ mod tests {
         let ss2 = decaps(&keys.dk, &ct1, &ct2).expect("decaps");
         assert_eq!(ss1, ss2);
     }
-    
+
     #[test]
     fn test_ek_header_match() {
         let keys = generate();
         assert!(ek_matches_header(&keys.ek, &keys.hdr));
-        
+
         let keys2 = generate();
         assert!(!ek_matches_header(&keys.ek, &keys2.hdr));
     }

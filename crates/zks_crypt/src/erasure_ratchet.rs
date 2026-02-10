@@ -41,8 +41,8 @@
 //! - ✅ Packet loss tolerance (graceful degradation)
 //! - ✅ Post-quantum secure (shards of ML-KEM data)
 
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use sha2::{Sha256, Digest};
 
 /// Error type for erasure coding operations
 #[derive(Debug, Clone)]
@@ -127,15 +127,15 @@ impl ErasureConfig {
     pub fn custom(original_count: usize, recovery_count: usize) -> Result<Self> {
         if original_count == 0 {
             return Err(ErasureError::EncodingError(
-                "original_count must be positive".to_string()
+                "original_count must be positive".to_string(),
             ));
         }
         if recovery_count == 0 {
             return Err(ErasureError::EncodingError(
-                "recovery_count must be positive".to_string()
+                "recovery_count must be positive".to_string(),
             ));
         }
-        
+
         Ok(Self {
             original_count,
             recovery_count,
@@ -161,7 +161,8 @@ impl ErasureConfig {
     pub fn shard_size(&self, data_len: usize) -> usize {
         // Each shard must be the same size
         // Pad data to be divisible by original_count, then divide
-        let padded = (data_len + self.original_count - 1) / self.original_count * self.original_count;
+        let padded =
+            (data_len + self.original_count - 1) / self.original_count * self.original_count;
         padded / self.original_count
     }
 
@@ -214,21 +215,20 @@ impl ErasureCodec {
         // Calculate shard size and pad data
         let shard_size = self.config.shard_size(data.len());
         let padded_len = shard_size * self.config.original_count;
-        
+
         let mut padded_data = data.to_vec();
         padded_data.resize(padded_len, 0);
 
         // Split into original shards
-        let original_shards: Vec<&[u8]> = padded_data
-            .chunks_exact(shard_size)
-            .collect();
+        let original_shards: Vec<&[u8]> = padded_data.chunks_exact(shard_size).collect();
 
         // Generate recovery shards using Reed-Solomon
         let recovery_shards = reed_solomon_simd::encode(
             self.config.original_count,
             self.config.recovery_count,
             &original_shards,
-        ).map_err(|e| ErasureError::EncodingError(format!("Reed-Solomon encode failed: {:?}", e)))?;
+        )
+        .map_err(|e| ErasureError::EncodingError(format!("Reed-Solomon encode failed: {:?}", e)))?;
 
         // Build output vector with all shards
         let mut shards = Vec::with_capacity(self.config.total_shards());
@@ -287,17 +287,19 @@ impl ErasureCodec {
         let first_hash = shards[0].data_hash;
         if !shards.iter().all(|c| c.data_hash == first_hash) {
             return Err(ErasureError::ReconstructionError(
-                "Shards have mismatched hashes".to_string()
+                "Shards have mismatched hashes".to_string(),
             ));
         }
 
         // Separate original and recovery shards
-        let original_shards: Vec<(usize, &[u8])> = shards.iter()
+        let original_shards: Vec<(usize, &[u8])> = shards
+            .iter()
             .filter(|s| !s.is_recovery)
             .map(|s| (s.index, s.data.as_slice()))
             .collect();
 
-        let recovery_shards: Vec<(usize, &[u8])> = shards.iter()
+        let recovery_shards: Vec<(usize, &[u8])> = shards
+            .iter()
             .filter(|s| s.is_recovery)
             .map(|s| (s.index - self.config.original_count, s.data.as_slice()))
             .collect();
@@ -306,19 +308,19 @@ impl ErasureCodec {
         if original_shards.len() == self.config.original_count {
             let mut sorted_originals: Vec<_> = original_shards.clone();
             sorted_originals.sort_by_key(|(idx, _)| *idx);
-            
+
             let mut result = Vec::with_capacity(original_len);
             for (_, data) in sorted_originals {
                 result.extend_from_slice(data);
             }
             result.truncate(original_len);
-            
+
             tracing::debug!(
                 "📦 Reed-Solomon decoded {} shards (all originals present) into {} bytes",
                 shards.len(),
                 result.len()
             );
-            
+
             return Ok(result);
         }
 
@@ -328,7 +330,10 @@ impl ErasureCodec {
             self.config.recovery_count,
             original_shards,
             recovery_shards,
-        ).map_err(|e| ErasureError::ReconstructionError(format!("Reed-Solomon decode failed: {:?}", e)))?;
+        )
+        .map_err(|e| {
+            ErasureError::ReconstructionError(format!("Reed-Solomon decode failed: {:?}", e))
+        })?;
 
         // Reconstruct the full data from all original shards
         let shard_size = shards[0].data.len();
@@ -406,7 +411,7 @@ impl ErasureRatchet {
     /// Returns the reconstructed ciphertext if we now have enough shards
     pub fn receive_shard(&mut self, shard: EncodedShard) -> Result<Option<Vec<u8>>> {
         let epoch = shard.epoch;
-        
+
         // Skip if already decoded
         if self.decoded_epochs.contains(&epoch) {
             return Ok(None);
@@ -414,7 +419,7 @@ impl ErasureRatchet {
 
         // Add to pending
         let shards = self.pending_shards.entry(epoch).or_insert_with(Vec::new);
-        
+
         // Check if we already have this shard index
         if shards.iter().any(|s| s.index == shard.index) {
             return Ok(None); // Duplicate
@@ -426,7 +431,9 @@ impl ErasureRatchet {
         // Try to reconstruct
         if self.codec.can_reconstruct(shard_count) {
             let shards = self.pending_shards.get(&epoch).unwrap();
-            let original_len = self.pending_lengths.get(&epoch)
+            let original_len = self
+                .pending_lengths
+                .get(&epoch)
                 .copied()
                 .unwrap_or_else(|| {
                     // Estimate from shard size * original_count
@@ -438,19 +445,20 @@ impl ErasureRatchet {
                     self.decoded_epochs.push(epoch);
                     self.pending_shards.remove(&epoch);
                     self.pending_lengths.remove(&epoch);
-                    
+
                     tracing::info!(
                         "✅ Reed-Solomon epoch {} reconstructed ({} shards)",
                         epoch,
                         shard_count
                     );
-                    
+
                     Ok(Some(data))
                 }
                 Err(e) => {
                     tracing::warn!(
                         "⚠️ Reconstruction attempt failed for epoch {}: {}",
-                        epoch, e
+                        epoch,
+                        e
                     );
                     Ok(None) // Keep waiting for more shards
                 }
@@ -472,9 +480,7 @@ impl ErasureRatchet {
     /// Get statistics on pending reconstructions
     pub fn pending_stats(&self) -> PendingStats {
         let epochs: Vec<_> = self.pending_shards.keys().copied().collect();
-        let shards_per_epoch: Vec<_> = self.pending_shards.values()
-            .map(|v| v.len())
-            .collect();
+        let shards_per_epoch: Vec<_> = self.pending_shards.values().map(|v| v.len()).collect();
 
         PendingStats {
             pending_epochs: epochs.len(),
@@ -544,12 +550,10 @@ mod tests {
         let shards = codec.encode(&original, 1).unwrap();
 
         // Keep only 4 shards (drop half) - use only original shards
-        let partial: Vec<_> = shards.into_iter()
-            .filter(|s| !s.is_recovery)
-            .collect();
-        
+        let partial: Vec<_> = shards.into_iter().filter(|s| !s.is_recovery).collect();
+
         assert_eq!(partial.len(), 4);
-        
+
         let decoded = codec.decode(&partial, original.len()).unwrap();
         assert_eq!(decoded, original);
     }
@@ -563,14 +567,15 @@ mod tests {
         let shards = codec.encode(&original, 1).unwrap();
 
         // Keep only 2 original and 2 recovery shards (still 4 = k)
-        let partial: Vec<_> = shards.into_iter()
+        let partial: Vec<_> = shards
+            .into_iter()
             .enumerate()
             .filter(|(i, _)| *i == 0 || *i == 1 || *i == 4 || *i == 5)
             .map(|(_, s)| s)
             .collect();
-        
+
         assert_eq!(partial.len(), 4);
-        
+
         let decoded = codec.decode(&partial, original.len()).unwrap();
         assert_eq!(decoded, original);
     }
@@ -585,9 +590,12 @@ mod tests {
 
         // Only keep k-1 shards
         let partial: Vec<_> = shards.into_iter().take(3).collect();
-        
+
         let result = codec.decode(&partial, original.len());
-        assert!(matches!(result, Err(ErasureError::InsufficientShards { .. })));
+        assert!(matches!(
+            result,
+            Err(ErasureError::InsufficientShards { .. })
+        ));
     }
 
     #[test]
@@ -597,13 +605,13 @@ mod tests {
 
         let original = vec![0xABu8; 1568];
         let shards = ratchet.encode_ciphertext(&original, 1).unwrap();
-        
+
         ratchet.set_original_length(1, original.len());
 
         // Receive shards one by one
         for (i, shard) in shards.into_iter().enumerate() {
             let result = ratchet.receive_shard(shard).unwrap();
-            
+
             if i < 3 {
                 // Not enough yet
                 assert!(result.is_none());
@@ -628,7 +636,7 @@ mod tests {
         let first_shard = shards[0].clone();
         ratchet.receive_shard(first_shard.clone()).unwrap();
         let result = ratchet.receive_shard(first_shard).unwrap();
-        
+
         // Should ignore duplicate
         assert!(result.is_none());
     }
@@ -640,18 +648,19 @@ mod tests {
 
         let original = vec![0x55u8; 1568];
         let shards = codec.encode(&original, 1).unwrap();
-        
+
         assert_eq!(shards.len(), 12);
 
         // Keep only 4 shards (lose 66%)
-        let partial: Vec<_> = shards.into_iter()
+        let partial: Vec<_> = shards
+            .into_iter()
             .enumerate()
             .filter(|(i, _)| *i == 2 || *i == 5 || *i == 8 || *i == 11)
             .map(|(_, s)| s)
             .collect();
-        
+
         assert_eq!(partial.len(), 4);
-        
+
         let decoded = codec.decode(&partial, original.len()).unwrap();
         assert_eq!(decoded, original);
     }

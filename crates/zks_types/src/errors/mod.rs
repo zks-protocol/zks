@@ -1,10 +1,10 @@
 //! Error types for ZKS Protocol
-//! 
+//!
 //! This module provides comprehensive error handling for the ZKS Protocol ecosystem,
 //! including categorized error types and convenience result types.
 
-use std::fmt;
 use std::error::Error as StdError;
+use std::fmt;
 
 /// Main error type for ZKS Protocol operations
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,17 +23,17 @@ impl ZksError {
             message: message.into(),
         }
     }
-    
+
     /// Create a cryptographic error
     pub fn crypto(message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Crypto, message)
     }
-    
+
     /// Create a network error
     pub fn network(message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Network, message)
     }
-    
+
     /// Create a protocol error
     pub fn protocol(message: impl Into<String>) -> Self {
         Self::new(ErrorKind::Protocol, message)

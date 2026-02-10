@@ -1,19 +1,19 @@
 //! ZKS Protocol Entropy Seeder CLI
-//! 
+//!
 //! This binary provides command-line interface for running and managing
 //! the entropy seeder daemon that polls drand and publishes entropy blocks
 //! to the P2P swarm.
 
 use clap::{Parser, Subcommand};
+use serde_json;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use serde_json;
 
-use zks_wire::seeder::{EntropySeeder, SeederConfig};
 use zks_crypt::drand::DrandEntropy;
+use zks_wire::seeder::{EntropySeeder, SeederConfig};
 
 /// ZKS Protocol Entropy Seeder CLI
 #[derive(Parser)]
@@ -46,7 +46,10 @@ enum Commands {
         network: String,
 
         /// Drand chain hash (mainnet: 8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce)
-        #[clap(long, default_value = "8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce")]
+        #[clap(
+            long,
+            default_value = "8990e7a9aaed2ffed73dbd7092123d6f289930540d7651336225dc172e51b2ce"
+        )]
         chain_hash: String,
 
         /// Drand API URL
@@ -125,7 +128,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_target(false)
         .with_ansi(!cli.no_color);
-    
+
     tracing_subscriber::registry()
         .with(fmt_layer)
         .with(tracing_subscriber::EnvFilter::new(log_level))
@@ -134,11 +137,11 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     info!("Starting ZKS Protocol Entropy Seeder");
 
     match cli.command {
-        Commands::Init { 
-            network, 
-            chain_hash, 
-            drand_url, 
-            block_size, 
+        Commands::Init {
+            network,
+            chain_hash,
+            drand_url,
+            block_size,
             poll_interval,
             start_from_current,
             start_round,
@@ -159,12 +162,13 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 enable_cache,
                 cache_capacity,
                 cache_ttl,
-            ).await?;
+            )
+            .await?;
         }
-        Commands::Run { 
-            network, 
-            drand_url, 
-            block_size, 
+        Commands::Run {
+            network,
+            drand_url,
+            block_size,
             poll_interval,
             auto_publish,
         } => {
@@ -175,7 +179,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 block_size,
                 poll_interval,
                 auto_publish,
-            ).await?;
+            )
+            .await?;
         }
         Commands::Status => {
             show_status().await?;
@@ -253,29 +258,44 @@ async fn run_seeder(
             Ok(config_json) => {
                 let config_data: serde_json::Value = serde_json::from_str(&config_json)?;
                 // Apply loaded config values
-                if let Some(block_size_val) = config_data.get("block_size").and_then(|v| v.as_u64()) {
+                if let Some(block_size_val) = config_data.get("block_size").and_then(|v| v.as_u64())
+                {
                     config.block_size = block_size_val;
                 }
-                if let Some(poll_interval_val) = config_data.get("poll_interval").and_then(|v| v.as_u64()) {
+                if let Some(poll_interval_val) =
+                    config_data.get("poll_interval").and_then(|v| v.as_u64())
+                {
                     config.poll_interval = std::time::Duration::from_secs(poll_interval_val);
                 }
-                if let Some(start_from_current) = config_data.get("start_from_current").and_then(|v| v.as_bool()) {
+                if let Some(start_from_current) = config_data
+                    .get("start_from_current")
+                    .and_then(|v| v.as_bool())
+                {
                     config.start_from_current = start_from_current;
                 }
-                if let Some(start_round_val) = config_data.get("start_round").and_then(|v| v.as_u64()) {
+                if let Some(start_round_val) =
+                    config_data.get("start_round").and_then(|v| v.as_u64())
+                {
                     config.start_round = Some(start_round_val);
                 }
-                if let Some(auto_publish_val) = config_data.get("auto_publish").and_then(|v| v.as_bool()) {
+                if let Some(auto_publish_val) =
+                    config_data.get("auto_publish").and_then(|v| v.as_bool())
+                {
                     config.auto_publish = auto_publish_val;
                 }
-                if let Some(cache_blocks_val) = config_data.get("enable_cache").and_then(|v| v.as_bool()) {
+                if let Some(cache_blocks_val) =
+                    config_data.get("enable_cache").and_then(|v| v.as_bool())
+                {
                     config.cache_blocks = cache_blocks_val;
                 }
-                if let Some(max_cached_blocks_val) = config_data.get("cache_capacity").and_then(|v| v.as_u64()) {
+                if let Some(max_cached_blocks_val) =
+                    config_data.get("cache_capacity").and_then(|v| v.as_u64())
+                {
                     config.max_cached_blocks = max_cached_blocks_val as usize;
                 }
                 // Load drand configuration
-                if let Some(chain_hash_val) = config_data.get("chain_hash").and_then(|v| v.as_str()) {
+                if let Some(chain_hash_val) = config_data.get("chain_hash").and_then(|v| v.as_str())
+                {
                     chain_hash = Some(chain_hash_val.to_string());
                 }
                 if let Some(drand_url_val) = config_data.get("drand_url").and_then(|v| v.as_str()) {
@@ -310,9 +330,9 @@ async fn run_seeder(
 
     // Create drand client with loaded configuration
     let drand_config = zks_crypt::drand::DrandConfig {
-        api_urls: drand_url.map(|url| vec![url]).unwrap_or_else(|| vec![
-            "https://drand.cloudflare.com".to_string(),
-        ]),
+        api_urls: drand_url
+            .map(|url| vec![url])
+            .unwrap_or_else(|| vec!["https://drand.cloudflare.com".to_string()]),
         chain_hash,
         cache_duration_secs: 30,
         max_retries: 3,
@@ -337,9 +357,9 @@ async fn run_seeder(
 
     // Wait for shutdown signal
     tokio::signal::ctrl_c().await?;
-    
+
     info!("Shutting down seeder daemon...");
-    
+
     // Stop seeder and handle errors
     if let Err(e) = seeder.stop().await {
         error!("Error stopping seeder: {}", e);
@@ -352,16 +372,20 @@ async fn run_seeder(
 
 async fn show_status() -> Result<(), Box<dyn Error + Send + Sync>> {
     info!("=== ZKS Protocol Entropy Seeder Status ===");
-    
+
     // Check for default configuration file
     let default_config_path = PathBuf::from("seeder_config.json");
     if default_config_path.exists() {
-        info!("Configuration file found: {}", default_config_path.display());
-        
+        info!(
+            "Configuration file found: {}",
+            default_config_path.display()
+        );
+
         // Try to load and display basic config info
         match tokio::fs::read_to_string(&default_config_path).await {
             Ok(config_content) => {
-                if let Ok(config_json) = serde_json::from_str::<serde_json::Value>(&config_content) {
+                if let Ok(config_json) = serde_json::from_str::<serde_json::Value>(&config_content)
+                {
                     info!("Configuration summary:");
                     if let Some(poll_interval) = config_json.get("poll_interval_secs") {
                         info!("  Poll interval: {} seconds", poll_interval);
@@ -384,15 +408,18 @@ async fn show_status() -> Result<(), Box<dyn Error + Send + Sync>> {
             }
         }
     } else {
-        info!("No configuration file found at: {}", default_config_path.display());
+        info!(
+            "No configuration file found at: {}",
+            default_config_path.display()
+        );
         info!("Run 'zks-seeder init' to create a configuration");
     }
-    
+
     // Check if seeder might be running (basic check - this could be enhanced)
     // In a real implementation, we might check for a PID file or use IPC
     info!("Daemon status: Unknown (status communication not implemented)");
     info!("Note: To check if seeder is running, check system processes or logs");
-    
+
     Ok(())
 }
 
