@@ -119,8 +119,14 @@ fn validate_drand_entropy(
         .unwrap_or_default()
         .as_secs();
 
-    // drand updates every 30 seconds, so current round should be approximately current_time / 30
-    let expected_round = current_time / 30;
+    // Quicknet: round = (current_time - 1692803367) / 3
+    let genesis = 1692803367;
+    let period = 3;
+    let expected_round = if current_time >= genesis {
+        (current_time - genesis) / period
+    } else {
+        0
+    };
     let round_diff = response.round.abs_diff(expected_round);
 
     // SECURITY: Use constant-time comparison to prevent timing attacks
@@ -399,13 +405,13 @@ impl Default for DrandConfig {
         Self {
             api_urls: vec![
                 "https://api.drand.sh".to_string(),
-                "https://drand.cloudflare.com".to_string(),
                 "https://api2.drand.sh".to_string(),
             ],
-            chain_hash: None,
-            cache_duration_secs: 30,
+            // Quicknet chain hash (3s period, unchained, G1)
+            chain_hash: Some("52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971".to_string()),
+            cache_duration_secs: 3,
             max_retries: 3,
-            timeout_secs: 10,
+            timeout_secs: 5,
         }
     }
 }
@@ -723,13 +729,22 @@ impl DrandEntropy {
 
     /// Calculate the current expected drand round number
     ///
-    /// drand updates every 30 seconds, so round = current_time / 30
+    /// Quicknet: round = (current_time - genesis) / period
+    /// Genesis: 1692803367 (Aug 23, 2023), Period: 3s
     pub fn current_round(&self) -> u64 {
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        current_time / 30
+        
+        let genesis = 1692803367;
+        let period = 3;
+
+        if current_time < genesis {
+            return 0;
+        }
+
+        (current_time - genesis) / period
     }
 
     /// Fetch a range of drand rounds efficiently

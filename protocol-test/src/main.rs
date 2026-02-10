@@ -2,7 +2,7 @@ mod protocol;
 
 use protocol::{ZksProtocolClient, ZksProtocolServer};
 use std::time::Instant;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.len() < 2 {
         println!("Usage:");
         println!("  server <bind_addr>");
-        println!("  client <server_addr> [--key <base64_pubkey>] [--benchmark]");
+        println!("  client <server_addr> [--key <base64_pubkey>] [--keyfile <path>] [--benchmark]");
         return Ok(());
     }
 
@@ -43,6 +43,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let key_b64 = &args[i + 1];
                 let key_bytes =
                     base64::Engine::decode(&base64::engine::general_purpose::STANDARD, key_b64)?;
+                trusted_key = Some(key_bytes);
+                i += 2;
+            } else if args[i] == "--keyfile" && i + 1 < args.len() {
+                let content = std::fs::read_to_string(&args[i + 1])?;
+                // Robust cleanup: remove BOM, whitespace and newlines
+                let content_no_bom = content.trim_start_matches('\u{feff}');
+                let key_b64: String = content_no_bom.chars().filter(|c| !c.is_whitespace()).collect();
+                
+                info!("Key string length (raw): {}", key_b64.len());
+                if key_b64.len() > 3456 {
+                    warn!("Key too long, truncating to 3456 chars");
+                }
+                let key_b64: String = key_b64.chars().take(3456).collect();
+                
+                info!("Key string length (truncated): {}", key_b64.len());
+
+                let key_bytes =
+                    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &key_b64)?;
+                info!("🔑 Loaded trusted key from file: {} ({} bytes)", &args[i + 1], key_bytes.len());
                 trusted_key = Some(key_bytes);
                 i += 2;
             } else if args[i] == "--benchmark" {
@@ -152,22 +171,31 @@ async fn run_benchmark(
     let avg_rtt = latencies.iter().sum::<std::time::Duration>() / 10;
     info!("⏱️  Average RTT (10 iterations): {:?}", avg_rtt);
 
-    // 3. Throughput Test
-    info!("📥 Measuring throughput (sending 5MB payload)...");
-    let payload_size = 5 * 1024 * 1024;
-    let payload = vec![0x42u8; payload_size];
+    // 3. Throughput Test — send many small chunks to avoid TCP deadlock
+    let chunk_size = 4096;
+    let num_chunks = 256; // 256 × 4KB = 1MB total
+    let total_payload = chunk_size * num_chunks;
+    info!(
+        "📥 Measuring throughput ({} × {}B = {}KB total)...",
+        num_chunks,
+        chunk_size,
+        total_payload / 1024
+    );
+    let chunk = vec![0x42u8; chunk_size];
 
     let start = Instant::now();
-    conn.send(&payload).await?;
-    let _ = conn.recv().await?; // Wait for echo
+    for _ in 0..num_chunks {
+        conn.send(&chunk).await?;
+        let _ = conn.recv().await?; // Wait for echo of each chunk
+    }
     let duration = start.elapsed();
 
-    // Throughput calculation: (size * 2) / duration since it's a round trip
-    let total_bytes = payload_size * 2;
+    // Throughput: total bytes transferred (send + recv) / time
+    let total_bytes = total_payload * 2; // round-trip
     let mb_per_sec = (total_bytes as f64 / 1024.0 / 1024.0) / duration.as_secs_f64();
 
-    info!("🚀 Throughput: {:.2} MB/s (RTT included)", mb_per_sec);
-    info!("⏱️  Total time for 5MB round-trip: {:?}", duration);
+    info!("🚀 Throughput: {:.2} MB/s (send+recv, {} chunks)", mb_per_sec, num_chunks);
+    info!("⏱️  Total time for {}KB round-trip: {:?}", total_payload / 1024, duration);
 
     conn.close().await?;
     info!("✅ Benchmark complete");

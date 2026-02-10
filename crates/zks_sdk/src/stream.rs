@@ -22,7 +22,8 @@ use crate::{
 /// Encrypted stream that wraps an inner stream with post-quantum encryption
 pub struct EncryptedStream<S> {
     inner: S,
-    read_buf: BytesMut,
+    read_buf: BytesMut,           // Decrypted plaintext buffer
+    raw_read_buf: BytesMut,       // Raw ciphertext buffer (framed)
     write_buf: BytesMut,
     encrypted_write_buf: BytesMut,
     is_handshake_complete: bool,
@@ -203,6 +204,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
         Ok(Self {
             inner,
             read_buf: BytesMut::with_capacity(config.buffer_size),
+            raw_read_buf: BytesMut::with_capacity(config.buffer_size),
             write_buf: BytesMut::with_capacity(config.buffer_size),
             encrypted_write_buf: BytesMut::with_capacity(config.buffer_size),
             is_handshake_complete: true,
@@ -302,6 +304,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
         Ok(Self {
             inner,
             read_buf: BytesMut::with_capacity(config.buffer_size),
+            raw_read_buf: BytesMut::with_capacity(config.buffer_size),
             write_buf: BytesMut::with_capacity(config.buffer_size),
             encrypted_write_buf: BytesMut::with_capacity(config.buffer_size),
             is_handshake_complete: true,
@@ -394,71 +397,97 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
     }
 }
 
+
 impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for EncryptedStream<S> {
     fn poll_read(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
-        // If we have buffered data, return it first
-        if !self.read_buf.is_empty() {
-            let to_read = std::cmp::min(buf.remaining(), self.read_buf.len());
-            buf.put_slice(&self.read_buf.split_to(to_read));
-            trace!("EncryptedStream: Read {} buffered bytes", to_read);
+        let this = self.get_mut();
+
+        // 1. If we have buffered plaintext data, return it first
+        if !this.read_buf.is_empty() {
+            let to_read = std::cmp::min(buf.remaining(), this.read_buf.len());
+            buf.put_slice(&this.read_buf.split_to(to_read));
             return Poll::Ready(Ok(()));
         }
 
-        // Try to read and decrypt more data
-        let mut temp_buf = vec![0u8; 4096];
-        let mut read_buf = ReadBuf::new(&mut temp_buf);
-        match Pin::new(&mut self.inner).poll_read(cx, &mut read_buf) {
+        // 2. Try to read more raw data from the inner stream into raw_read_buf
+        let mut temp_buf = [0u8; 8192];
+        let mut temp_read_buf = ReadBuf::new(&mut temp_buf);
+        match Pin::new(&mut this.inner).poll_read(cx, &mut temp_read_buf) {
             Poll::Ready(Ok(())) => {
-                // Get the actual number of bytes read
-                let n = read_buf.filled().len();
-
+                let n = temp_read_buf.filled().len();
                 if n > 0 {
-                    trace!("EncryptedStream: Read {} encrypted bytes from inner", n);
-                    // Decrypt the data using WasifVernam reader cipher
-                    match &mut self.reader_cipher {
-                        Some(cipher) => {
-                            match cipher.decrypt(&temp_buf[..n]) {
-                                Ok(decrypted_data) => {
-                                    trace!(
-                                        "EncryptedStream: Decrypted {} bytes",
-                                        decrypted_data.len()
-                                    );
-                                    let to_copy =
-                                        std::cmp::min(buf.remaining(), decrypted_data.len());
-                                    buf.put_slice(&decrypted_data[..to_copy]);
+                    this.raw_read_buf.extend_from_slice(&temp_buf[..n]);
+                } else if this.raw_read_buf.is_empty() {
+                    // EOF and no pending data
+                    return Poll::Ready(Ok(()));
+                }
+            }
+            Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+            Poll::Pending => {
+                if this.raw_read_buf.is_empty() {
+                    return Poll::Pending;
+                }
+            }
+        }
 
-                                    // Buffer any remaining decrypted data
-                                    if decrypted_data.len() > to_copy {
-                                        self.read_buf.extend_from_slice(&decrypted_data[to_copy..]);
-                                    }
-                                }
-                                Err(e) => {
-                                    return Poll::Ready(Err(std::io::Error::new(
-                                        std::io::ErrorKind::InvalidData,
-                                        format!("Decryption failed: {}", e),
-                                    )));
-                                }
+        // 3. Parse and decrypt frames from raw_read_buf
+        while this.raw_read_buf.len() >= 4 {
+            let frame_len = u32::from_be_bytes(this.raw_read_buf[..4].try_into().unwrap()) as usize;
+            
+            // Safety check for frame size (16MB max)
+            if frame_len > 16 * 1024 * 1024 {
+                return Poll::Ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Frame size exceeds 16MB limit",
+                )));
+            }
+
+            if this.raw_read_buf.len() >= 4 + frame_len {
+                // We have a full frame!
+                this.raw_read_buf.advance(4); // Skip length
+                let encrypted_frame = this.raw_read_buf.split_to(frame_len);
+                
+                match &mut this.reader_cipher {
+                    Some(cipher) => {
+                        match cipher.decrypt(&encrypted_frame) {
+                            Ok(decrypted) => {
+                                // Add to plaintext buffer
+                                this.read_buf.extend_from_slice(&decrypted);
+                            }
+                            Err(e) => {
+                                return Poll::Ready(Err(std::io::Error::new(
+                                    std::io::ErrorKind::InvalidData,
+                                    format!("Decryption failed: {}", e),
+                                )));
                             }
                         }
-                        None => {
-                            return Poll::Ready(Err(std::io::Error::new(
-                                std::io::ErrorKind::InvalidData,
-                                "Cipher not initialized - handshake incomplete",
-                            )));
-                        }
                     }
-                } else {
-                    trace!("EncryptedStream: Read 0 bytes from inner (EOF)");
+                    None => {
+                        return Poll::Ready(Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            "Cipher not initialized",
+                        )));
+                    }
                 }
-                Poll::Ready(Ok(()))
+            } else {
+                // Partial frame, need more data
+                break;
             }
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
-            Poll::Pending => Poll::Pending,
         }
+
+        // 4. If we successfully decrypted something, return it
+        if !this.read_buf.is_empty() {
+            let to_read = std::cmp::min(buf.remaining(), this.read_buf.len());
+            buf.put_slice(&this.read_buf.split_to(to_read));
+            return Poll::Ready(Ok(()));
+        }
+
+        // Otherwise, if we're here it means we need more data from inner
+        Poll::Pending
     }
 }
 
@@ -541,9 +570,13 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for EncryptedStream<S> {
                 }
             };
 
+            // PREPEND 4-BYTE LENGTH PREFIX
+            let frame_len = encrypted_data.len() as u32;
+            this.encrypted_write_buf.extend_from_slice(&frame_len.to_be_bytes());
             this.encrypted_write_buf.extend_from_slice(&encrypted_data);
             trace!(
-                "EncryptedStream: Encrypted data appended to buffer, total encrypted buffered: {}",
+                "EncryptedStream: Encrypted data ({} bytes) appended to buffer with framing, total encrypted buffered: {}",
+                encrypted_data.len(),
                 this.encrypted_write_buf.len()
             );
 
