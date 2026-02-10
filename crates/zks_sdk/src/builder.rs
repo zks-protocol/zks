@@ -2,6 +2,8 @@
 
 use std::time::Duration;
 use url::Url;
+use zks_wire::signaling::SignalingClientTrait;
+
 use crate::{
     connection::{ZkConnection, ZksConnection},
     error::{Result, SdkError},
@@ -89,6 +91,7 @@ pub struct ZksConnectionBuilder {
     min_hops: Option<u8>,
     max_hops: Option<u8>,
     enable_scrambling: Option<bool>,
+    bootstrap_nodes: Option<Vec<String>>,
 }
 
 impl ZksConnectionBuilder {
@@ -102,6 +105,7 @@ impl ZksConnectionBuilder {
             min_hops: None,
             max_hops: None,
             enable_scrambling: None,
+            bootstrap_nodes: None,
         }
     }
 
@@ -147,8 +151,14 @@ impl ZksConnectionBuilder {
         self
     }
 
+    /// Set bootstrap nodes (Directory Authorities / Signaling Servers)
+    pub fn bootstrap_nodes(mut self, nodes: Vec<String>) -> Self {
+        self.bootstrap_nodes = Some(nodes);
+        self
+    }
+
     /// Build the ZKS connection
-    pub async fn build(self) -> Result<ZksConnection> {
+    pub async fn build<S: SignalingClientTrait + From<zks_wire::signaling::SignalingClient>>(self) -> Result<ZksConnection<S>> {
         let url = self.url.ok_or_else(|| SdkError::InvalidUrl("URL is required".to_string()))?;
         
         // Validate URL scheme
@@ -164,6 +174,9 @@ impl ZksConnectionBuilder {
             timeout: self.timeout.unwrap_or_else(|| Duration::from_secs(30)),
             buffer_size: self.buffer_size.unwrap_or(64 * 1024),
             enable_scrambling: self.enable_scrambling.unwrap_or(true),
+            bootstrap_nodes: self.bootstrap_nodes.unwrap_or_else(|| vec![
+                "wss://signal.zks-protocol.org:8443".to_string()
+            ]),
             ..Default::default()
         };
 

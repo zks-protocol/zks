@@ -414,14 +414,14 @@ impl RelayPayload {
 }
 
 /// Faisal Swarm cell processing
-pub struct CellProcessor {
+pub struct CellProcessor<S: crate::signaling::SignalingClientTrait> {
     /// Circuit manager reference
-    circuit_manager: Arc<super::circuit_manager::FaisalSwarmManager>,
+    circuit_manager: Arc<super::circuit_manager::FaisalSwarmManager<S>>,
 }
 
-impl CellProcessor {
+impl<S: crate::signaling::SignalingClientTrait> CellProcessor<S> {
     /// Create a new cell processor
-    pub fn new(circuit_manager: Arc<super::circuit_manager::FaisalSwarmManager>) -> Self {
+    pub fn new(circuit_manager: Arc<super::circuit_manager::FaisalSwarmManager<S>>) -> Self {
         Self { circuit_manager }
     }
     

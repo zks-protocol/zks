@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, debug};
+use tracing::{debug, info, warn, error};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::signaling::SignalingClient;
@@ -15,6 +15,8 @@ use crate::signaling::SignalingClient;
 use crate::signaling::SignalingClient;
 
 use crate::faisal_swarm::FaisalSwarmManager;
+use crate::p2p::NativeP2PTransport;
+use crate::signaling::SignalingClientTrait;
 
 /// Platform detection and transport selection
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -40,18 +42,18 @@ impl Platform {
 }
 
 /// Unified swarm controller that automatically selects the appropriate transport
-pub struct SwarmController {
+pub struct SwarmController<S: SignalingClientTrait> {
     platform: Platform,
-    signaling_client: Arc<RwLock<Option<SignalingClient>>>,
+    signaling_client: Arc<RwLock<Option<S>>>,
     
     /// Faisal Swarm manager for onion routing circuits
-    faisal_swarm_manager: Arc<RwLock<Option<FaisalSwarmManager>>>,
+    faisal_swarm_manager: Arc<RwLock<Option<FaisalSwarmManager<S>>>>,
     
     is_connected: Arc<RwLock<bool>>,
     local_peer_id: Arc<RwLock<Option<String>>>,
 }
 
-impl SwarmController {
+impl<S: SignalingClientTrait> SwarmController<S> {
     /// Create a new swarm controller
     pub async fn new() -> Result<Self, SwarmControllerError> {
         let platform = Platform::detect();
@@ -63,7 +65,6 @@ impl SwarmController {
             
             // Faisal Swarm manager for onion routing circuits
             faisal_swarm_manager: Arc::new(RwLock::new(None)),
-            
             is_connected: Arc::new(RwLock::new(false)),
             local_peer_id: Arc::new(RwLock::new(None)),
         })
@@ -74,54 +75,37 @@ impl SwarmController {
         self.platform
     }
     
-    /// Connect to the swarm using the appropriate transport
-    pub async fn connect(
+    /// Connect to the swarm using the appropriate transport with a pre-configured signaling client
+    pub async fn connect_with_signaling(
         &self,
-        signaling_url: &str,
-        local_peer_id: String,
+        signaling_client: S,
     ) -> Result<(), SwarmControllerError> {
-        debug!("Connecting to swarm via signaling server: {}", signaling_url);
+        debug!("Connecting to swarm with pre-configured signaling client");
         
-        // Store local peer ID
-        *self.local_peer_id.write().await = Some(local_peer_id.clone());
-        
-        // Create and connect signaling client
-        let signaling_client = SignalingClient::connect(signaling_url, local_peer_id).await
-            .map_err(|e| SwarmControllerError::SignalingError(format!("Failed to connect to signaling server: {}", e)))?;
-        
+        // Store signaling client
         *self.signaling_client.write().await = Some(signaling_client.clone());
         
-        // Initialize Faisal Swarm manager
-        use libp2p::{identity::Keypair, tcp::Config as TcpConfig, noise, yamux, Transport};
+        // Create Native P2P transport
+        let (mut p2p_transport, driver) = NativeP2PTransport::new(None, None)
+            .map_err(|e| SwarmControllerError::TransportError(format!("Failed to create P2P transport: {}", e)))?;
         
-        // Create keypair for libp2p
-        let keypair = Keypair::generate_ed25519();
-        let local_peer_id = libp2p::PeerId::from(keypair.public());
+        // Spawn the P2P driver loop
+        tokio::spawn(async move {
+            if let Err(e) = driver.run().await {
+                error!("P2P Driver failed: {:?}", e);
+            }
+        });
         
-        // Create transport with TCP, noise, and yamux
-        let _transport = libp2p::tcp::tokio::Transport::new(TcpConfig::default())
-            .upgrade(libp2p::core::upgrade::Version::V1)
-            .authenticate(noise::Config::new(&keypair).map_err(|e| SwarmControllerError::TransportError(format!("Noise error: {}", e)))?)
-            .multiplex(yamux::Config::default())
-            .boxed();
+        // Start listening on a random port
+        let listen_addr = "/ip4/0.0.0.0/tcp/0".parse()
+            .map_err(|e| SwarmControllerError::TransportError(format!("Invalid listen address: {}", e)))?;
+        p2p_transport.listen_on(listen_addr).await
+            .map_err(|e| SwarmControllerError::TransportError(format!("Failed to listen on address: {}", e)))?;
         
-        // Create swarm behavior
-        let behaviour = crate::p2p::NativeSwarmBehaviour::new(local_peer_id);
-        
-        // Create swarm
-        let swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
-            .with_tokio()
-            .with_tcp(
-                TcpConfig::default(),
-                noise::Config::new,
-                yamux::Config::default,
-            ).map_err(|e| SwarmControllerError::TransportError(format!("Swarm build error: {}", e)))?
-            .with_behaviour(|_| behaviour).map_err(|e| SwarmControllerError::TransportError(format!("Behaviour error: {}", e)))?
-            .build();
-        
+        // Create Faisal Swarm manager with the P2P transport
         let faisal_swarm_manager = FaisalSwarmManager::new(
             Arc::new(signaling_client),
-            Arc::new(RwLock::new(swarm)),
+            Arc::new(RwLock::new(p2p_transport)),
         );
         
         *self.faisal_swarm_manager.write().await = Some(faisal_swarm_manager);
@@ -129,6 +113,28 @@ impl SwarmController {
         
         info!("Successfully connected to swarm via signaling server");
         Ok(())
+    }
+    
+    /// Connect to the swarm using the appropriate transport (legacy method for basic SignalingClient)
+    pub async fn connect(
+        &self,
+        signaling_url: &str,
+        local_peer_id: String,
+    ) -> Result<(), SwarmControllerError> 
+    where
+        S: From<SignalingClient>,
+    {
+        debug!("Connecting to swarm via signaling server: {}", signaling_url);
+        
+        // Store local peer ID
+        *self.local_peer_id.write().await = Some(local_peer_id.clone());
+        
+        // Create and connect basic signaling client
+        let basic_client = SignalingClient::connect(signaling_url, local_peer_id).await
+            .map_err(|e| SwarmControllerError::SignalingError(format!("Failed to connect to signaling server: {}", e)))?;
+        
+        let signaling_client = S::from(basic_client);
+        self.connect_with_signaling(signaling_client).await
     }
     
     /// Join a swarm room for peer discovery
@@ -158,7 +164,7 @@ impl SwarmController {
     }
     
     /// Get swarm entropy for cryptographic operations
-    pub async fn get_swarm_entropy(&self, room_id: &str) -> Result<[u8; 32], SwarmControllerError> {
+    pub async fn get_swarm_entropy(&self, room_id: &str) -> Result<Vec<u8>, SwarmControllerError> {
         if let Some(client) = self.signaling_client.write().await.as_mut() {
             let entropy = client.get_swarm_entropy(room_id).await
                 .map_err(|e| SwarmControllerError::SignalingError(format!("Failed to get swarm entropy: {}", e)))?;
@@ -270,7 +276,7 @@ impl SwarmController {
             debug!("Receiving data from Faisal Swarm circuit {}", circuit_id);
             
             // Receive data from Faisal Swarm circuit
-            match faisal_manager.receive_from_swarm(circuit_id_u32).await {
+            match faisal_manager.receive_from_swarm_network(circuit_id_u32).await {
                 Ok(data) => {
                     info!("✅ Successfully received {} bytes from Faisal Swarm circuit {}", data.len(), circuit_id);
                     Ok(Some(data))
@@ -458,13 +464,13 @@ mod tests {
     
     #[tokio::test]
     async fn test_swarm_controller_creation() {
-        let controller = SwarmController::new().await.unwrap();
+        let controller = SwarmController::<SignalingClient>::new().await.unwrap();
         assert!(controller.is_connected().await == false);
     }
     
     #[tokio::test]
     async fn test_transport_capabilities() {
-        let controller = SwarmController::new().await.unwrap();
+        let controller = SwarmController::<SignalingClient>::new().await.unwrap();
         let capabilities = controller.transport_capabilities();
         
         match controller.platform() {

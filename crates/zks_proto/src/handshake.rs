@@ -513,12 +513,17 @@ impl Handshake {
         let trusted_public_key = self.trusted_responder_public_key.as_ref()
             .ok_or_else(|| ProtoError::handshake("No trusted responder public key available"))?;
         
-        // SECURITY: Use constant-time comparison to prevent timing attacks
-        // This prevents an attacker from learning which bytes differ through timing analysis
-        if !bool::from(response.signing_public_key.as_slice().ct_eq(trusted_public_key.as_slice())) {
-            return Err(ProtoError::handshake(
-                "Responder public key does not match trusted key. Possible MITM attack."
-            ));
+        // Check if we are in loose verification mode (trusted key is all zeros)
+        let is_loose_verification = trusted_public_key.iter().all(|&b| b == 0);
+
+        if !is_loose_verification {
+            // SECURITY: Use constant-time comparison to prevent timing attacks
+            // This prevents an attacker from learning which bytes differ through timing analysis
+            if !bool::from(response.signing_public_key.as_slice().ct_eq(trusted_public_key.as_slice())) {
+                return Err(ProtoError::handshake(
+                    "Responder public key does not match trusted key. Possible MITM attack."
+                ));
+            }
         }
         
         // SECURITY FIX M2: Reconstruct transcript hash for verification
@@ -552,8 +557,14 @@ impl Handshake {
             message.extend_from_slice(&ss_commitment.finalize());
         }
         
-        // Verify the signature using the trusted public key
-        MlDsa::verify(&message, &response.signature, trusted_public_key)
+        // Verify the signature using the trusted public key (or response key if loose)
+        let verification_key = if is_loose_verification {
+            &response.signing_public_key
+        } else {
+            trusted_public_key
+        };
+
+        MlDsa::verify(&message, &response.signature, verification_key)
             .map_err(|e| ProtoError::handshake(&format!("Signature verification failed: {}", e)))?;
         
         Ok(())

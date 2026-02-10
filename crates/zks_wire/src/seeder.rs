@@ -180,6 +180,24 @@ impl EntropySeeder {
             running: Arc::new(RwLock::new(false)),
         })
     }
+
+    /// Create a new entropy seeder with a custom drand client
+    pub async fn with_drand_client(config: SeederConfig, drand_client: Arc<DrandEntropy>) -> SeederResult<Self> {
+        let cache = if config.cache_blocks {
+            Some(Arc::new(EntropyCache::new(crate::entropy_cache::EntropyCacheConfig::default())))
+        } else {
+            None
+        };
+        
+        Ok(Self {
+            config,
+            drand_client,
+            swarm: None,
+            cache,
+            stats: Arc::new(RwLock::new(SeederStats::default())),
+            running: Arc::new(RwLock::new(false)),
+        })
+    }
     
     /// Attach a swarm for publishing blocks
     pub fn attach_swarm(&mut self, swarm: Arc<EntropySwarm>) {

@@ -2,7 +2,7 @@
 
 use tokio::io::{AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
 use tracing::{info, debug, warn};
-use zks_wire::{SwarmController, SwarmCircuit};
+use zks_wire::{SwarmController, SwarmCircuit, signaling::SignalingClientTrait};
 
 use crate::{
     config::ConnectionConfig,
@@ -16,25 +16,31 @@ pub trait ZksStream: AsyncRead + AsyncWrite + Send + Unpin + 'static {}
 impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> ZksStream for T {}
 
 /// Swarm-based ZKS connection for maximum privacy with real onion routing
-pub struct ZksConnection {
+pub struct ZksConnection<S: SignalingClientTrait> {
     stream: EncryptedStream<Box<dyn ZksStream>>,
     config: ConnectionConfig,
     peer_addr: String,
     hop_count: u8,
     circuit: Option<SwarmCircuit>,
-    swarm_controller: Option<SwarmController>,
+    swarm_controller: Option<SwarmController<S>>,
     circuit_id: Option<String>,
 }
 
-impl ZksConnection {
+
+
+impl<S: SignalingClientTrait> ZksConnection<S> {
+
     /// Connect to a peer using zks:// protocol with real onion routing
     pub async fn connect(
         url: String, 
         config: ConnectionConfig, 
         min_hops: u8, 
         max_hops: u8
-    ) -> Result<Self> {
+    ) -> Result<Self> 
+    where S: From<zks_wire::signaling::SignalingClient>
+    {
         info!("🔐 Connecting to ZKS peer via onion routing: {} with {}-{} hops", url, min_hops, max_hops);
+
         
         // Parse the URL to extract target information
         let parsed_url = url::Url::parse(&url)
@@ -45,11 +51,13 @@ impl ZksConnection {
             .to_string();
         
         // Create swarm controller with platform detection
-        let swarm_controller = SwarmController::new().await
+        let swarm_controller = SwarmController::<S>::new().await
             .map_err(|e| SdkError::ConnectionFailed(format!("Failed to create swarm controller: {}", e)))?;
         
-        // Connect to signaling server (use default for now)
-        let signaling_url = "wss://signal.zks-protocol.org:8443";
+        // Connect to signaling server (use first configured bootstrap node)
+        let signaling_url = config.bootstrap_nodes.first()
+            .ok_or_else(|| SdkError::ConfigError("No bootstrap nodes configured".to_string()))?;
+            
         let local_peer_id = format!("zks-client-{}", uuid::Uuid::new_v4());
         
         swarm_controller.connect(signaling_url, local_peer_id).await
@@ -97,6 +105,7 @@ impl ZksConnection {
             zks_proto::HandshakeRole::Initiator,
             room_id.to_string(),
             None, // Exit node not authenticated - use app-layer E2E encryption for sensitive data
+            None, // No persistent local key needed for initiator
         ).await?;
         
         info!("🔐 ZKS connection established with {} via onion circuit {} ({} hops)", peer_addr, circuit_id, max_hops);
@@ -293,7 +302,7 @@ impl ZksConnection {
     }
     
     /// Get the swarm controller (if any)
-    pub fn swarm_controller(&self) -> Option<&SwarmController> {
+    pub fn swarm_controller(&self) -> Option<&SwarmController<S>> {
         self.swarm_controller.as_ref()
     }
     

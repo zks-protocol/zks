@@ -185,7 +185,7 @@ impl SignalingClient {
     }
     
     /// Request entropy from the swarm
-    pub async fn get_swarm_entropy(&self, room_id: &str) -> Result<[u8; 32], SignalingError> {
+    pub async fn get_swarm_entropy(&self, room_id: &str) -> Result<Vec<u8>, SignalingError> {
         let request_id = uuid::Uuid::new_v4().to_string();
         
         let message = SignalingMessage::EntropyRequest {
@@ -208,9 +208,7 @@ impl SignalingClient {
                     return Err(SignalingError::InvalidEntropy("Entropy must be 32 bytes"));
                 }
                 
-                let mut result = [0u8; 32];
-                result.copy_from_slice(&entropy);
-                Ok(result)
+                Ok(entropy)
             }
             SignalingMessage::Error { code, message } => {
                 Err(SignalingError::ServerError(format!("{}: {}", code, message)))
@@ -292,7 +290,7 @@ impl SignalingClient {
     }
     
     /// Close the connection
-    pub async fn close(self) -> Result<(), SignalingError> {
+    pub async fn close(&mut self) -> Result<(), SignalingError> {
         let message = Message::Close(None);
         let mut stream = self.ws_stream.lock().await;
         stream.send(message).await
@@ -339,6 +337,58 @@ pub enum SignalingError {
     /// Invalid entropy data received
     #[error("Invalid entropy: {0}")]
     InvalidEntropy(&'static str),
+}
+
+/// Trait for signaling clients that can be used with FaisalSwarm
+#[async_trait::async_trait]
+pub trait SignalingClientTrait: Send + Sync + Clone {
+    /// Discover peers in a room
+    async fn discover_peers(&self, room_id: &str) -> Result<Vec<PeerInfo>, Box<dyn std::error::Error + Send + Sync>>;
+    
+    /// Join a room with given capabilities
+    async fn join_room(&mut self, room_id: &str, capabilities: PeerCapabilities) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    
+    /// Leave a room
+    async fn leave_room(&mut self, room_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+    
+    /// Get swarm entropy for a room
+    async fn get_swarm_entropy(&mut self, room_id: &str) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>>;
+    
+    /// Close the signaling connection
+    async fn close(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+}
+
+#[async_trait::async_trait]
+impl SignalingClientTrait for SignalingClient {
+    async fn discover_peers(&self, room_id: &str) -> Result<Vec<PeerInfo>, Box<dyn std::error::Error + Send + Sync>> {
+        SignalingClient::discover_peers(self, room_id)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    }
+    
+    async fn join_room(&mut self, room_id: &str, capabilities: PeerCapabilities) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        SignalingClient::join_room(self, room_id, capabilities)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    }
+    
+    async fn leave_room(&mut self, room_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        SignalingClient::leave_room(self, room_id)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    }
+    
+    async fn get_swarm_entropy(&mut self, room_id: &str) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+        SignalingClient::get_swarm_entropy(self, room_id)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    }
+    
+    async fn close(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        SignalingClient::close(self)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    }
 }
 
 #[cfg(test)]

@@ -5,6 +5,8 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, debug, warn};
 
+use zks_wire::signaling::SignalingClientTrait;
+
 use crate::{
     connection::{ZkConnection, ZksConnection},
     config::ConnectionConfig,
@@ -12,17 +14,17 @@ use crate::{
 };
 
 /// P2P connection manager
-pub struct P2PConnection {
-    connections: Arc<RwLock<HashMap<String, Connection>>>,
+pub struct P2PConnection<S: SignalingClientTrait> {
+    connections: Arc<RwLock<HashMap<String, Connection<S>>>>,
     config: ConnectionConfig,
 }
 
-enum Connection {
+enum Connection<S: SignalingClientTrait> {
     Zk(ZkConnection),
-    Zks(ZksConnection),
+    Zks(ZksConnection<S>),
 }
 
-impl P2PConnection {
+impl<S: SignalingClientTrait> P2PConnection<S> {
     /// Create a new P2P connection manager
     pub fn new(config: ConnectionConfig) -> Self {
         Self {
@@ -32,7 +34,9 @@ impl P2PConnection {
     }
     
     /// Connect to a peer
-    pub async fn connect(&self, peer_id: &str, url: &str) -> Result<()> {
+    pub async fn connect(&self, peer_id: &str, url: &str) -> Result<()> 
+    where S: From<zks_wire::signaling::SignalingClient>
+    {
         info!("Connecting to peer: {} at {}", peer_id, url);
         
         let parsed_url = url::Url::parse(url)
@@ -165,7 +169,7 @@ impl P2PConnection {
     }
 }
 
-impl Default for P2PConnection {
+impl<S: SignalingClientTrait> Default for P2PConnection<S> {
     fn default() -> Self {
         Self::new(ConnectionConfig::default())
     }

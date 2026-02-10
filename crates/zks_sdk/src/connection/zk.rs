@@ -63,6 +63,7 @@ impl ZkConnection {
             zks_proto::HandshakeRole::Initiator,
             "zk-direct".to_string(),
             Some(responder_key), // Pass the verified responder key
+            None, // No persistent local key needed for initiator
         ).await?;
         
         info!("🔐 ZK connection established with {} (PQ-authenticated)", peer_addr);

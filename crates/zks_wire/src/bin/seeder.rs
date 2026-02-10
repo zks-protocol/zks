@@ -244,6 +244,8 @@ async fn run_seeder(
 
     // Create default config first
     let mut config = SeederConfig::default();
+    let mut chain_hash: Option<String> = None;
+    let mut drand_url: Option<String> = None;
 
     // Try to load configuration from file if provided
     if let Some(path) = config_path {
@@ -272,6 +274,13 @@ async fn run_seeder(
                 if let Some(max_cached_blocks_val) = config_data.get("cache_capacity").and_then(|v| v.as_u64()) {
                     config.max_cached_blocks = max_cached_blocks_val as usize;
                 }
+                // Load drand configuration
+                if let Some(chain_hash_val) = config_data.get("chain_hash").and_then(|v| v.as_str()) {
+                    chain_hash = Some(chain_hash_val.to_string());
+                }
+                if let Some(drand_url_val) = config_data.get("drand_url").and_then(|v| v.as_str()) {
+                    drand_url = Some(drand_url_val.to_string());
+                }
                 info!("Configuration loaded from file");
             }
             Err(e) => {
@@ -299,11 +308,26 @@ async fn run_seeder(
     info!("  Cache blocks: {}", config.cache_blocks);
     info!("  Max cached blocks: {}", config.max_cached_blocks);
 
-    // Create drand client
-    let _drand_client = Arc::new(DrandEntropy::new());
+    // Create drand client with loaded configuration
+    let drand_config = zks_crypt::drand::DrandConfig {
+        api_urls: drand_url.map(|url| vec![url]).unwrap_or_else(|| vec![
+            "https://drand.cloudflare.com".to_string(),
+        ]),
+        chain_hash,
+        cache_duration_secs: 30,
+        max_retries: 3,
+        timeout_secs: 10,
+    };
+    if let Some(ref hash) = drand_config.chain_hash {
+        info!("  Drand chain: {}", hash);
+    }
+    if !drand_config.api_urls.is_empty() {
+        info!("  Drand URL: {}", drand_config.api_urls[0]);
+    }
+    let drand_client = Arc::new(DrandEntropy::with_config(drand_config));
 
-    // Create seeder
-    let mut seeder = EntropySeeder::new(config).await?;
+    // Create seeder with custom drand client
+    let mut seeder = EntropySeeder::with_drand_client(config, drand_client).await?;
 
     // Start seeder
     seeder.start().await?;

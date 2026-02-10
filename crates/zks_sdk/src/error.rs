@@ -36,6 +36,10 @@ pub enum SdkError {
     /// Post-quantum crypto error
     #[error("Post-quantum crypto error: {0}")]
     PqcError(#[from] zks_pqcrypto::PqcError),
+
+    /// Configuration error
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
     
     /// IO error
     #[error("IO error: {0}")]

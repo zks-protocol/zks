@@ -24,19 +24,55 @@ use libp2p::{
     Multiaddr,
     Transport,
 };
+use std::time::{Duration, Instant};
 
 
 
 use crate::entropy_swarm::{EntropyGossipMessage, ENTROPY_TOPIC};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, oneshot};
 use tracing::{debug, info, warn, error};
 use futures_util::StreamExt;
 
 use serde::{Deserialize, Serialize};
 use std::io;
 use async_trait::async_trait;
+use futures::future::BoxFuture;
+
+/// Internal commands for the P2P transport loop
+#[derive(Debug)]
+pub enum P2PCommand {
+    /// Send a Faisal Swarm response
+    SendResponse {
+        channel: request_response::ResponseChannel<FaisalSwarmResponse>,
+        response: FaisalSwarmResponse,
+    },
+    /// Dial a peer
+    Dial {
+        addr: Multiaddr,
+        response: oneshot::Sender<Result<(), NativeP2PError>>,
+    },
+    /// Send a Faisal Swarm request
+    SendRequest {
+        peer_id: PeerId,
+        request: FaisalSwarmRequest,
+        response_sender: oneshot::Sender<Result<FaisalSwarmResponse, NativeP2PError>>,
+    },
+    SubscribeEntropy,
+    UnsubscribeEntropy,
+    PublishEntropy(Vec<u8>),
+    AddEntropyProvider(Vec<u8>, PeerId),
+    /// Start providing an entropy block
+    StartProvidingEntropy(Vec<u8>),
+    /// Stop providing an entropy block
+    StopProvidingEntropy(Vec<u8>),
+    /// Listen on an address
+    ListenOn(Multiaddr, oneshot::Sender<Result<(), NativeP2PError>>),
+    GetEntropyProviders(Vec<u8>, oneshot::Sender<Vec<PeerId>>),
+    AddKadBootstrap(PeerId, Multiaddr),
+    BootstrapKad(oneshot::Sender<Result<(), NativeP2PError>>),
+}
 
 /// Request type for Faisal Swarm protocol
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,20 +253,109 @@ impl NativeSwarmBehaviour {
     }
 }
 
-/// Native P2P transport for desktop/mobile platforms
+/// Response channel for routing FaisalSwarm responses to waiting tasks
 #[cfg(not(target_arch = "wasm32"))]
-pub struct NativeP2PTransport {
+#[derive(Debug)]
+pub struct ResponseChannel {
+    /// Pending requests mapped to their response senders and creation timestamps
+    pending: Arc<Mutex<HashMap<libp2p::request_response::OutboundRequestId, (oneshot::Sender<FaisalSwarmResponse>, Instant)>>>,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ResponseChannel {
+    /// Create a new response channel
+    pub fn new() -> Self {
+        Self {
+            pending: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+    
+    /// Register a pending request and return a receiver for the response
+    pub async fn register_request(&self, request_id: libp2p::request_response::OutboundRequestId) -> oneshot::Receiver<FaisalSwarmResponse> {
+        let (sender, receiver) = oneshot::channel();
+        let mut pending = self.pending.lock().await;
+        pending.insert(request_id, (sender, Instant::now()));
+        receiver
+    }
+    
+    /// Route a response to the waiting task
+    pub async fn route_response(&self, request_id: libp2p::request_response::OutboundRequestId, response: FaisalSwarmResponse) {
+        let mut pending = self.pending.lock().await;
+        if let Some((sender, _)) = pending.remove(&request_id) {
+            if let Err(_) = sender.send(response) {
+                warn!("Failed to send response to waiting task for request {:?}", request_id);
+            }
+        } else {
+            warn!("No pending request found for response {:?}", request_id);
+        }
+    }
+    
+    /// Remove a pending request (used for cleanup on timeout/failure)
+    pub async fn remove_request(&self, request_id: libp2p::request_response::OutboundRequestId) {
+        let mut pending = self.pending.lock().await;
+        pending.remove(&request_id);
+    }
+    
+    /// Clean up stale requests that have been pending for longer than the specified duration
+    pub async fn cleanup_stale_requests(&self, max_age: Duration) -> usize {
+        let mut pending = self.pending.lock().await;
+        let now = Instant::now();
+        let initial_count = pending.len();
+        
+        pending.retain(|request_id, (_, timestamp)| {
+            let is_stale = now.duration_since(*timestamp) > max_age;
+            if is_stale {
+                debug!("Cleaning up stale request {:?} (age: {:?})", request_id, now.duration_since(*timestamp));
+            }
+            !is_stale
+        });
+        
+        let cleaned_count = initial_count - pending.len();
+        if cleaned_count > 0 {
+            info!("Cleaned up {} stale requests from ResponseChannel", cleaned_count);
+        }
+        
+        cleaned_count
+    }
+    
+    /// Get the number of currently pending requests
+    pub async fn pending_count(&self) -> usize {
+        let pending = self.pending.lock().await;
+        pending.len()
+    }
+}
+
+/// Native P2P transport driver (runs the event loop)
+#[cfg(not(target_arch = "wasm32"))]
+pub struct NativeP2PDriver {
     /// libp2p swarm instance managing all protocols
     swarm: Swarm<NativeSwarmBehaviour>,
     /// Local peer ID for this transport
     local_peer_id: PeerId,
-    /// Map of connected peers to their network addresses
-    connected_peers: Arc<Mutex<HashMap<PeerId, Vec<Multiaddr>>>>,
-    /// Channel receiver for swarm events (currently unused but kept for future event processing)
-    #[allow(dead_code)]
-    event_receiver: mpsc::UnboundedReceiver<SwarmEvent<NativeSwarmEvent>>,
+    /// Channel receiver for internal loop commands
+    command_receiver: mpsc::UnboundedReceiver<P2PCommand>,
+    /// Channel sender for internal loop commands (needed for spawned tasks)
+    command_sender: mpsc::UnboundedSender<P2PCommand>,
+    /// Request handler for Faisal Swarm protocol
+    faisal_request_handler: Option<Arc<dyn Fn(PeerId, FaisalSwarmRequest) -> BoxFuture<'static, FaisalSwarmResponse> + Send + Sync>>,
     /// Channel sender for forwarding GossipSub messages to EntropySwarm
     entropy_message_sender: Option<mpsc::UnboundedSender<(EntropyGossipMessage, PeerId)>>,
+    /// Map of connected peers to their network addresses (shared with Client)
+    connected_peers: Arc<Mutex<HashMap<PeerId, Vec<Multiaddr>>>>,
+    /// List of addresses this node is listening on (shared with Client)
+    listen_addresses: Arc<Mutex<Vec<Multiaddr>>>,
+    /// Response channel for routing FaisalSwarm responses (owned by Driver)
+    response_channel: ResponseChannel,
+}
+
+/// Native P2P transport client handle (safe to share across threads)
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone)]
+pub struct NativeP2PTransport {
+    local_peer_id: PeerId,
+    command_sender: mpsc::UnboundedSender<P2PCommand>,
+    connected_peers: Arc<Mutex<HashMap<PeerId, Vec<Multiaddr>>>>,
+    listen_addresses: Arc<Mutex<Vec<Multiaddr>>>,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -239,22 +364,20 @@ impl std::fmt::Debug for NativeP2PTransport {
         f.debug_struct("NativeP2PTransport")
             .field("local_peer_id", &self.local_peer_id)
             .field("connected_peers", &self.connected_peers)
-            .field("entropy_message_sender", &self.entropy_message_sender.is_some())
-            .field("swarm", &"<Swarm>")
             .finish()
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl NativeP2PTransport {
-    /// Create a new native P2P transport
-    pub async fn new(keypair: Option<Keypair>) -> Result<Self, NativeP2PError> {
+    /// Create a new native P2P transport client and driver
+    pub fn new(keypair: Option<Keypair>, faisal_request_timeout: Option<Duration>) -> Result<(Self, NativeP2PDriver), NativeP2PError> {
         let keypair = keypair.unwrap_or_else(Keypair::generate_ed25519);
         let local_peer_id = PeerId::from(keypair.public());
         
         info!("Creating native P2P transport with peer ID: {}", local_peer_id);
         
-        // Create transport with TCP, noise, and yamux
+        // Create transport
         let _transport = TcpTransport::new(TcpConfig::default())
             .upgrade(libp2p::core::upgrade::Version::V1)
             .authenticate(noise::Config::new(&keypair).map_err(|e| NativeP2PError::Noise(e.to_string()))?)
@@ -272,9 +395,9 @@ impl NativeP2PTransport {
             faisal_swarm_config,
         );
 
-        // Create GossipSub configuration for entropy sharing
         let gossipsub_config = gossipsub::ConfigBuilder::default()
-            .max_transmit_size(1024 * 1024) // 1MB max message size
+            .max_transmit_size(1024 * 1024)
+            .validation_mode(gossipsub::ValidationMode::Permissive)
             .build()
             .map_err(|e| NativeP2PError::GossipSubConfig(e.to_string()))?;
         
@@ -283,7 +406,6 @@ impl NativeP2PTransport {
             gossipsub_config,
         ).map_err(|e| NativeP2PError::GossipSubInit(e.to_string()))?;
 
-        // Configure Kademlia for entropy block discovery
         let kademlia = kad::Behaviour::new(local_peer_id, kad::store::MemoryStore::new(local_peer_id));
         
         let behaviour = NativeSwarmBehaviour {
@@ -295,7 +417,6 @@ impl NativeP2PTransport {
             kademlia,
         };
         
-        // Create swarm
         let swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
             .with_tokio()
             .with_tcp(
@@ -306,183 +427,71 @@ impl NativeP2PTransport {
             .with_behaviour(|_| behaviour)?
             .build();
         
-        let (_event_sender, event_receiver) = mpsc::unbounded_channel();
+        let (command_sender, command_receiver) = mpsc::unbounded_channel();
+        let connected_peers = Arc::new(Mutex::new(HashMap::new()));
+        let listen_addresses = Arc::new(Mutex::new(Vec::new()));
         
-        Ok(Self {
+        let client = Self {
+            local_peer_id,
+            command_sender: command_sender.clone(),
+            connected_peers: connected_peers.clone(),
+            listen_addresses: listen_addresses.clone(),
+        };
+        
+        let driver = NativeP2PDriver {
             swarm,
             local_peer_id,
-            connected_peers: Arc::new(Mutex::new(HashMap::new())),
-            event_receiver,
+            command_receiver,
+            command_sender,
+            faisal_request_handler: None,
             entropy_message_sender: None,
-        })
+            connected_peers,
+            listen_addresses,
+            response_channel: ResponseChannel::new(),
+        };
+        
+        Ok((client, driver))
     }
     
-    /// Listen on a local address
-    pub async fn listen_on(&mut self, addr: Multiaddr) -> Result<(), NativeP2PError> {
-        self.swarm.listen_on(addr)?;
-        info!("Native P2P transport listening on swarm addresses");
-        Ok(())
-    }
-    
-    /// Dial a peer at the given address
-    pub async fn dial(&mut self, peer_addr: Multiaddr) -> Result<(), NativeP2PError> {
-        info!("Dialing peer at: {}", peer_addr);
-        self.swarm.dial(peer_addr)?;
-        Ok(())
-    }
-    
-    /// Subscribe to the entropy topic for GossipSub
-    pub async fn subscribe_entropy_topic(&mut self) -> Result<(), NativeP2PError> {
-        let topic = gossipsub::IdentTopic::new(ENTROPY_TOPIC);
-        self.swarm.behaviour_mut().entropy_gossip.subscribe(&topic)?;
-        info!("Subscribed to entropy topic: {}", ENTROPY_TOPIC);
-        Ok(())
-    }
-    
-    /// Unsubscribe from the entropy topic
-    pub async fn unsubscribe_entropy_topic(&mut self) -> Result<(), NativeP2PError> {
-        let topic = gossipsub::IdentTopic::new(ENTROPY_TOPIC);
-        self.swarm.behaviour_mut().entropy_gossip.unsubscribe(&topic)?;
-        info!("Unsubscribed from entropy topic: {}", ENTROPY_TOPIC);
-        Ok(())
-    }
-    
-    /// Publish an entropy message to the GossipSub topic
-    pub async fn publish_entropy_message(&mut self, message: Vec<u8>) -> Result<(), NativeP2PError> {
-        let topic = gossipsub::IdentTopic::new(ENTROPY_TOPIC);
-        self.swarm.behaviour_mut().entropy_gossip.publish(topic, message)
-            .map_err(|e| NativeP2PError::GossipSubPublish(format!("Failed to publish entropy message: {:?}", e)))?;
-        debug!("Published entropy message to topic");
-        Ok(())
-    }
-    
-    /// Set the entropy message sender for forwarding GossipSub messages to EntropySwarm
-    pub fn set_entropy_message_sender(&mut self, sender: mpsc::UnboundedSender<(EntropyGossipMessage, PeerId)>) {
-        self.entropy_message_sender = Some(sender);
-    }
-
     /// Get the local peer ID
     pub fn local_peer_id(&self) -> PeerId {
         self.local_peer_id
     }
     
-    /// Get swarm addresses
-    pub fn listen_addresses(&self) -> Vec<Multiaddr> {
-        self.swarm.listeners().cloned().collect()
+    /// Send a command and wait for simple result
+    async fn send_command(&self, cmd: P2PCommand) -> Result<(), NativeP2PError> {
+        // This is for commands that don't need response or have their own response channel inserted in cmd
+        self.command_sender.send(cmd).map_err(|_| NativeP2PError::Network("Transport closed".into()))
+    }
+
+    /// Dial a peer
+    pub async fn dial(&self, addr: Multiaddr) -> Result<(), NativeP2PError> {
+        let (tx, rx) = oneshot::channel();
+        self.send_command(P2PCommand::Dial { addr, response: tx }).await?;
+        rx.await.map_err(|_| NativeP2PError::Network("Response channel closed".into()))?
+    }
+
+    /// Check if connected to a peer
+    pub async fn is_connected(&self, peer_id: &PeerId) -> bool {
+        self.connected_peers.lock().await.contains_key(peer_id)
+    }
+
+    /// Listen on an address
+    pub async fn listen_on(&self, addr: Multiaddr) -> Result<(), NativeP2PError> {
+        let (tx, rx) = oneshot::channel();
+        self.send_command(P2PCommand::ListenOn(addr, tx)).await?;
+        rx.await.map_err(|_| NativeP2PError::Network("Response channel closed".into()))?
     }
     
-    /// Start the event loop
-    pub async fn run(mut self) -> Result<(), NativeP2PError> {
-        info!("Starting native P2P transport event loop");
-        
-        loop {
-            match self.swarm.select_next_some().await {
-                SwarmEvent::NewListenAddr { address, .. } => {
-                    info!("Listening on {}", address);
-                }
-                SwarmEvent::Behaviour(event) => {
-                    match event {
-                        NativeSwarmEvent::Ping(ping_event) => {
-                            debug!("Ping event: {:?}", ping_event);
-                        }
-                        NativeSwarmEvent::Relay(relay_event) => {
-                            debug!("Relay event: {:?}", relay_event);
-                        }
-                        NativeSwarmEvent::Dcutr(dcutr_event) => {
-                            debug!("DCUtR event: {:?}", dcutr_event);
-                        }
-                        NativeSwarmEvent::FaisalSwarm(faisal_event) => {
-                            debug!("FaisalSwarm event: {:?}", faisal_event);
-                        }
-                        NativeSwarmEvent::EntropyGossip(gossip_event) => {
-                            debug!("EntropyGossip event: {:?}", gossip_event);
-                            
-                            // Handle incoming GossipSub messages
-                            if let gossipsub::Event::Message { propagation_source, message, .. } = gossip_event {
-                                match bincode::deserialize::<EntropyGossipMessage>(&message.data) {
-                                    Ok(entropy_msg) => {
-                                        debug!("Received entropy message from {}: {:?}", propagation_source, entropy_msg);
-                                        
-                                        // Forward to EntropySwarm if sender is available
-                                        if let Some(sender) = &self.entropy_message_sender {
-                                            if let Err(e) = sender.send((entropy_msg, propagation_source)) {
-                                                error!("Failed to forward entropy message to EntropySwarm: {}", e);
-                                            }
-                                        } else {
-                                            debug!("No entropy message sender configured");
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to deserialize entropy message: {}", e);
-                                    }
-                                }
-                            }
-                        }
-                        NativeSwarmEvent::Kademlia(kad_event) => {
-                            debug!("Kademlia event: {:?}", kad_event);
-                            
-                            // Handle Kademlia events for entropy block discovery
-                            match kad_event {
-                                kad::Event::OutboundQueryProgressed { result, .. } => {
-                                    match result {
-                                        kad::QueryResult::GetProviders(Ok(kad::GetProvidersOk::FoundProviders { providers, .. })) => {
-                                            debug!("Found {} providers for entropy block", providers.len());
-                                            for provider in providers {
-                                                debug!("Entropy block provider: {}", provider);
-                                                // TODO: Connect to provider and request entropy block
-                                            }
-                                        }
-                                        kad::QueryResult::GetProviders(Err(e)) => {
-                                            error!("Failed to get providers for entropy block: {:?}", e);
-                                        }
-                                        kad::QueryResult::StartProviding(Ok(kad::AddProviderOk { key })) => {
-                                            debug!("Successfully started providing entropy block: {:?}", hex::encode(key.as_ref()));
-                                        }
-                                        kad::QueryResult::StartProviding(Err(e)) => {
-                                            error!("Failed to start providing entropy block: {:?}", e);
-                                        }
-                                        _ => {
-                                            debug!("Other Kademlia query result: {:?}", result);
-                                        }
-                                    }
-                                }
-                                kad::Event::RoutingUpdated { peer, .. } => {
-                                    debug!("Routing table updated with peer: {}", peer);
-                                }
-                                _ => {
-                                    debug!("Other Kademlia event: {:?}", kad_event);
-                                }
-                            }
-                        }
-                    }
-                }
-                SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
-                    info!("Connected to {} via {}", peer_id, endpoint.get_remote_address());
-                    
-                    let mut peers = self.connected_peers.lock().await;
-                    peers.entry(peer_id).or_default().push(endpoint.get_remote_address().clone());
-                }
-                SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
-                    warn!("Connection closed to {}: {:?}", peer_id, cause);
-                    
-                    let mut peers = self.connected_peers.lock().await;
-                    peers.remove(&peer_id);
-                }
-                SwarmEvent::IncomingConnection { local_addr, send_back_addr, .. } => {
-                    debug!("Incoming connection from {} to {}", send_back_addr, local_addr);
-                }
-                SwarmEvent::IncomingConnectionError { local_addr, send_back_addr, error, .. } => {
-                    error!("Incoming connection error from {} to {}: {}", send_back_addr, local_addr, error);
-                }
-                SwarmEvent::Dialing { peer_id, .. } => {
-                    debug!("Dialing peer {:?}", peer_id);
-                }
-                SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
-                    error!("Outgoing connection error to {:?}: {}", peer_id, error);
-                }
-                _ => {}
-            }
-        }
+    /// Send a request
+    pub async fn send_faisal_request(
+        &self,
+        peer_id: PeerId,
+        request: FaisalSwarmRequest,
+    ) -> Result<FaisalSwarmResponse, NativeP2PError> {
+        let (tx, rx) = oneshot::channel();
+        self.send_command(P2PCommand::SendRequest { peer_id, request, response_sender: tx }).await?;
+        rx.await.map_err(|_| NativeP2PError::Network("Response channel closed".into()))?
     }
     
     /// Get connected peers
@@ -491,69 +500,260 @@ impl NativeP2PTransport {
         peers.keys().cloned().collect()
     }
     
-    /// Check if connected to a specific peer
-    pub async fn is_connected(&self, peer_id: &PeerId) -> bool {
-        let peers = self.connected_peers.lock().await;
-        peers.contains_key(peer_id)
+
+
+    // Proxy other methods if needed...
+}
+
+impl NativeP2PDriver {
+    pub fn set_faisal_request_handler<F>(&mut self, handler: F)
+    where
+        F: Fn(PeerId, FaisalSwarmRequest) -> BoxFuture<'static, FaisalSwarmResponse> + Send + Sync + 'static,
+    {
+        self.faisal_request_handler = Some(Arc::new(handler));
     }
-    
-    /// Add a peer as a provider for an entropy block
-    pub async fn add_entropy_block_provider(&mut self, block_key: &[u8], peer_id: PeerId) -> Result<(), NativeP2PError> {
-        // Note: In libp2p-kad, we don't manually add providers. 
-        // Providers are discovered through the DHT when they announce themselves via start_providing
-        debug!("Note: Provider {} for entropy block key {:?} should announce via start_providing", peer_id, hex::encode(block_key));
+
+    pub fn set_entropy_message_sender(&mut self, sender: mpsc::UnboundedSender<(EntropyGossipMessage, PeerId)>) {
+        self.entropy_message_sender = Some(sender);
+    }
+
+    pub async fn listen_on(&mut self, addr: Multiaddr) -> Result<(), NativeP2PError> {
+        self.swarm.listen_on(addr)?;
         Ok(())
     }
     
-    /// Start providing an entropy block (announce that we have it)
-    pub async fn start_providing_entropy_block(&mut self, block_key: &[u8]) -> Result<(), NativeP2PError> {
-        let key = kad::RecordKey::new(&block_key);
-        self.swarm.behaviour_mut().kademlia.start_providing(key)
-            .map_err(|e| NativeP2PError::Kademlia(format!("Failed to start providing entropy block: {:?}", e)))?;
-        debug!("Started providing entropy block key: {:?}", hex::encode(block_key));
-        Ok(())
-    }
-    
-    /// Stop providing an entropy block
-    pub async fn stop_providing_entropy_block(&mut self, block_key: &[u8]) -> Result<(), NativeP2PError> {
-        let key = kad::RecordKey::new(&block_key);
-        self.swarm.behaviour_mut().kademlia.stop_providing(&key);
-        debug!("Stopped providing entropy block key: {:?}", hex::encode(block_key));
-        Ok(())
-    }
-    
-    /// Get providers for an entropy block
-    pub async fn get_entropy_block_providers(&mut self, block_key: &[u8]) -> Result<Vec<PeerId>, NativeP2PError> {
-        let key = kad::RecordKey::new(&block_key);
-        let query_id = self.swarm.behaviour_mut().kademlia.get_providers(key);
-        debug!("Started provider query {:?} for entropy block key: {:?}", query_id, hex::encode(block_key));
+    pub async fn run(mut self) -> Result<(), NativeP2PError> {
+        info!("Starting native P2P transport event loop");
+        let cleanup_interval = Duration::from_secs(30);
+        let max_request_age = Duration::from_secs(300);
+        let mut cleanup_timer = tokio::time::interval(cleanup_interval);
         
-        // For now, return empty vector - in a real implementation, we'd wait for the query to complete
-        // and return the actual providers. This is a simplified version.
-        Ok(vec![])
-    }
-    
-    /// Add a bootstrap node for Kademlia
-    pub async fn add_kademlia_bootstrap(&mut self, peer_id: PeerId, addr: Multiaddr) -> Result<(), NativeP2PError> {
-        self.swarm.behaviour_mut().kademlia.add_address(&peer_id, addr.clone());
-        debug!("Added Kademlia bootstrap node {} at {}", peer_id, addr);
+        loop {
+            tokio::select! {
+                event = self.swarm.select_next_some() => {
+                    self.handle_swarm_event(event).await;
+                }
+                command = self.command_receiver.recv() => {
+                    if let Some(cmd) = command {
+                        self.handle_command(cmd).await;
+                    } else {
+                        break; // Channel closed
+                    }
+                }
+                _ = cleanup_timer.tick() => {
+                    // Cleanup stale requests
+                    self.response_channel.cleanup_stale_requests(max_request_age).await;
+                }
+            }
+        }
         Ok(())
     }
     
-    /// Bootstrap the Kademlia DHT
-    pub async fn bootstrap_kademlia(&mut self) -> Result<(), NativeP2PError> {
-        match self.swarm.behaviour_mut().kademlia.bootstrap() {
-            Ok(query_id) => {
-                debug!("Started Kademlia bootstrap with query ID: {:?}", query_id);
-                Ok(())
+    async fn handle_command(&mut self, cmd: P2PCommand) {
+        match cmd {
+            P2PCommand::Dial { addr, response } => {
+                let result = self.swarm.dial(addr).map_err(|e| NativeP2PError::Network(e.to_string()));
+                let _ = response.send(result);
             }
-            Err(e) => {
-                error!("Failed to bootstrap Kademlia: {:?}", e);
-                Err(NativeP2PError::Kademlia(format!("Bootstrap failed: {:?}", e)))
+            P2PCommand::SendRequest { peer_id, request, response_sender } => {
+                let request_id = self.swarm.behaviour_mut().faisal_swarm.send_request(&peer_id, request);
+                let receiver = self.response_channel.register_request(request_id).await;
+                
+                tokio::spawn(async move {
+                    match tokio::time::timeout(Duration::from_secs(30), receiver).await {
+                         Ok(Ok(res)) => { let _ = response_sender.send(Ok(res)); }
+                         Ok(Err(_)) => { let _ = response_sender.send(Err(NativeP2PError::Network("Channel closed".into()))); }
+                         Err(_) => { let _ = response_sender.send(Err(NativeP2PError::Timeout("Timeout".into()))); }
+                    }
+                });
+            }
+            P2PCommand::SendResponse { channel, response } => {
+                 let _ = self.swarm.behaviour_mut().faisal_swarm.send_response(channel, response);
+            }
+            P2PCommand::SubscribeEntropy => {
+                let topic = gossipsub::IdentTopic::new(ENTROPY_TOPIC);
+                if let Err(e) = self.swarm.behaviour_mut().entropy_gossip.subscribe(&topic) {
+                     error!("Failed to subscribe to entropy topic: {:?}", e);
+                }
+            }
+            P2PCommand::UnsubscribeEntropy => {
+                let topic = gossipsub::IdentTopic::new(ENTROPY_TOPIC);
+                if let Err(e) = self.swarm.behaviour_mut().entropy_gossip.unsubscribe(&topic) {
+                     error!("Failed to unsubscribe from entropy topic: {:?}", e);
+                }
+            }
+            P2PCommand::PublishEntropy(message) => {
+                let topic = gossipsub::IdentTopic::new(ENTROPY_TOPIC);
+                if let Err(e) = self.swarm.behaviour_mut().entropy_gossip.publish(topic, message) {
+                     error!("Failed to publish entropy message: {:?}", e);
+                }
+            }
+            P2PCommand::AddEntropyProvider(block_key, _peer_id) => {
+                 // kademlia doesnt have add_provider taking peer_id directly easily without knowing addr?
+                 // But we can start providing ourselves.
+                 // For remote provider, we just discover them.
+                 // This command might be used to manually populate DHT?
+                 // Or maybe we treat it as 'add address' then 'add provider'?
+                 // Let's warn for now.
+                 let _key = kad::RecordKey::new(&block_key);
+                 debug!("AddEntropyProvider ignored - Kademlia handles discovery automatically");
+            }
+            P2PCommand::StartProvidingEntropy(block_key) => {
+                 let key = kad::RecordKey::new(&block_key);
+                 if let Err(e) = self.swarm.behaviour_mut().kademlia.start_providing(key) {
+                      error!("Failed to start providing entropy block: {:?}", e);
+                 }
+            }
+            P2PCommand::StopProvidingEntropy(block_key) => {
+                 let key = kad::RecordKey::new(&block_key);
+                 self.swarm.behaviour_mut().kademlia.stop_providing(&key);
+            }
+            P2PCommand::ListenOn(addr, response) => {
+                 let result = self.swarm.listen_on(addr).map_err(|e| NativeP2PError::Transport(e));
+                 if let Ok(_) = &result {
+                     // We don't return the ListenerId, just success
+                     let _ = response.send(Ok(()));
+                 } else {
+                     let _ = response.send(Err(result.err().unwrap()));
+                 }
+            }
+            P2PCommand::GetEntropyProviders(block_key, response) => {
+                 let key = kad::RecordKey::new(&block_key);
+                 let _query_id = self.swarm.behaviour_mut().kademlia.get_providers(key);
+                 // We don't wait for query completion here (complex logic needed).
+                 // We just return immediately to unblock client.
+                 // Real implementation would track query_id in a map and send results later.
+                 // For now, return empty.
+                 let _ = response.send(vec![]); 
+            }
+            P2PCommand::AddKadBootstrap(peer_id, addr) => {
+                 self.swarm.behaviour_mut().kademlia.add_address(&peer_id, addr);
+            }
+            P2PCommand::BootstrapKad(response) => {
+                 match self.swarm.behaviour_mut().kademlia.bootstrap() {
+                     Ok(_) => { let _ = response.send(Ok(())); }
+                     Err(e) => { let _ = response.send(Err(NativeP2PError::Kademlia(format!("{:?}", e)))); }
+                 }
             }
         }
     }
+    
+    async fn handle_swarm_event(&mut self, event: SwarmEvent<NativeSwarmEvent>) {
+         match event {
+            SwarmEvent::NewListenAddr { address, .. } => {
+                info!("Listening on {}", address);
+                let mut addrs = self.listen_addresses.lock().await;
+                if !addrs.contains(&address) {
+                    addrs.push(address);
+                }
+            }
+            SwarmEvent::ExpiredListenAddr { address, .. } => {
+                let mut addrs = self.listen_addresses.lock().await;
+                if let Some(pos) = addrs.iter().position(|a| *a == address) {
+                    addrs.remove(pos);
+                }
+            }
+            SwarmEvent::Behaviour(NativeSwarmEvent::FaisalSwarm(request_response::Event::Message { peer, message })) => {
+                match message {
+                     request_response::Message::Request { request_id, request, channel } => {
+                         if let Some(handler) = &self.faisal_request_handler {
+                             let response_future = handler(peer, request);
+                             let command_sender = self.command_sender.clone();
+                             tokio::spawn(async move {
+                                 let response = response_future.await;
+                                 let _ = command_sender.send(P2PCommand::SendResponse {
+                                     channel,
+                                     response,
+                                 });
+                             });
+                         } else {
+                             let _ = self.swarm.behaviour_mut().faisal_swarm.send_response(channel, FaisalSwarmResponse { success: true, data: b"ACK".to_vec() });
+                         }
+                     }
+                     request_response::Message::Response { request_id, response } => {
+                         self.response_channel.route_response(request_id, response).await;
+                     }
+                }
+            }
+            SwarmEvent::ConnectionEstablished { peer_id, endpoint, .. } => {
+                let mut peers = self.connected_peers.lock().await;
+                peers.entry(peer_id).or_default().push(endpoint.get_remote_address().clone());
+            }
+            SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                let mut peers = self.connected_peers.lock().await;
+                peers.remove(&peer_id);
+            }
+            SwarmEvent::Behaviour(NativeSwarmEvent::EntropyGossip(gossipsub::Event::Message { propagation_source, message, .. })) => {
+                 if let Ok(entropy_msg) = bincode::deserialize::<EntropyGossipMessage>(&message.data) {
+                      if let Some(sender) = &self.entropy_message_sender {
+                           let _ = sender.send((entropy_msg, propagation_source));
+                      }
+                 }
+            }
+            _ => {}
+         }
+    }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+impl NativeP2PTransport {
+    /// Subscribe to the entropy topic for GossipSub
+    pub async fn subscribe_entropy_topic(&self) -> Result<(), NativeP2PError> {
+        self.send_command(P2PCommand::SubscribeEntropy).await
+    }
+    
+    /// Unsubscribe from the entropy topic
+    pub async fn unsubscribe_entropy_topic(&self) -> Result<(), NativeP2PError> {
+        self.send_command(P2PCommand::UnsubscribeEntropy).await
+    }
+    
+    /// Publish an entropy message to the GossipSub topic
+    pub async fn publish_entropy_message(&self, message: Vec<u8>) -> Result<(), NativeP2PError> {
+        self.send_command(P2PCommand::PublishEntropy(message)).await
+    }
+    
+    /// Add a peer as a provider for an entropy block
+    pub async fn add_entropy_block_provider(&self, block_key: &[u8], peer_id: PeerId) -> Result<(), NativeP2PError> {
+        self.send_command(P2PCommand::AddEntropyProvider(block_key.to_vec(), peer_id)).await
+    }
+    
+    /// Start providing an entropy block (announce that we have it)
+    pub async fn start_providing_entropy_block(&self, block_key: &[u8]) -> Result<(), NativeP2PError> {
+        self.send_command(P2PCommand::StartProvidingEntropy(block_key.to_vec())).await
+    }
+    
+    /// Stop providing an entropy block
+    pub async fn stop_providing_entropy_block(&self, block_key: &[u8]) -> Result<(), NativeP2PError> {
+        self.send_command(P2PCommand::StopProvidingEntropy(block_key.to_vec())).await
+    }
+    
+    /// Get providers for an entropy block
+    pub async fn get_entropy_block_providers(&self, block_key: &[u8]) -> Result<Vec<PeerId>, NativeP2PError> {
+        let (tx, rx) = oneshot::channel();
+        self.send_command(P2PCommand::GetEntropyProviders(block_key.to_vec(), tx)).await?;
+        rx.await.map_err(|_| NativeP2PError::Network("Response channel closed".into()))
+    }
+    
+    /// Add a bootstrap node for Kademlia
+    pub async fn add_kademlia_bootstrap(&self, peer_id: PeerId, addr: Multiaddr) -> Result<(), NativeP2PError> {
+        self.send_command(P2PCommand::AddKadBootstrap(peer_id, addr)).await
+    }
+    
+    /// Bootstrap the Kademlia DHT
+    pub async fn bootstrap_kademlia(&self) -> Result<(), NativeP2PError> {
+        let (tx, rx) = oneshot::channel();
+        self.send_command(P2PCommand::BootstrapKad(tx)).await?;
+        rx.await.map_err(|_| NativeP2PError::Network("Response channel closed".into()))?
+    }
+    
+    /// Get swarm addresses (Snapshot)
+    pub async fn listen_addresses(&self) -> Vec<Multiaddr> {
+        let addrs = self.listen_addresses.lock().await;
+        addrs.clone()
+    }
+}
+
+
 
 /// Errors that can occur in native P2P transport
 #[cfg(not(target_arch = "wasm32"))]
@@ -591,6 +791,10 @@ pub enum NativeP2PError {
     #[error("Noise error: {0}")]
     Noise(String),
     
+    /// Request timeout
+    #[error("Request timeout: {0}")]
+    Timeout(String),
+    
     /// GossipSub publish error
     #[error("GossipSub publish error: {0}")]
     GossipSubPublish(String),
@@ -610,6 +814,10 @@ pub enum NativeP2PError {
     /// Kademlia DHT error
     #[error("Kademlia error: {0}")]
     Kademlia(String),
+
+    /// Network error
+    #[error("Network error: {0}")]
+    Network(String),
 }
 
 impl From<libp2p::gossipsub::SubscriptionError> for NativeP2PError {
@@ -643,7 +851,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[ignore = "Requires gossipsub configuration for local testing"]
     async fn test_native_p2p_creation() {
-        let transport = NativeP2PTransport::new(None).await.unwrap();
+        let (transport, _driver) = NativeP2PTransport::new(None, None).unwrap();
         let peer_id = transport.local_peer_id();
         assert!(!peer_id.to_string().is_empty());
     }

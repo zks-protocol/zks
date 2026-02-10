@@ -1,0 +1,64 @@
+# Cloudflare Workers Deployment Configuration
+# This file configures the real-world deployment of ZKS Protocol signaling
+
+name = "zks-protocol-signaling"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Environment-specific configurations
+[env.staging]
+name = "zks-protocol-signaling-staging"
+
+[env.production]
+name = "zks-protocol-signaling-prod"
+
+# KV Namespaces for production data
+[[kv_namespaces]]
+binding = "SIGNALING_KV"
+id = "zks_protocol_signaling_kv_prod"
+preview_id = "zks_protocol_signaling_kv_preview"
+
+# Durable Objects for real-time coordination (optional upgrade)
+[[durable_objects.bindings]]
+name = "ROOM_COORDINATOR"
+class_name = "RoomCoordinator"
+script_name = "zks-protocol-signaling"
+
+# Environment variables
+[vars]
+ENVIRONMENT = "production"
+MAX_PEERS_PER_ROOM = "100"
+MESSAGE_RATE_LIMIT = "200"
+ROOM_EXPIRY_HOURS = "48"
+ENABLE_METRICS = "true"
+
+# Rate limiting configuration
+[env.production.vars]
+RATE_LIMIT_PER_MINUTE = "6000"
+CONNECTION_LIMIT_PER_IP = "10"
+MESSAGE_SIZE_LIMIT = "65536"
+
+[env.staging.vars]
+RATE_LIMIT_PER_MINUTE = "1000"
+CONNECTION_LIMIT_PER_IP = "20"
+MESSAGE_SIZE_LIMIT = "131072"
+
+# Custom domain configuration (update with your domain)
+[[env.production.routes]]
+pattern = "signal.zks-protocol.com/*"
+zone_name = "zks-protocol.com"
+
+[[env.staging.routes]]
+pattern = "signal-staging.zks-protocol.com/*"
+zone_name = "zks-protocol.com"
+
+# Analytics and logging
+[env.production.logfwdr]
+bindings = [
+  { name = "ANALYTICS", destination = "zks-protocol-analytics" }
+]
+
+# Secrets (set via wrangler secret put)
+# JWT_SIGNING_KEY = "your-jwt-signing-key"
+# API_SECRET = "your-api-secret"
+# ANALYTICS_API_KEY = "your-analytics-api-key"

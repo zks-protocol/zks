@@ -5,6 +5,8 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{info, debug};
 
+use zks_wire::signaling::SignalingClientTrait;
+
 use crate::{
     connection::{ZkConnection, ZksConnection},
     error::{Result, SdkError},
@@ -193,13 +195,14 @@ impl SecureFileTransfer {
     }
     
     /// Send a file using ZKS connection (swarm mode)
-    pub async fn send_file_zks<P, F>(
+    pub async fn send_file_zks<P, F, S>(
         &self,
-        connection: &mut ZksConnection,
+        connection: &mut ZksConnection<S>,
         path: P,
         on_progress: F,
     ) -> Result<()>
     where
+        S: SignalingClientTrait,
         P: AsRef<Path>,
         F: FnMut(u64, u64),
     {
@@ -209,15 +212,16 @@ impl SecureFileTransfer {
     }
     
     /// Internal implementation for ZKS file sending
-    async fn send_file_zks_impl<P, F>(
+    async fn send_file_zks_impl<P, F, S>(
         &self,
-        connection: &mut ZksConnection,
+        connection: &mut ZksConnection<S>,
         path: P,
         mut on_progress: F,
     ) -> Result<()>
     where
         P: AsRef<Path>,
         F: FnMut(u64, u64),
+        S: SignalingClientTrait,
     {
         let path = path.as_ref();
         let file = tokio::fs::File::open(path).await
@@ -261,13 +265,14 @@ impl SecureFileTransfer {
     }
     
     /// Receive a file using ZKS connection (swarm mode)
-    pub async fn recv_file_zks<P, F>(
+    pub async fn recv_file_zks<P, F, S>(
         &self,
-        connection: &mut ZksConnection,
+        connection: &mut ZksConnection<S>,
         save_path: P,
         on_progress: F,
     ) -> Result<String>
     where
+        S: SignalingClientTrait,
         P: AsRef<Path>,
         F: FnMut(u64, u64),
     {
@@ -277,14 +282,15 @@ impl SecureFileTransfer {
     }
     
     /// Internal implementation for ZKS file receiving
-    async fn recv_file_zks_impl<P, F>(
+    async fn recv_file_zks_impl<P, F, S>(
         &self,
-        connection: &mut ZksConnection,
+        connection: &mut ZksConnection<S>,
         save_path: P,
         mut on_progress: F,
     ) -> Result<String>
     where
         P: AsRef<Path>,
+        S: SignalingClientTrait,
         F: FnMut(u64, u64),
     {
         let save_path = save_path.as_ref();

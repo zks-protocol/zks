@@ -52,9 +52,12 @@ sha2 = "0.10"
 hkdf = "0.12"
 zeroize = "1.8"
 tempfile = "3.24.0"
+hex = "0.4"
 
 [dev-dependencies]
 tokio-test = "0.4"
+clap = { version = "4.0", features = ["derive"] }
+tracing-subscriber = "0.3"
 
 [lib]
 name = "zks"

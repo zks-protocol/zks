@@ -1,0 +1,18 @@
+[package]
+name = "zks-protocol-test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+zks_pqcrypto = { version = "0.1.0", path = "crates/zks_pqcrypto" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[[bin]]
+name = "protocol_server"
+path = "examples/protocol_server.rs"
+
+[[bin]]
+name = "protocol_client"
+path = "examples/protocol_client.rs"

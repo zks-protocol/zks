@@ -44,6 +44,9 @@ pub struct ConnectionConfig {
     
     /// Maximum message size
     pub max_message_size: usize,
+
+    /// Bootstrap nodes (Directory Authorities) for initial connection
+    pub bootstrap_nodes: Vec<String>,
 }
 
 impl Default for ConnectionConfig {
@@ -56,6 +59,12 @@ impl Default for ConnectionConfig {
             enable_anti_replay: true,
             enable_compression: false,
             max_message_size: 16 * 1024 * 1024, // 16MB
+            bootstrap_nodes: vec![
+                // Default ZKS Mainnet Authorities
+                "zk://auth1.zks-protocol.org:9443".to_string(),
+                "zk://auth2.zks-protocol.org:9443".to_string(),
+                "zk://auth3.zks-protocol.org:9443".to_string(),
+            ],
         }
     }
 }
@@ -115,9 +124,11 @@ impl ConnectionConfig {
         self
     }
     
-    /// Set the maximum message size
+    /// Maximum message size
     pub fn with_max_message_size(mut self, size: usize) -> Self {
         self.max_message_size = size;
         self
     }
 }
+
+

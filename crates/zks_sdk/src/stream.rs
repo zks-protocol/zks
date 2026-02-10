@@ -3,7 +3,7 @@
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf, AsyncWriteExt, AsyncReadExt};
-use bytes::BytesMut;
+use bytes::{BytesMut, Buf};
 use tracing::{debug, trace};
 use zks_crypt::wasif_vernam::WasifVernam;
 use zks_proto::{Handshake, HandshakeRole, handshake::{HandshakeInit, HandshakeResponse, HandshakeFinish}};
@@ -21,8 +21,10 @@ pub struct EncryptedStream<S> {
     inner: S,
     read_buf: BytesMut,
     write_buf: BytesMut,
+    encrypted_write_buf: BytesMut,
     is_handshake_complete: bool,
-    cipher: Option<WasifVernam>,
+    reader_cipher: Option<WasifVernam>,
+    writer_cipher: Option<WasifVernam>,
 }
 
 impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
@@ -38,7 +40,8 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
         is_swarm: bool,
         role: HandshakeRole,
         room_id: String,
-        trusted_responder_key: Option<Vec<u8>>, // Required for initiator, None for responder
+        trusted_responder_key: Option<Vec<u8>>, // Required for initiator
+        responder_signing_key: Option<MlDsaKeypair>, // Optional for responder (persistent identity)
     ) -> Result<Self> {
         debug!("Starting encrypted stream handshake (role: {:?}, swarm: {})", role, is_swarm);
         
@@ -96,9 +99,13 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
                 handshake.process_init(&init)?;
                 
                 // Set signing keypair for responder
-                let signing_keypair = crate::sdk_crypto::ml_dsa_keypair().await?;
-                let ml_dsa_keypair = MlDsaKeypair::from_bytes(signing_keypair.0, signing_keypair.1)
-                    .map_err(|e| SdkError::CryptoError(format!("Failed to create ML-DSA keypair: {}", e).into()))?;
+                let ml_dsa_keypair = if let Some(key) = responder_signing_key {
+                    key
+                } else {
+                    let signing_keypair = crate::sdk_crypto::ml_dsa_keypair().await?;
+                    MlDsaKeypair::from_bytes(signing_keypair.0, signing_keypair.1)
+                        .map_err(|e| SdkError::CryptoError(format!("Failed to create ML-DSA keypair: {}", e).into()))?
+                };
                 handshake.set_signing_keypair(ml_dsa_keypair)?;
                 
                 // Message 2: Send HandshakeResponse
@@ -122,19 +129,31 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
             }
         };
         
-        debug!("Handshake complete, creating cipher");
+        debug!("Handshake complete, creating ciphers");
         
-        // Create WasifVernam cipher with the shared secret
-        let mut cipher = WasifVernam::new(shared_secret)
-            .map_err(|e| SdkError::CryptoError(format!("Failed to create cipher: {}", e).into()))?;
+        // Create WasifVernam ciphers with the shared secret
+        // We need separate ciphers for reading and writing to ensure nonce separation
+        // and correct keystream generation (since keystream depends on role)
+        
+        // Writer cipher: Uses MY role
+        let mut writer_cipher = WasifVernam::new(shared_secret)
+            .map_err(|e| SdkError::CryptoError(format!("Failed to create writer cipher: {}", e).into()))?;
+        writer_cipher.derive_base_iv(&shared_secret, role == HandshakeRole::Initiator);
+        
+        // Reader cipher: Uses PEER'S role (opposite of mine)
+        let mut reader_cipher = WasifVernam::new(shared_secret)
+            .map_err(|e| SdkError::CryptoError(format!("Failed to create reader cipher: {}", e).into()))?;
+        reader_cipher.derive_base_iv(&shared_secret, role != HandshakeRole::Initiator);
         
         // Enable features based on configuration
         if is_swarm {
-            let _ = cipher.enable_scrambling(256); // Enable traffic analysis resistance
+            let _ = writer_cipher.enable_scrambling(256);
+            let _ = reader_cipher.enable_scrambling(256);
         }
         
         if config.security == crate::config::SecurityLevel::TrueVernam {
-            cipher.enable_true_vernam(1024); // Enable TRUE Vernam mode
+            writer_cipher.enable_true_vernam(1024);
+            reader_cipher.enable_true_vernam(1024);
         }
         
         debug!("Encrypted stream handshake complete (security: {:?})", config.security);
@@ -143,31 +162,49 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
             inner,
             read_buf: BytesMut::with_capacity(config.buffer_size),
             write_buf: BytesMut::with_capacity(config.buffer_size),
+            encrypted_write_buf: BytesMut::with_capacity(config.buffer_size),
             is_handshake_complete: true,
-            cipher: Some(cipher),
+            reader_cipher: Some(reader_cipher),
+            writer_cipher: Some(writer_cipher),
         })
     }
     
     /// Read a wire message from the stream
     async fn read_wire_message(inner: &mut S) -> Result<Vec<u8>> {
-        // Read message length (4 bytes)
-        let mut len_bytes = [0u8; 4];
-        inner.read_exact(&mut len_bytes).await
-            .map_err(|e| SdkError::NetworkError(format!("Failed to read message length: {}", e)))?;
+        // Read header (16 bytes)
+        let mut header_bytes = [0u8; 16];
+        inner.read_exact(&mut header_bytes).await
+            .map_err(|e| SdkError::NetworkError(format!("Failed to read message header: {}", e)))?;
         
-        let msg_len = u32::from_be_bytes(len_bytes) as usize;
+        // Parse header manually to get length
+        // Structure: [Version: 1] [Type: 1] [Sequence: 4] [Length: 4] [Padding: 6]
+        let version = header_bytes[0];
+        let _msg_type = header_bytes[1];
+        let _sequence = u32::from_be_bytes(header_bytes[2..6].try_into().unwrap());
+        let payload_len = u32::from_be_bytes(header_bytes[6..10].try_into().unwrap()) as usize;
+        
+        // Validate version
+        if version != 1 {
+            return Err(SdkError::NetworkError(format!("Invalid protocol version: {}", version)));
+        }
         
         // Validate message size (prevent DoS)
-        if msg_len > 1024 * 1024 { // 1MB max
-            return Err(SdkError::NetworkError("Message too large".into()));
+        if payload_len > 16 * 1024 * 1024 { // 16MB max (matching config default)
+            return Err(SdkError::NetworkError(format!("Message too large: {} bytes", payload_len).into()));
         }
         
         // Read message data
-        let mut msg_bytes = vec![0u8; msg_len];
+        let mut msg_bytes = vec![0u8; payload_len];
         inner.read_exact(&mut msg_bytes).await
             .map_err(|e| SdkError::NetworkError(format!("Failed to read message data: {}", e)))?;
+            
+        // Reconstruct the full message bytes (header + payload) because WireMessage::from_bytes expects the full frame
+        // including the header we already read.
+        let mut full_frame = Vec::with_capacity(16 + payload_len);
+        full_frame.extend_from_slice(&header_bytes);
+        full_frame.extend_from_slice(&msg_bytes);
         
-        Ok(msg_bytes)
+        Ok(full_frame)
     }
     
     /// Create a new encrypted stream (for existing connections, skips handshake)
@@ -176,28 +213,39 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
         session_key: [u8; 32],
         config: &ConnectionConfig,
         is_swarm: bool,
+        is_initiator: bool,
     ) -> Result<Self> {
-        debug!("Creating encrypted stream with existing session key");
+        debug!("Creating encrypted stream with existing session key (role: {})", if is_initiator { "Initiator" } else { "Responder" });
         
-        // Create WasifVernam cipher with the session key
-        let mut cipher = WasifVernam::new(session_key)
-            .map_err(|e| SdkError::CryptoError(format!("Failed to create cipher: {}", e).into()))?;
+        // Create writer cipher (my role)
+        let mut writer_cipher = WasifVernam::new(session_key)
+            .map_err(|e| SdkError::CryptoError(format!("Failed to create writer cipher: {}", e).into()))?;
+        writer_cipher.derive_base_iv(&session_key, is_initiator);
+        
+        // Create reader cipher (peer's role)
+        let mut reader_cipher = WasifVernam::new(session_key)
+            .map_err(|e| SdkError::CryptoError(format!("Failed to create reader cipher: {}", e).into()))?;
+        reader_cipher.derive_base_iv(&session_key, !is_initiator);
         
         // Enable features based on configuration
         if is_swarm {
-            let _ = cipher.enable_scrambling(256); // Enable traffic analysis resistance
+            let _ = writer_cipher.enable_scrambling(256);
+            let _ = reader_cipher.enable_scrambling(256);
         }
         
         if config.security == crate::config::SecurityLevel::TrueVernam {
-            cipher.enable_true_vernam(1024); // Enable TRUE Vernam mode
+            writer_cipher.enable_true_vernam(1024);
+            reader_cipher.enable_true_vernam(1024);
         }
         
         Ok(Self {
             inner,
             read_buf: BytesMut::with_capacity(config.buffer_size),
             write_buf: BytesMut::with_capacity(config.buffer_size),
+            encrypted_write_buf: BytesMut::with_capacity(config.buffer_size),
             is_handshake_complete: true,
-            cipher: Some(cipher),
+            reader_cipher: Some(reader_cipher),
+            writer_cipher: Some(writer_cipher),
         })
     }
     
@@ -238,30 +286,38 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
     
     /// Flush encrypted data to the inner stream
     async fn flush_encrypted(&mut self) -> Result<()> {
-        if self.write_buf.is_empty() {
+        // First flush any plain data into encrypted buffer
+        if !self.write_buf.is_empty() {
+            trace!("Encrypting {} bytes of pending data", self.write_buf.len());
+            // Encrypt the data using WasifVernam writer cipher
+            let encrypted_data = match &mut self.writer_cipher {
+                Some(cipher) => cipher.encrypt(&self.write_buf)
+                    .map_err(|e| SdkError::CryptoError(format!("Encryption failed: {}", e).into()))?,
+                None => return Err(SdkError::CryptoError("Cipher not initialized - handshake incomplete".into())),
+            };
+            
+            self.encrypted_write_buf.extend_from_slice(&encrypted_data);
+            self.write_buf.clear();
+        }
+
+        if self.encrypted_write_buf.is_empty() {
             return Ok(());
         }
         
-        trace!("Flushing {} bytes of encrypted data", self.write_buf.len());
+        trace!("Flushing {} bytes of encrypted data", self.encrypted_write_buf.len());
         
-        // Encrypt the data using WasifVernam cipher
-        let encrypted_data = match &mut self.cipher {
-            Some(cipher) => cipher.encrypt(&self.write_buf)
-                .map_err(|e| SdkError::CryptoError(format!("Encryption failed: {}", e).into()))?,
-            None => return Err(SdkError::CryptoError("Cipher not initialized - handshake incomplete".into())),
-        };
-        
-        self.inner.write_all(&encrypted_data).await
+        self.inner.write_all(&self.encrypted_write_buf).await
             .map_err(|e| SdkError::NetworkError(e.to_string()))?;
         
         self.inner.flush().await
             .map_err(|e| SdkError::NetworkError(e.to_string()))?;
         
-        self.write_buf.clear();
+        self.encrypted_write_buf.clear();
         
         trace!("Flushed encrypted data successfully");
         Ok(())
     }
+
 }
 
 impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for EncryptedStream<S> {
@@ -274,22 +330,26 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for EncryptedStream<S> {
         if !self.read_buf.is_empty() {
             let to_read = std::cmp::min(buf.remaining(), self.read_buf.len());
             buf.put_slice(&self.read_buf.split_to(to_read));
+            trace!("EncryptedStream: Read {} buffered bytes", to_read);
             return Poll::Ready(Ok(()));
         }
         
         // Try to read and decrypt more data
         let mut temp_buf = vec![0u8; 4096];
-        match Pin::new(&mut self.inner).poll_read(cx, &mut ReadBuf::new(&mut temp_buf)) {
+        let mut read_buf = ReadBuf::new(&mut temp_buf);
+        match Pin::new(&mut self.inner).poll_read(cx, &mut read_buf) {
             Poll::Ready(Ok(())) => {
                 // Get the actual number of bytes read
-                let n = temp_buf.len() - ReadBuf::new(&mut temp_buf).remaining();
+                let n = read_buf.filled().len();
                 
                 if n > 0 {
-                    // Decrypt the data using WasifVernam cipher
-                    match &mut self.cipher {
+                    trace!("EncryptedStream: Read {} encrypted bytes from inner", n);
+                    // Decrypt the data using WasifVernam reader cipher
+                    match &mut self.reader_cipher {
                         Some(cipher) => {
                             match cipher.decrypt(&temp_buf[..n]) {
                                 Ok(decrypted_data) => {
+                                    trace!("EncryptedStream: Decrypted {} bytes", decrypted_data.len());
                                     let to_copy = std::cmp::min(buf.remaining(), decrypted_data.len());
                                     buf.put_slice(&decrypted_data[..to_copy]);
                                     
@@ -313,6 +373,8 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for EncryptedStream<S> {
                             )));
                         }
                     }
+                } else {
+                    trace!("EncryptedStream: Read 0 bytes from inner (EOF)");
                 }
                 Poll::Ready(Ok(()))
             }
@@ -330,9 +392,11 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for EncryptedStream<S> {
     ) -> Poll<std::io::Result<usize>> {
         // Buffer the data for encryption
         self.write_buf.extend_from_slice(buf);
+        trace!("EncryptedStream: Buffered {} bytes for writing", buf.len());
         
         // If buffer is getting full, flush it
         if self.write_buf.len() >= 4096 {
+            trace!("EncryptedStream: Write buffer full, flushing...");
             match self.as_mut().poll_flush(cx) {
                 Poll::Ready(Ok(())) => {}
                 Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
@@ -343,45 +407,93 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for EncryptedStream<S> {
         Poll::Ready(Ok(buf.len()))
     }
     
-    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-        if self.write_buf.is_empty() {
-            return Poll::Ready(Ok(()));
-        }
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        let this = self.get_mut();
         
-        // Encrypt the data using WasifVernam cipher
-        let write_buf_data = self.write_buf.split().freeze();
-        let encrypted_data = match &mut self.cipher {
-            Some(cipher) => {
-                match cipher.encrypt(write_buf_data.as_ref()) {
-                    Ok(data) => data,
-                    Err(e) => return Poll::Ready(Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        format!("Encryption failed: {}", e)
-                    ))),
-                }
-            }
-            None => {
+        // First, check if we have any pending encrypted data to write
+        while !this.encrypted_write_buf.is_empty() {
+            let to_write = this.encrypted_write_buf.len();
+            trace!("EncryptedStream: Attempting to write {} encrypted bytes to inner", to_write);
+            let n = match Pin::new(&mut this.inner).poll_write(cx, &this.encrypted_write_buf) {
+                Poll::Ready(Ok(n)) => {
+                    trace!("EncryptedStream: Wrote {} encrypted bytes to inner", n);
+                    n
+                },
+                Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+                Poll::Pending => {
+                    trace!("EncryptedStream: inner poll_write pending");
+                    return Poll::Pending;
+                },
+            };
+            
+            if n == 0 {
                 return Poll::Ready(Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Cipher not initialized - handshake incomplete"
+                    std::io::ErrorKind::WriteZero,
+                    "Zero bytes written to inner stream"
                 )));
             }
-        };
-        
-        let _n = match Pin::new(&mut self.inner).poll_write(cx, &encrypted_data) {
-            Poll::Ready(Ok(n)) => n,
-            Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
-            Poll::Pending => return Poll::Pending,
-        };
-        
-        // Clear the write buffer since we've processed all data
-        self.write_buf.clear();
-        
-        if self.write_buf.is_empty() {
-            Pin::new(&mut self.inner).poll_flush(cx)
-        } else {
-            Poll::Pending
+            
+            this.encrypted_write_buf.advance(n);
         }
+    
+        // If we have plain data to encrypt
+        if !this.write_buf.is_empty() {
+            let len = this.write_buf.len();
+            trace!("EncryptedStream: Encrypting {} bytes of pending data", len);
+            // Encrypt the data using WasifVernam writer cipher
+            let write_buf_data = this.write_buf.split_to(len).freeze();
+            let encrypted_data = match &mut this.writer_cipher {
+                Some(cipher) => {
+                    match cipher.encrypt(write_buf_data.as_ref()) {
+                        Ok(data) => data,
+                        Err(e) => return Poll::Ready(Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!("Encryption failed: {}", e)
+                        ))),
+                    }
+                }
+                None => {
+                    return Poll::Ready(Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "Cipher not initialized - handshake incomplete"
+                    )));
+                }
+            };
+            
+            this.encrypted_write_buf.extend_from_slice(&encrypted_data);
+            trace!("EncryptedStream: Encrypted data appended to buffer, total encrypted buffered: {}", this.encrypted_write_buf.len());
+            
+            // Now try to write the newly encrypted data
+            while !this.encrypted_write_buf.is_empty() {
+                let to_write = this.encrypted_write_buf.len();
+                trace!("EncryptedStream: Attempting to write {} encrypted bytes to inner (second loop)", to_write);
+                let n = match Pin::new(&mut this.inner).poll_write(cx, &this.encrypted_write_buf) {
+                    Poll::Ready(Ok(n)) => {
+                        trace!("EncryptedStream: Wrote {} encrypted bytes to inner (second loop)", n);
+                        n
+                    },
+                    Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+                    Poll::Pending => {
+                        trace!("EncryptedStream: inner poll_write pending (second loop)");
+                        return Poll::Pending;
+                    },
+                };
+                
+                if n == 0 {
+                     return Poll::Ready(Err(std::io::Error::new(
+                        std::io::ErrorKind::WriteZero,
+                        "Zero bytes written to inner stream"
+                    )));
+                }
+                
+                this.encrypted_write_buf.advance(n);
+            }
+        }
+        
+        // If we got here, all buffers are empty or flushed to inner.
+        // Now flush the inner stream.
+        trace!("EncryptedStream: Flushing inner stream");
+        Pin::new(&mut this.inner).poll_flush(cx)
     }
     
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {

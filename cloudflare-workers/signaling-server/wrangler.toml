@@ -1,0 +1,26 @@
+name = "zks-protocol-signaling"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[env.production]
+name = "zks-protocol-signaling-prod"
+
+[env.staging]
+name = "zks-protocol-signaling-staging"
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+MAX_PEERS_PER_ROOM = "50"
+MESSAGE_RATE_LIMIT = "100"
+ROOM_EXPIRY_HOURS = "24"
+
+[[kv_namespaces]]
+binding = "SIGNALING_KV"
+id = "your-kv-namespace-id"
+preview_id = "your-preview-kv-namespace-id"
+
+[vars]
+ENVIRONMENT = "production"
+MAX_PEERS_PER_ROOM = "50"
+MESSAGE_RATE_LIMIT = "100"
+ROOM_EXPIRY_HOURS = "24"

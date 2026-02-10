@@ -40,6 +40,7 @@ use tracing::info;
 pub mod circuit_manager;
 pub mod cells;
 pub mod encryption;
+pub mod relay;
 
 // =============================================================================
 // Faisal Swarm Circuit Types
@@ -136,6 +137,12 @@ pub struct SwarmLayer {
     /// Backward cipher (relay → client) using Wasif-Vernam
     pub backward_cipher: Arc<RwLock<zks_crypt::wasif_vernam::WasifVernam>>,
     
+    /// Forward cipher key (for cloning)
+    forward_key: [u8; 32],
+    
+    /// Backward cipher key (for cloning)
+    backward_key: [u8; 32],
+    
     /// Shared secret (from ML-KEM handshake)
     pub shared_secret: [u8; 32],
     
@@ -153,6 +160,31 @@ impl std::fmt::Debug for SwarmLayer {
             .field("shared_secret", &"[REDACTED]")
             .field("counter", &self.counter.load(std::sync::atomic::Ordering::Relaxed))
             .finish()
+    }
+}
+
+impl Clone for SwarmLayer {
+    fn clone(&self) -> Self {
+        // Clone the ciphers by creating new ones with the same keys
+        let mut forward_cipher = zks_crypt::wasif_vernam::WasifVernam::new(self.forward_key)
+            .expect("Failed to clone forward cipher");
+        let mut backward_cipher = zks_crypt::wasif_vernam::WasifVernam::new(self.backward_key)
+            .expect("Failed to clone backward cipher");
+        
+        // Derive base IV for both ciphers
+        forward_cipher.derive_base_iv(&self.forward_key, true);
+        backward_cipher.derive_base_iv(&self.backward_key, false);
+        
+        Self {
+            peer_id: self.peer_id,
+            forward_cipher: Arc::new(RwLock::new(forward_cipher)),
+            backward_cipher: Arc::new(RwLock::new(backward_cipher)),
+            forward_key: self.forward_key,
+            backward_key: self.backward_key,
+            shared_secret: self.shared_secret,
+            anti_replay: zks_crypt::anti_replay::BitmapAntiReplay::new(), // Create new anti-replay state
+            counter: std::sync::atomic::AtomicU64::new(self.counter.load(std::sync::atomic::Ordering::Relaxed)),
+        }
     }
 }
 
@@ -177,6 +209,8 @@ impl SwarmLayer {
             peer_id,
             forward_cipher: Arc::new(RwLock::new(forward_cipher)),
             backward_cipher: Arc::new(RwLock::new(backward_cipher)),
+            forward_key,
+            backward_key,
             shared_secret: [0u8; 32],
             anti_replay: zks_crypt::anti_replay::BitmapAntiReplay::new(),
             counter: std::sync::atomic::AtomicU64::new(0),
@@ -205,7 +239,7 @@ impl SwarmLayer {
         self.anti_replay.validate(pid)
             .map_err(|_| SwarmError::ReplayDetected)?;
         
-        let cipher = self.backward_cipher.write()
+        let mut cipher = self.backward_cipher.write()
             .map_err(|e| SwarmError::Encryption(format!("Failed to acquire backward cipher lock: {}", e)))?;
         cipher.decrypt(data)
             .map_err(|e| SwarmError::Encryption(format!("Backward decryption failed: {:?}", e)))
@@ -229,6 +263,10 @@ pub struct FaisalSwarmCircuit {
     
     /// When created
     pub created_at: Instant,
+
+    /// Encryption manager for this circuit (client-side only)
+    /// Wrapped in Arc<Mutex> to allow interior mutability while holding read lock on circuit map
+    pub encryption: Option<Arc<std::sync::Mutex<encryption::FaisalSwarmEncryption>>>,
 }
 
 // No stream needed - we use request-response protocol
@@ -322,6 +360,18 @@ pub enum SwarmError {
     /// Serialization/deserialization error
     #[error("Serialization error: {0}")]
     Serialization(String),
+    
+    /// Request timed out waiting for response
+    #[error("Request timed out after {0:?}")]
+    Timeout(std::time::Duration),
+    
+    /// Response channel was closed unexpectedly
+    #[error("Response channel closed")]
+    ChannelClosed,
+
+    /// Internal error
+    #[error("Internal error: {0}")]
+    InternalError(String),
 }
 
 /// Result type alias for Faisal Swarm operations

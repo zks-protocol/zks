@@ -10,13 +10,64 @@ use url::Url;
 use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Serialize};
 use schemars::JsonSchema;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use zks_sdk::{
+    prelude::*,
+    connection::{ZkConnection, ZksConnection},
+    config::ConnectionConfig,
+};
+use zks_wire::signaling::SignalingClient;
+
+/// Wrapper for different connection types
+pub enum ZkConnectionWrapper {
+    /// Direct connection (zk://)
+    Direct(ZkConnection),
+    /// Swarm connection (zks://)
+    Swarm(ZksConnection<SignalingClient>),
+}
+
+impl ZkConnectionWrapper {
+    pub async fn send(&mut self, data: &[u8]) -> Result<()> {
+        match self {
+            Self::Direct(conn) => conn.send(data).await,
+            Self::Swarm(conn) => conn.send(data).await,
+        }
+    }
+
+    pub async fn recv(&mut self, buf: &mut [u8]) -> Result<usize> {
+        match self {
+            Self::Direct(conn) => conn.recv(buf).await,
+            Self::Swarm(conn) => conn.recv(buf).await,
+        }
+    }
+
+    pub async fn close(self) -> Result<()> {
+        match self {
+            Self::Direct(conn) => conn.close().await,
+            Self::Swarm(conn) => conn.close().await,
+        }
+    }
+
+    pub fn peer_addr(&self) -> &str {
+        match self {
+            Self::Direct(conn) => conn.peer_addr(),
+            Self::Swarm(conn) => conn.peer_addr(),
+        }
+    }
+}
 
 #[derive(Clone)]
-pub struct NetworkTools;
+pub struct NetworkTools {
+    connections: Arc<std::sync::Mutex<HashMap<String, Arc<Mutex<ZkConnectionWrapper>>>>>,
+}
 
 impl NetworkTools {
     pub fn new() -> Self {
-        Self
+        Self {
+            connections: Arc::new(std::sync::Mutex::new(HashMap::new())),
+        }
     }
 }
 
@@ -51,12 +102,14 @@ pub struct ParseUrlParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SendParams {
+    pub connection_id: String,
     pub data: String,
     pub encoding: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ReceiveParams {
+    pub connection_id: String,
     pub encoding: Option<String>,
     pub max_size: Option<usize>,
 }
@@ -73,35 +126,32 @@ impl NetworkTools {
     pub async fn zks_connect(&self, params: Parameters<ConnectParams>) -> Result<CallToolResult, McpError> {
         let url = &params.0.url;
         
-        // Validate URL scheme
-        if !url.starts_with("zk://") {
-            return Err(McpError::invalid_params(
-                "URL must use zk:// scheme".to_string(),
-                None
-            ));
+        let connection = ZkConnectionBuilder::new()
+            .url(url)
+            .security(SecurityLevel::PostQuantum)
+            .build()
+            .await
+            .map_err(|e| McpError::internal_error(format!("Connection failed: {}", e), None))?;
+
+        let connection_id = format!("zk_{}", uuid::Uuid::new_v4());
+        let peer_addr = connection.peer_addr().to_string();
+        
+        {
+            let mut connections = self.connections.lock().unwrap();
+            connections.insert(
+                connection_id.clone(), 
+                Arc::new(Mutex::new(ZkConnectionWrapper::Direct(connection)))
+            );
         }
 
-        // Parse URL
-        let parsed_url = Url::parse(url)
-            .map_err(|e| McpError::invalid_params(format!("Invalid URL: {}", e), None))?;
-
-        // Validate URL components
-        if parsed_url.host().is_none() {
-            return Err(McpError::invalid_params(
-                "URL must have a host".to_string(),
-                None
-            ));
-        }
-
-        // Return connection info (stateless - no actual connection created)
         Ok(CallToolResult::success(vec![Content::text(serde_json::json!({
-            "status": "ready",
+            "status": "connected",
             "protocol": "zk",
             "url": url,
+            "peer_addr": peer_addr,
             "security": "post-quantum",
-            "timeout": 30,
-            "connection_id": format!("zk_{}", uuid::Uuid::new_v4()),
-            "message": "Connection parameters validated successfully"
+            "connection_id": connection_id,
+            "message": "Connected successfully via ZKS SDK"
         }).to_string())]))
     }
 
@@ -112,58 +162,60 @@ impl NetworkTools {
         let min_hops = params.0.min_hops.unwrap_or(3);
         let max_hops = params.0.max_hops.unwrap_or(5);
         
-        // Validate URL scheme
-        if !url.starts_with("zks://") {
-            return Err(McpError::invalid_params(
-                "URL must use zks:// scheme".to_string(),
-                None
-            ));
-        }
-
-        // Parse URL
-        let parsed_url = Url::parse(url)
-            .map_err(|e| McpError::invalid_params(format!("Invalid URL: {}", e), None))?;
-
-        // Validate URL components
-        if parsed_url.host().is_none() {
-            return Err(McpError::invalid_params(
-                "URL must have a host".to_string(),
-                None
-            ));
-        }
-
-        // Validate hop parameters
-        if min_hops < 1 || min_hops > 10 {
-            return Err(McpError::invalid_params(
-                "min_hops must be between 1 and 10".to_string(),
-                None
-            ));
-        }
+        // Use ZksConnectionBuilder manually since we need to specify hops which aren't in the generic builder yet
+        // Wait, ZksConnectionBuilder has min_hops/max_hops methods
         
-        if max_hops < min_hops || max_hops > 10 {
-            return Err(McpError::invalid_params(
-                "max_hops must be between min_hops and 10".to_string(),
-                None
-            ));
+        // However, ZksConnectionBuilder needs generic parameter S.
+        // We need to instantiate it with SignalingClient.
+        // But ZksConnectionBuilder::new() returns a builder without S.
+        // The build() method has generic S.
+        
+        // Let's use ZksConnection::connect directly or generic builder if possible.
+        // The builder assumes S is inferred from return type.
+        
+        // ZksConnectionBuilder is in builder.rs
+        // pub async fn build<S: ...>(self) -> Result<ZksConnection<S>>
+        
+        let builder = crate::zks_sdk::builder::ZksConnectionBuilder::new()
+            .url(url)
+            .min_hops(min_hops)
+            .max_hops(max_hops)
+            .security(SecurityLevel::PostQuantum);
+            
+        let connection: ZksConnection<SignalingClient> = builder.build().await
+             .map_err(|e| McpError::internal_error(format!("Anonymous connection failed: {}", e), None))?;
+
+        let connection_id = format!("zks_{}", uuid::Uuid::new_v4());
+        let peer_addr = connection.peer_addr().to_string();
+        let hop_count = connection.hop_count();
+
+        {
+            let mut connections = self.connections.lock().unwrap();
+            connections.insert(
+                connection_id.clone(), 
+                Arc::new(Mutex::new(ZkConnectionWrapper::Swarm(connection)))
+            );
         }
 
-        // Return connection info (stateless - no actual connection created)
         Ok(CallToolResult::success(vec![Content::text(serde_json::json!({
-            "status": "ready",
+            "status": "connected",
             "protocol": "zks",
             "url": url,
-            "min_hops": min_hops,
-            "max_hops": max_hops,
-            "scrambling": true,
-            "timeout": 60,
-            "connection_id": format!("zks_{}", uuid::Uuid::new_v4()),
-            "message": "Anonymous connection parameters validated successfully"
+            "peer_addr": peer_addr,
+            "hops": hop_count,
+            "security": "onion-routed",
+            "connection_id": connection_id,
+            "message": "Anonymous connection established via ZKS SDK"
         }).to_string())]))
     }
 
     /// Perform 3-message post-quantum handshake
     #[tool(name = "zks_handshake", description = "Perform 3-message post-quantum handshake")]
     pub async fn zks_handshake(&self, params: Parameters<HandshakeParams>) -> Result<CallToolResult, McpError> {
+        // This is mainly for testing purposes or manual handshake control.
+        // The SDK handles handshakes automatically during connection.
+        // We'll keep this as a simulation/demo or for specialized use cases.
+        
         let role = &params.0.role;
         let room_id = params.0.room_id.as_deref().unwrap_or("default_room");
 
@@ -178,7 +230,7 @@ impl NetworkTools {
                     "status": "initiated",
                     "role": "initiator",
                     "room_id": room_id,
-                    "message": "Handshake initiated as initiator"
+                    "message": "Handshake initiated as initiator (Demo Mode)"
                 }).to_string())]))
             }
             "responder" => {
@@ -188,7 +240,7 @@ impl NetworkTools {
                     "status": "initiated",
                     "role": "responder",
                     "room_id": room_id,
-                    "message": "Handshake initiated as responder"
+                    "message": "Handshake initiated as responder (Demo Mode)"
                 }).to_string())]))
             }
             _ => Err(McpError::invalid_params(
@@ -234,6 +286,7 @@ impl NetworkTools {
     /// Send data over a connection
     #[tool(name = "zks_send", description = "Send data over a connection")]
     pub async fn zks_send(&self, params: Parameters<SendParams>) -> Result<CallToolResult, McpError> {
+        let connection_id = &params.0.connection_id;
         let data = &params.0.data;
         let encoding = params.0.encoding.as_deref().unwrap_or("text");
 
@@ -256,31 +309,57 @@ impl NetworkTools {
             }
         };
 
-        // Simulate sending data
+        // Get connection
+        let connection_arc = {
+            let connections = self.connections.lock().unwrap();
+            connections.get(connection_id)
+                .ok_or_else(|| McpError::invalid_params("Connection not found".to_string(), None))?
+                .clone()
+        };
+
+        // Send data
+        let mut connection = connection_arc.lock().await;
+        connection.send(&bytes).await
+            .map_err(|e| McpError::internal_error(format!("Failed to send data: {}", e), None))?;
+
         Ok(CallToolResult::success(vec![Content::text(serde_json::json!({
             "status": "sent",
             "bytes_sent": bytes.len(),
-            "encoding": encoding
+            "encoding": encoding,
+            "connection_id": connection_id
         }).to_string())]))
     }
 
     /// Receive data from a connection
     #[tool(name = "zks_receive", description = "Receive data from a connection")]
     pub async fn zks_receive(&self, params: Parameters<ReceiveParams>) -> Result<CallToolResult, McpError> {
+        let connection_id = &params.0.connection_id;
         let encoding = params.0.encoding.as_deref().unwrap_or("text");
-        let max_size = params.0.max_size.unwrap_or(1024);
+        let max_size = params.0.max_size.unwrap_or(4096);
 
-        // Simulate receiving data
-        let sample_data = b"Hello from ZKS network!";
-        let received_bytes = &sample_data[..sample_data.len().min(max_size)];
+        // Get connection
+        let connection_arc = {
+            let connections = self.connections.lock().unwrap();
+            connections.get(connection_id)
+                .ok_or_else(|| McpError::invalid_params("Connection not found".to_string(), None))?
+                .clone()
+        };
+
+        // Receive data
+        let mut buf = vec![0u8; max_size];
+        let mut connection = connection_arc.lock().await;
+        let n = connection.recv(&mut buf).await
+            .map_err(|e| McpError::internal_error(format!("Failed to receive data: {}", e), None))?;
+        
+        // Truncate buffer to actual size
+        buf.truncate(n);
 
         let result = match encoding {
             "text" => {
-                String::from_utf8(received_bytes.to_vec())
-                    .map_err(|e| McpError::internal_error(format!("Invalid UTF-8: {}", e), None))?
+                String::from_utf8_lossy(&buf).to_string()
             }
-            "base64" => general_purpose::STANDARD.encode(received_bytes),
-            "hex" => hex::encode(received_bytes),
+            "base64" => general_purpose::STANDARD.encode(&buf),
+            "hex" => hex::encode(&buf),
             _ => {
                 return Err(McpError::invalid_params(
                     "Encoding must be 'text', 'base64', or 'hex'".to_string(),
@@ -291,8 +370,9 @@ impl NetworkTools {
 
         Ok(CallToolResult::success(vec![Content::text(serde_json::json!({
             "data": result,
-            "bytes_received": received_bytes.len(),
-            "encoding": encoding
+            "bytes_received": n,
+            "encoding": encoding,
+            "connection_id": connection_id
         }).to_string())]))
     }
 
@@ -301,7 +381,34 @@ impl NetworkTools {
     pub async fn zks_close(&self, params: Parameters<CloseParams>) -> Result<CallToolResult, McpError> {
         let connection_id = &params.0.connection_id;
 
-        // Simulate closing connection
+        // Remove from map first
+        let connection_arc = {
+            let mut connections = self.connections.lock().unwrap();
+            connections.remove(connection_id)
+                .ok_or_else(|| McpError::invalid_params("Connection not found".to_string(), None))?
+        };
+
+        // Close connection
+        // We need to take ownership of the inner connection
+        // Since we have the Arc, we can try to unwrap if we are the only holder
+        // But invalidation in the map is enough, we can call close() on the locked inner
+        
+        // Note: ZkConnection::close() consumes self.
+        // We are holding it in a Mutex, so we can't easily consume it unless we take it out of the mutex
+        // or the mutex impl allows it. tokio::sync::Mutex doesn't support into_inner easily if shared.
+        
+        // Workaround: We'll implement a close method that takes &mut self and calls shutdown on the stream
+        // But generic close consumes self.
+        // For now, we'll just drop it, which drops the TCP stream, which closes the connection.
+        // Or we can manually call shutdown if we expose it.
+        
+        // Proper way:
+        let mut conn = connection_arc.lock().await;
+        // We can't call close() because it takes self.
+        // But dropping it should be fine.
+        
+        // Actually, let's just let it drop.
+        
         Ok(CallToolResult::success(vec![Content::text(serde_json::json!({
             "status": "closed",
             "connection_id": connection_id
@@ -311,9 +418,27 @@ impl NetworkTools {
     /// List active connections
     #[tool(name = "zks_list_connections", description = "List active connections")]
     pub async fn zks_list_connections(&self) -> Result<CallToolResult, McpError> {
-        // Return empty list (stateless design)
+        let connections = self.connections.lock().unwrap();
+        
+        // We can't await inside the sync mutex lock
+        // But we just need keys and maybe some info.
+        // We can't call async methods on connections here easily without locking each one.
+        // Let's just list IDs.
+        
+        let mut connection_list = Vec::new();
+        for (id, conn_arc) in connections.iter() {
+           // We can try_lock to get info, or just list IDs
+           // Let's just list IDs to avoid async complexity in this list method
+           connection_list.push(serde_json::json!({
+               "connection_id": id,
+           }));
+        }
+        
+        // For more details we'd need to async lock each one.
+        // This is fine for now.
+
         Ok(CallToolResult::success(vec![Content::text(serde_json::json!({
-            "connections": []
+            "connections": connection_list
         }).to_string())]))
     }
 }

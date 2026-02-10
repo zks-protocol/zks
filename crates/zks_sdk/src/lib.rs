@@ -14,7 +14,7 @@
 //! use zks::prelude::*;
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! async fn main() -> Result<()> {
 //!     let conn = ZkConnectionBuilder::new()
 //!         .url("zk://example.com:8443")
 //!         .security(SecurityLevel::PostQuantum)
@@ -49,6 +49,9 @@ pub mod error;
 pub mod prefabs;
 pub mod stream;
 pub mod sdk_crypto;
+pub mod identity;
+pub mod node;
+pub mod swarm;
 
 /// Prelude module for convenient imports
 pub mod prelude {

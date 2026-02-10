@@ -4,18 +4,80 @@
 
 use super::*;
 use libp2p::{PeerId, Multiaddr};
-use crate::signaling::{SignalingClient, PeerInfo};
-use crate::p2p::NativeSwarmBehaviour;
+use crate::signaling::{SignalingClientTrait, PeerInfo};
+use crate::p2p::FaisalSwarmRequest;
+use crate::faisal_swarm::encryption::create_encryption_manager_from_secrets;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info};
+use tracing::{debug, info, instrument, span, Level};
 use serde::{Serialize, Deserialize};
+use zeroize::Zeroizing;
+use std::time::Duration;
+
+/// Retry configuration for network operations
+#[derive(Debug, Clone)]
+pub struct RetryConfig {
+    pub max_attempts: u32,
+    pub initial_delay: Duration,
+    pub max_delay: Duration,
+    pub backoff_multiplier: f64,
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            max_attempts: 3,
+            initial_delay: Duration::from_millis(100),
+            max_delay: Duration::from_secs(5),
+            backoff_multiplier: 2.0,
+        }
+    }
+}
+
+/// Retry an async operation with exponential backoff
+async fn retry_with_backoff<T, F, Fut>(
+    operation: F,
+    retry_config: &RetryConfig,
+) -> Result<T>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = Result<T>>,
+{
+    let mut delay = retry_config.initial_delay;
+    
+    for attempt in 1..=retry_config.max_attempts {
+        match operation().await {
+            Ok(result) => return Ok(result),
+            Err(err) if attempt < retry_config.max_attempts => {
+                debug!("Attempt {} failed: {}, retrying in {:?}", attempt, err, delay);
+                tokio::time::sleep(delay).await;
+                delay = std::cmp::min(
+                    Duration::from_millis((delay.as_millis() as f64 * retry_config.backoff_multiplier) as u64),
+                    retry_config.max_delay
+                );
+            }
+            Err(err) => return Err(err),
+        }
+    }
+    
+    unreachable!("Retry loop should have returned by now")
+}
+
+/// Circuit manager statistics for monitoring and debugging
+#[derive(Debug, Clone)]
+pub struct CircuitStats {
+    pub total_circuits: usize,
+    pub ready_circuits: usize,
+    pub building_circuits: usize,
+    pub failed_circuits: usize,
+}
 
 /// Faisal Swarm circuit manager
 /// 
 /// Coordinates circuit building, peer selection, and circuit lifecycle
 /// for the Faisal Swarm topology.
-pub struct FaisalSwarmManager {
+pub struct FaisalSwarmManager<S: SignalingClientTrait> {
     /// Active circuits
     circuits: RwLock<HashMap<CircuitId, FaisalSwarmCircuit>>,
     
@@ -23,29 +85,64 @@ pub struct FaisalSwarmManager {
     next_id: AtomicU32,
     
     /// Signaling client (for swarm peer discovery)
-    signaling: Arc<SignalingClient>,
+    signaling: Arc<S>,
     
-    /// libp2p swarm handle
-    swarm_handle: Arc<RwLock<libp2p::Swarm<NativeSwarmBehaviour>>>,
+    /// Native P2P transport for network operations
+    p2p_transport: Arc<RwLock<crate::p2p::NativeP2PTransport>>,
+    
+    /// Retry configuration for network operations
+    retry_config: RetryConfig,
 }
 
-impl FaisalSwarmManager {
+impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
     /// Create a new Faisal Swarm manager for circuit management
     /// 
     /// # Arguments
     /// * `signaling` - Signaling client for peer discovery
-    /// * `swarm_handle` - Handle to the libp2p swarm for network operations
+    /// * `p2p_transport` - Native P2P transport for network operations
     pub fn new(
-        signaling: Arc<SignalingClient>,
-        swarm_handle: Arc<RwLock<libp2p::Swarm<crate::p2p::NativeSwarmBehaviour>>>, 
+        signaling: Arc<S>,
+        p2p_transport: Arc<RwLock<crate::p2p::NativeP2PTransport>>, 
+    ) -> Self {
+        Self::with_retry_config(signaling, p2p_transport, RetryConfig::default())
+    }
+    
+    /// Create a new Faisal Swarm manager for circuit management with custom retry configuration
+    /// 
+    /// # Arguments
+    /// * `signaling` - Signaling client for peer discovery
+    /// * `p2p_transport` - Native P2P transport for network operations
+    /// * `retry_config` - Custom retry configuration for network operations
+    pub fn with_retry_config(
+        signaling: Arc<S>,
+        p2p_transport: Arc<RwLock<crate::p2p::NativeP2PTransport>>,
+        retry_config: RetryConfig,
     ) -> Self {
         Self {
             circuits: RwLock::new(HashMap::new()),
             next_id: AtomicU32::new(0x80000001),
             signaling,
-            swarm_handle,
+            p2p_transport,
+            retry_config,
         }
     }
+    
+    /// Get circuit statistics for monitoring
+    pub async fn get_circuit_stats(&self) -> CircuitStats {
+        let circuits = self.circuits.read().await;
+        let total_circuits = circuits.len();
+        let ready_circuits = circuits.values().filter(|c| c.state == CircuitState::Ready).count();
+        let building_circuits = circuits.values().filter(|c| c.state == CircuitState::Building).count();
+        
+        CircuitStats {
+            total_circuits,
+            ready_circuits,
+            building_circuits,
+            failed_circuits: total_circuits - ready_circuits - building_circuits,
+        }
+    }
+    
+
     
     // =========================================================================
     // Faisal Swarm Circuit Creation
@@ -62,11 +159,16 @@ impl FaisalSwarmManager {
     /// 
     /// # Returns
     /// Circuit ID if successful
+    #[instrument(skip(self), fields(room_id, hops, circuit_id))]
     pub async fn create_circuit(&self, room_id: &str, hops: usize) -> Result<CircuitId> {
+        let span = span!(Level::INFO, "create_circuit", room_id = room_id, hops = hops);
+        let _enter = span.enter();
+        
         info!("🔧 Creating {}-hop Faisal Swarm circuit in room {}", hops, room_id);
         
         // Allocate circuit ID
         let circuit_id = self.allocate_circuit_id();
+        tracing::Span::current().record("circuit_id", &circuit_id);
         
         // 1. Discover peers in the swarm
         let available_peers = self.discover_swarm_peers(room_id).await?;
@@ -87,17 +189,29 @@ impl FaisalSwarmManager {
             layers: Vec::new(),
             state: CircuitState::Building,
             created_at: Instant::now(),
+            encryption: None,
         };
         
-        self.circuits.write().await.insert(circuit_id, circuit);
+        // Insert circuit with minimal lock time
+        {
+            let start = Instant::now();
+            let mut circuits = self.circuits.write().await;
+            debug!("Circuit write lock acquired in {:?}", start.elapsed());
+            circuits.insert(circuit_id, circuit);
+        }
         
         // 4. Build circuit via libp2p relay
         self.build_swarm_circuit(circuit_id).await?;
         
         // 5. Mark as ready
-        if let Some(circuit) = self.circuits.write().await.get_mut(&circuit_id) {
-            circuit.state = CircuitState::Ready;
-            info!("✅ Faisal Swarm circuit {} is ready!", circuit_id);
+        {
+            let start = Instant::now();
+            let mut circuits = self.circuits.write().await;
+            debug!("Circuit write lock acquired in {:?}", start.elapsed());
+            if let Some(circuit) = circuits.get_mut(&circuit_id) {
+                circuit.state = CircuitState::Ready;
+                info!("✅ Faisal Swarm circuit {} is ready!", circuit_id);
+            }
         }
         
         Ok(circuit_id)
@@ -180,26 +294,74 @@ impl FaisalSwarmManager {
     
     /// Build Faisal Swarm circuit using libp2p relay protocol
     async fn build_swarm_circuit(&self, circuit_id: CircuitId) -> Result<()> {
-        let mut circuits = self.circuits.write().await;
-        let circuit = circuits.get_mut(&circuit_id)
-            .ok_or(SwarmError::NotFound(circuit_id))?;
+        // Get circuit info first, then release the lock
+        let guard_info = {
+            let circuits = self.circuits.read().await;
+            let circuit = circuits.get(&circuit_id)
+                .ok_or(SwarmError::NotFound(circuit_id))?;
+            
+            info!("🔗 Building Faisal Swarm circuit {}", circuit_id);
+            
+            // Get the first hop info
+            if circuit.hops.is_empty() {
+                return Err(SwarmError::InvalidArgument("Circuit has no hops".to_string()));
+            }
+            
+            let guard = &circuit.hops[0];
+            info!("  → Connecting to Guard: {}", guard.peer_id);
+            
+            (guard.peer_id, guard.multiaddr.clone())
+        };
         
-        info!("🔗 Building Faisal Swarm circuit {}", circuit_id);
-        
-        // Connect to first hop (Guard)
-        let guard = &circuit.hops[0];
-        info!("  → Connecting to Guard: {}", guard.peer_id);
-        
-        self.connect_to_swarm_peer(&guard.peer_id, &guard.multiaddr, circuit_id).await?;
+        // Connect to first hop (Guard) without holding circuit lock
+        self.connect_to_swarm_peer(&guard_info.0, &guard_info.1, circuit_id).await?;
         
         // Perform ML-KEM handshake with Guard (post-quantum secure)
         let layer0 = self.handshake_with_swarm_peer(circuit_id, 0).await?;
-        circuit.layers.push(layer0);
+        
+        // Add the first layer to the circuit and Initialize Encryption
+        {
+            let mut circuits = self.circuits.write().await;
+            if let Some(circuit) = circuits.get_mut(&circuit_id) {
+                circuit.layers.push(layer0.clone());
+                
+                // Initialize encryption with first layer
+                let shared_secrets = vec![layer0.shared_secret];
+                let encryption = create_encryption_manager_from_secrets(&shared_secrets)
+                    .map_err(|e| SwarmError::Encryption(format!("Failed to create encryption manager: {:?}", e)))?;
+                
+                circuit.encryption = Some(Arc::new(std::sync::Mutex::new(encryption)));
+            } else {
+                return Err(SwarmError::NotFound(circuit_id));
+            }
+        }
         
         // Extend circuit to remaining hops
-        for hop_idx in 1..circuit.hops.len() {
+        // We need to re-fetch hop count as it might change? No, fixed at creation.
+        let hop_count = self.get_circuit_hop_count(circuit_id).await?;
+        
+        for hop_idx in 1..hop_count {
             info!("  → Extending Faisal Swarm circuit to hop {}", hop_idx + 1);
-            self.extend_swarm_circuit(circuit_id, hop_idx).await?;
+            
+            // Extend circuit - returns new layer
+            let new_layer = self.extend_swarm_circuit(circuit_id, hop_idx).await?;
+            
+            // Update circuit with new layer and update encryption
+            let mut circuits = self.circuits.write().await;
+            if let Some(circuit) = circuits.get_mut(&circuit_id) {
+                circuit.layers.push(new_layer);
+                
+                // Re-initialize encryption with ALL layers (including new one)
+                let shared_secrets: Vec<[u8; 32]> = circuit.layers.iter()
+                    .map(|layer| layer.shared_secret)
+                    .collect();
+                
+                let encryption = create_encryption_manager_from_secrets(&shared_secrets)
+                    .map_err(|e| SwarmError::Encryption(format!("Failed to update encryption manager: {:?}", e)))?;
+                
+                circuit.encryption = Some(Arc::new(std::sync::Mutex::new(encryption)));
+                info!("✅ Encryption manager updated for {} hops", circuit.layers.len());
+            }
         }
         
         Ok(())
@@ -214,10 +376,10 @@ impl FaisalSwarmManager {
     ) -> Result<()> {
         info!("Connecting to swarm peer {} at {} for circuit {}", peer_id, multiaddr, circuit_id);
 
-        let mut swarm = self.swarm_handle.write().await;
+        let p2p_transport = self.p2p_transport.read().await;
 
         // Dial the peer
-        swarm.dial(multiaddr.clone())
+        p2p_transport.dial(multiaddr.clone()).await
             .map_err(|e| SwarmError::Network(format!("Failed to dial peer: {}", e)))?;
 
         // Wait for connection to be established
@@ -226,7 +388,7 @@ impl FaisalSwarmManager {
         tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
         // Check if we're connected to the peer
-        if !swarm.is_connected(peer_id) {
+        if !p2p_transport.is_connected(peer_id).await {
             return Err(SwarmError::Network(format!("Failed to establish connection to peer {}", peer_id)));
         }
 
@@ -251,7 +413,15 @@ impl FaisalSwarmManager {
         
         // Generate ML-KEM keypair (post-quantum)
         // Note: This requires zks_pqcrypto crate integration
-        let shared_secret = self.perform_post_quantum_handshake(&hop.peer_id, circuit).await?;
+        let shared_secret_vec = self.perform_post_quantum_handshake(&hop.peer_id, circuit).await?;
+        
+        // Convert Zeroizing<Vec<u8>> to [u8; 32]
+        let mut shared_secret = [0u8; 32];
+        if shared_secret_vec.len() == 32 {
+            shared_secret.copy_from_slice(&shared_secret_vec);
+        } else {
+            return Err(SwarmError::HandshakeFailed("Invalid shared secret length".to_string()));
+        }
         
         // Derive Wasif-Vernam keys using HKDF
         let (forward_key, backward_key) = self.derive_vernam_keys(&shared_secret)?;
@@ -265,97 +435,186 @@ impl FaisalSwarmManager {
         Ok(layer)
     }
     
-    /// Perform post-quantum handshake (ML-KEM)
-    async fn perform_post_quantum_handshake(&self, peer_id: &PeerId, _circuit: &FaisalSwarmCircuit) -> Result<[u8; 32]> {
+    /// Perform post-quantum handshake (ML-KEM) via libp2p request-response
+    /// 
+    /// This is the REAL implementation that exchanges ML-KEM public keys
+    /// over the libp2p Faisal Swarm protocol and derives a shared secret.
+    #[instrument(skip(self, circuit), fields(peer_id = peer_id.to_string(), circuit_id = circuit.id))]
+    async fn perform_post_quantum_handshake(&self, peer_id: &PeerId, circuit: &FaisalSwarmCircuit) -> Result<Zeroizing<Vec<u8>>> {
         use zks_pqcrypto::MlKem;
         
-        info!("🤝 Performing post-quantum ML-KEM handshake with peer: {}", peer_id);
+        info!("🤝 Performing REAL post-quantum ML-KEM handshake with peer: {}", peer_id);
         
-        // Generate ML-KEM768 keypair (post-quantum secure)
-        let _keypair = MlKem::generate_keypair()
+        // 1. Generate ML-KEM keypair (post-quantum secure)
+        let keypair = MlKem::generate_keypair()
             .map_err(|e| SwarmError::HandshakeFailed(format!("ML-KEM key generation failed: {:?}", e)))?;
         
-        // For now, use a simplified handshake that generates a shared secret
-        // In a real implementation, this would use the request-response protocol
-        // to exchange public keys with the peer. For now, we simulate the handshake
-        // by using a deterministic shared secret based on peer ID.
+        let public_key = keypair.public_key();
+        debug!("📤 Sending ML-KEM public key ({} bytes) to peer {}", public_key.len(), peer_id);
         
-        debug!("📤 Simulating ML-KEM handshake with peer {}", peer_id);
+        // 2. Create handshake request with our public key
+        let request = FaisalSwarmRequest {
+            circuit_id: circuit.id,
+            data: public_key.to_vec(),
+        };
         
-        // Simulate shared secret generation (in production, this would be real key exchange)
-        let mut shared_secret = [0u8; 32];
-        let peer_id_bytes = peer_id.to_bytes();
-        for (i, &byte) in peer_id_bytes.iter().take(32).enumerate() {
-            shared_secret[i] = byte ^ 0xAB; // Simple XOR for simulation
+        // 3. Send request via NativeP2PTransport with retry logic
+        let response = retry_with_backoff(
+            || async {
+                let p2p_transport = self.p2p_transport.read().await;
+                p2p_transport.send_faisal_request(*peer_id, request.clone()).await
+                    .map_err(|e| SwarmError::Network(format!("Handshake request failed: {}", e)))
+            },
+            &self.retry_config,
+        ).await?;
+        
+        if !response.success {
+            return Err(SwarmError::HandshakeFailed(
+                format!("Peer {} rejected handshake", peer_id)
+            ));
         }
         
-        debug!("✅ Simulated ML-KEM handshake completed with peer {}", peer_id);
-        debug!("   Shared secret length: {} bytes", shared_secret.len());
+        // 5. Decapsulate the ciphertext to get shared secret
+        let ciphertext = &response.data;
+        if ciphertext.len() != zks_pqcrypto::ml_kem::CIPHERTEXT_SIZE {
+            return Err(SwarmError::HandshakeFailed(
+                format!("Invalid ciphertext size: expected {}, got {}", 
+                    zks_pqcrypto::ml_kem::CIPHERTEXT_SIZE, ciphertext.len())
+            ));
+        }
         
-        // Return the simulated shared secret
+        let shared_secret = MlKem::decapsulate(ciphertext, keypair.secret_key())
+            .map_err(|e| SwarmError::HandshakeFailed(format!("ML-KEM decapsulation failed: {:?}", e)))?;
+        
+        info!("✅ REAL ML-KEM handshake completed with peer {}", peer_id);
+        debug!("   Shared secret derived: {} bytes", shared_secret.len());
+        
         Ok(shared_secret)
     }
     
     /// Extend swarm circuit to next hop using EXTEND protocol
-    async fn extend_swarm_circuit(&self, circuit_id: CircuitId, hop_idx: usize) -> Result<()> {
-        let mut circuits = self.circuits.write().await;
-        let circuit = circuits.get_mut(&circuit_id)
-            .ok_or(SwarmError::NotFound(circuit_id))?;
-        
-        if hop_idx >= circuit.hops.len() {
-            return Err(SwarmError::InvalidArgument(format!("Invalid hop index: {}", hop_idx)));
-        }
-        
-        let current_hop = &circuit.hops[hop_idx - 1];
-        let next_hop = &circuit.hops[hop_idx];
-        
-        info!("🔗 Extending Faisal Swarm circuit {} from hop {} to hop {}", 
-               circuit_id, hop_idx, hop_idx + 1);
-        info!("   Current: {} → Next: {}", current_hop.peer_id, next_hop.peer_id);
-        
-        // Create EXTEND cell with next hop information
-        // EXTEND cells use no delay since they're circuit-building messages
-        let extend_cell = FaisalSwarmCell {
-            header: CellHeader {
-                circuit_id,
-                command: CellCommand::Extend,
-                payload_len: 0,
-                flags: 0,
-                delay_ms: 0, // No delay for circuit-building cells
-            },
-            payload: self.create_extend_payload(next_hop)?,
+    async fn extend_swarm_circuit(&self, circuit_id: CircuitId, hop_idx: usize) -> Result<SwarmLayer> {
+        // Get the hop info first, then release the lock
+        let (guard_peer_id, next_hop, layers_len, encryption_mutex) = {
+            let circuits = self.circuits.read().await;
+            let circuit = circuits.get(&circuit_id)
+                .ok_or(SwarmError::NotFound(circuit_id))?;
+            
+            if hop_idx >= circuit.hops.len() {
+                return Err(SwarmError::InvalidArgument(format!("Invalid hop index: {}", hop_idx)));
+            }
+            
+            let guard = circuit.hops.first()
+                .ok_or(SwarmError::InvalidState { expected: CircuitState::Building, actual: CircuitState::Error("No guard".into()) })?;
+
+            let next_hop = &circuit.hops[hop_idx];
+            
+            info!("🔗 Extending Faisal Swarm circuit {} from hop {} to hop {}", 
+                   circuit_id, hop_idx, hop_idx + 1);
+            info!("   Next Hop: {}", next_hop.peer_id);
+            
+            let encryption = circuit.encryption.clone()
+                 .ok_or(SwarmError::InvalidState { expected: CircuitState::Building, actual: CircuitState::Error("No encryption (should be init after guard)".into()) })?;
+
+            (guard.peer_id, next_hop.clone(), circuit.layers.len(), encryption)
         };
         
-        // Encrypt the EXTEND cell for current hop
-        let _encrypted_cell = self.encrypt_cell_for_hop(&extend_cell, hop_idx - 1, circuit)?;
+        // Match the Extend command format in relay.rs:
+        // [cmd:1][peer_id_len:2][peer_id_bytes][addr_len:2][addr_bytes][pk_len:2][pk_bytes]
+        // cmd = 0x04 for Extend
         
-        // Simulate EXTEND request-response protocol
-        // In a real implementation, this would use the swarm's request-response mechanism
-        // For now, we simulate the extension by generating a shared secret deterministically
+        // 1. Generate ML-KEM keypair for handshake with next hop
+        use zks_pqcrypto::MlKem;
+        let keypair = MlKem::generate_keypair()
+            .map_err(|e| SwarmError::HandshakeFailed(format!("ML-KEM key generation failed: {:?}", e)))?;
         
-        info!("🔄 Simulating EXTEND request-response for circuit {}", circuit_id);
+        let client_pk = keypair.public_key();
         
-        // Simulate shared secret generation based on peer IDs
-        let mut shared_secret = [0u8; 32];
-        let current_peer_bytes = current_hop.peer_id.to_bytes();
-        let next_peer_bytes = next_hop.peer_id.to_bytes();
+        // 2. Construct the binary payload
+        let mut payload = Vec::new();
+        payload.push(0x04); // Command: EXTEND
         
-        for i in 0..32 {
-            shared_secret[i] = current_peer_bytes[i % current_peer_bytes.len()] 
-                ^ next_peer_bytes[i % next_peer_bytes.len()] 
-                ^ (i as u8);
+        // Peer ID
+        let peer_id_bytes = next_hop.peer_id.to_bytes();
+        payload.extend_from_slice(&(peer_id_bytes.len() as u16).to_be_bytes());
+        payload.extend_from_slice(&peer_id_bytes);
+        
+        // Multiaddr
+        let addr_bytes = next_hop.multiaddr.to_string().into_bytes();
+        payload.extend_from_slice(&(addr_bytes.len() as u16).to_be_bytes());
+        payload.extend_from_slice(&addr_bytes);
+        
+        // Public Key
+        payload.extend_from_slice(&(client_pk.len() as u16).to_be_bytes());
+        payload.extend_from_slice(&client_pk);
+        
+        // 3. Encrypt payload with existing layers (Onion encryption)
+        // We need to lock encryption
+        let mut encryption = encryption_mutex.lock()
+             .map_err(|_| SwarmError::Encryption("Failed to lock encryption manager".into()))?;
+             
+        let encrypted_payload = encryption.encrypt_onion_layers(&payload, layers_len)
+             .map_err(|e| SwarmError::Encryption(format!("Extend payload encryption failed: {:?}", e)))?;
+             
+        // 4. Send to Guard
+        let request = FaisalSwarmRequest {
+            circuit_id,
+            data: encrypted_payload,
+        };
+        
+        // Retry logic for the extension request
+        let response = retry_with_backoff(
+            || async {
+                let p2p_transport = self.p2p_transport.read().await;
+                p2p_transport.send_faisal_request(guard_peer_id, request.clone()).await
+                    .map_err(|e| SwarmError::Network(format!("Extend request to guard failed: {}", e)))
+            },
+            &self.retry_config,
+        ).await?;
+        
+        if !response.success {
+            return Err(SwarmError::HandshakeFailed("Extend request rejected by network".into()));
         }
         
-        // Derive Wasif-Vernam keys for new hop
-        let (forward_key, backward_key) = self.derive_vernam_keys(&shared_secret)?;
+        // 5. Decrypt response (onion decryption)
+        // Decrypt iteratively
+        let mut decrypted: Vec<u8> = response.data;
         
-        // Create new SwarmLayer for extended hop
-        let new_layer = SwarmLayer::new(next_hop.peer_id, forward_key, backward_key)?;
-        circuit.layers.push(new_layer);
+        // IMPORTANT: Decrypt in correct order.
+        // If relay encrypted with R2 then R1 then R0 (Guardian), we must decrypt R0 then R1 then R2.
+        // Assuming `decrypt_onion_layer` handles the correct sequence if we pass the index.
+        // In `encryption.rs`, `decrypt_onion_layer` typically uses the cipher for that layer.
+        // Loop 0 to layers_len-1.
+        for i in 0..layers_len {
+             decrypted = encryption.decrypt_onion_layer(&decrypted, i)
+                 .map_err(|e| SwarmError::Encryption(format!("Extend response decryption failed at hop {}: {:?}", i, e)))?;
+        }
         
-        info!("✅ Circuit {} successfully extended to hop {} (simulated)", circuit_id, hop_idx + 1);
+        // 6. This decrypted data IS the ciphertext from the next hop (ML-KEM encapsulated secret)
+        // Check size
+        if decrypted.len() != zks_pqcrypto::ml_kem::CIPHERTEXT_SIZE {
+             return Err(SwarmError::HandshakeFailed(
+                 format!("Invalid ML-KEM ciphertext size from next hop: expected {}, got {}", 
+                     zks_pqcrypto::ml_kem::CIPHERTEXT_SIZE, decrypted.len())
+             ));
+        }
         
-        Ok(())
+        // 7. Decapsulate
+        let shared_secret = MlKem::decapsulate(&decrypted, keypair.secret_key())
+            .map_err(|e| SwarmError::HandshakeFailed(format!("ML-KEM decapsulation failed: {:?}", e)))?;
+            
+        // 8. Derive keys and return layer
+        let shared_secret_vec: &Vec<u8> = shared_secret.as_ref();
+        let shared_secret_array: [u8; 32] = shared_secret_vec.as_slice().try_into()
+            .map_err(|_| SwarmError::HandshakeFailed("Invalid shared secret length".to_string()))?;
+        
+        let (forward_key, backward_key) = self.derive_vernam_keys(&shared_secret_array)?;
+        
+        let mut new_layer = SwarmLayer::new(next_hop.peer_id, forward_key, backward_key)?;
+        new_layer.shared_secret = shared_secret_array;
+        
+        info!("✅ Circuit {} successfully extended to hop {} with REAL ML-KEM handshake", circuit_id, hop_idx + 1);
+        Ok(new_layer)
     }
     
     /// Create EXTEND payload for next hop
@@ -404,51 +663,198 @@ impl FaisalSwarmManager {
     // Circuit Usage
     // =========================================================================
     
-    /// Send data through Faisal Swarm circuit
+    /// Send data through Faisal Swarm circuit using onion encryption
+    #[instrument(skip(self, data), fields(circuit_id = circuit_id))]
     pub async fn send_via_swarm(&self, circuit_id: CircuitId, data: &[u8]) -> Result<Vec<u8>> {
-        let mut circuits = self.circuits.write().await;
-        let circuit = circuits.get_mut(&circuit_id)
-            .ok_or(SwarmError::NotFound(circuit_id))?;
+        let span = span!(Level::INFO, "send_via_swarm", circuit_id = circuit_id, data_len = data.len());
+        let _enter = span.enter();
         
-        if circuit.state != CircuitState::Ready {
-            return Err(SwarmError::InvalidState {
-                expected: CircuitState::Ready,
-                actual: circuit.state.clone(),
-            });
+        // Get circuit info first with read lock
+        let start = Instant::now();
+        let (guard_hop_peer_id, encrypted_data) = {
+            let circuits = self.circuits.read().await;
+            debug!("Circuit read lock acquired in {:?}", start.elapsed());
+            let circuit = circuits.get(&circuit_id)
+                .ok_or(SwarmError::NotFound(circuit_id))?;
+            
+            if circuit.state != CircuitState::Ready {
+                return Err(SwarmError::InvalidState {
+                    expected: CircuitState::Ready,
+                    actual: circuit.state.clone(),
+                });
+            }
+            
+            // Clone the circuit data needed for encryption
+            let hops = circuit.hops.clone();
+            let layers_len = circuit.layers.len();
+            let encryption_mutex = circuit.encryption.clone()
+                .ok_or_else(|| SwarmError::InvalidState {
+                    expected: CircuitState::Ready,
+                    actual: CircuitState::Error("Encryption manager not initialized".into()),
+                })?;
+                
+            // Acquire lock on encryption manager to update counters safely
+            let mut encryption = encryption_mutex.lock()
+                .map_err(|_| SwarmError::Encryption("Failed to lock encryption manager".into()))?;
+            
+            // Perform proper onion encryption - encrypt in reverse order (Exit → Guard)
+            let encrypted = encryption.encrypt_onion_layers(data, layers_len)
+                .map_err(|e| SwarmError::Encryption(format!("Onion encryption failed: {:?}", e)))?;
+            
+            // Get guard hop info (first hop in the circuit)
+            // CRITICAL FIX: Send to GUARD (first hop), not EXIT (last hop)
+            if let Some(guard_hop) = hops.first() {
+                (guard_hop.peer_id, encrypted)
+            } else {
+                return Err(SwarmError::InvalidState {
+                    expected: CircuitState::Ready,
+                    actual: circuit.state.clone(),
+                });
+            }
+        };
+        
+        // Send through Faisal Swarm protocol using libp2p request-response
+        // Send to the guard node (first hop) of the circuit
+        let request = FaisalSwarmRequest {
+            circuit_id,
+            data: encrypted_data.clone(),
+        };
+        
+        // Retry the send operation with exponential backoff
+        let response = retry_with_backoff(
+            || async {
+                let p2p_transport = self.p2p_transport.read().await;
+                p2p_transport.send_faisal_request(guard_hop_peer_id, request.clone()).await
+                    .map_err(|e| SwarmError::Network(format!("Faisal Swarm send failed: {}", e)))
+            },
+            &self.retry_config,
+        ).await?;
+        
+        if !response.success {
+            return Err(SwarmError::Network(format!("Faisal Swarm send failed for circuit {}", circuit_id)));
         }
         
-        // Encrypt with all Wasif-Vernam layers (onion encryption)
-        let encrypted = circuit.encrypt_onion(data)?;
-        
-        // Send through Faisal Swarm protocol using request-response
-        // For now, we'll simulate the send - in a real implementation, this would use the swarm's request-response
-        info!("Sent {} bytes through Faisal Swarm circuit {} (simulated)", encrypted.len(), circuit_id);
-        
-        Ok(encrypted)
+        info!("Sent {} bytes through Faisal Swarm circuit {} via libp2p", encrypted_data.len(), circuit_id);
+        Ok(response.data)
     }
     
-    /// Receive data from Faisal Swarm circuit
-    pub async fn receive_from_swarm(&self, circuit_id: CircuitId) -> Result<Vec<u8>> {
-        let mut circuits = self.circuits.write().await;
-        let circuit = circuits.get_mut(&circuit_id)
-            .ok_or(SwarmError::NotFound(circuit_id))?;
+    /// Receive and decrypt data from Faisal Swarm circuit (network version)
+    /// This method receives data from the network and decrypts it
+    #[instrument(skip(self), fields(circuit_id = circuit_id))]
+    pub async fn receive_from_swarm_network(&self, circuit_id: CircuitId) -> Result<Vec<u8>> {
+        let start = Instant::now();
+        let (guard_hop_peer_id, encryption_mutex, layers_len) = {
+            let circuits = self.circuits.read().await;
+            debug!("Circuit read lock acquired in {:?}", start.elapsed());
+            let circuit = circuits.get(&circuit_id)
+                .ok_or(SwarmError::NotFound(circuit_id))?;
+            
+            if circuit.state != CircuitState::Ready {
+                return Err(SwarmError::InvalidState {
+                    expected: CircuitState::Ready,
+                    actual: circuit.state.clone(),
+                });
+            }
+            
+            // Get guard hop for sending request (must enter via Guard)
+            let guard_hop = circuit.hops.first()
+                .ok_or_else(|| SwarmError::InvalidState {
+                    expected: CircuitState::Ready,
+                    actual: circuit.state.clone(),
+                })?;
+            
+            let layers_len = circuit.layers.len();
+            let encryption_mutex = circuit.encryption.clone()
+                .ok_or_else(|| SwarmError::InvalidState {
+                    expected: CircuitState::Ready,
+                    actual: CircuitState::Error("Encryption manager not initialized".into()),
+                })?;
+                
+            (guard_hop.peer_id, encryption_mutex, layers_len)
+        };
         
-        if circuit.state != CircuitState::Ready {
-            return Err(SwarmError::InvalidState {
-                expected: CircuitState::Ready,
-                actual: circuit.state.clone(),
-            });
+        // Lock encryption manager
+        let mut encryption = encryption_mutex.lock()
+            .map_err(|_| SwarmError::Encryption("Failed to lock encryption manager".into()))?;
+            
+        // Encrypt "RECV" request onion style
+        let encrypted_request_data = encryption.encrypt_onion_layers(b"RECV", layers_len)
+            .map_err(|e| SwarmError::Encryption(format!("Request encryption failed: {:?}", e)))?;
+        
+        // Create request to receive data
+        let request = FaisalSwarmRequest {
+            circuit_id,
+            data: encrypted_request_data,
+        };
+        
+        // Send to GUARD
+        let response = retry_with_backoff(
+            || async {
+                let p2p_transport = self.p2p_transport.read().await;
+                p2p_transport.send_faisal_request(guard_hop_peer_id, request.clone()).await
+                    .map_err(|e| SwarmError::Network(format!("Faisal Swarm receive failed: {}", e)))
+            },
+            &self.retry_config,
+        ).await?;
+        
+        if !response.success {
+            return Err(SwarmError::Network(format!("Faisal Swarm receive failed for circuit {}", circuit_id)));
         }
         
-        // Receive from Faisal Swarm protocol
-        // TODO: Implement actual request-response protocol for receiving data
-        // This should handle:
-        // 1. Waiting for incoming data from the swarm network
-        // 2. Validating the data integrity and authenticity
-        // 3. Decrypting the received data using the circuit's backward ciphers
-        // 4. Handling retransmissions and flow control
-        // 5. Managing circuit state transitions
-        return Err(SwarmError::NotImplemented("receive_from_swarm protocol not yet implemented".into()));
+        // Decrypt response layer-by-layer
+        // Note: decrypt_onion_layers handles peeling order correctly internally if implemented right,
+        // but let's verify encryption.rs implementation.
+        // encrypt_onion_layers does: Exit -> Guard.
+        // decrypt_onion_layers does: Guard -> Exit? No, we receive from Guard.
+        // Wait, encryption.rs has `decrypt_onion_layer` (singular). We need to loop.
+        // Or encryption.rs doesn't have `decrypt_onion_layers` (plural)?
+        // Let's check encryption.rs content from previous steps. 
+        // encryption.rs has `decrypt_onion_layer(..., hop_index)`.
+        
+        let mut decrypted = response.data;
+        for i in 0..layers_len {
+            decrypted = encryption.decrypt_onion_layer(&decrypted, i)
+                 .map_err(|e| SwarmError::Encryption(format!("Onion decryption failed at hop {}: {:?}", i, e)))?;
+        }
+        
+        
+        info!("Received {} bytes from Faisal Swarm circuit {} via libp2p", decrypted.len(), circuit_id);
+        Ok(decrypted)
+    }
+    
+    /// Decrypt data from Faisal Swarm circuit (direct decryption version)
+    /// This method takes pre-received data and decrypts it
+    #[instrument(skip(self, data), fields(circuit_id = circuit_id))]
+    pub async fn decrypt_swarm_data(&self, circuit_id: CircuitId, data: &[u8]) -> Result<Vec<u8>> {
+        // Get circuit info first with read lock
+        let start = Instant::now();
+        let layers = {
+            let circuits = self.circuits.read().await;
+            debug!("Circuit read lock acquired in {:?}", start.elapsed());
+            let circuit = circuits.get(&circuit_id)
+                .ok_or(SwarmError::NotFound(circuit_id))?;
+            
+            if circuit.state != CircuitState::Ready {
+                return Err(SwarmError::InvalidState {
+                    expected: CircuitState::Ready,
+                    actual: circuit.state.clone(),
+                });
+            }
+            
+            circuit.layers.clone()
+        };
+        
+        // Perform decryption outside of the lock
+        let mut decrypted = data.to_vec();
+        
+        // Decrypt with all Wasif-Vernam layers (onion decryption) in reverse order
+        for layer in layers.iter().rev() {
+            decrypted = layer.decrypt_backward(&decrypted)
+                .map_err(|e| SwarmError::Encryption(format!("Onion decryption failed: {:?}", e)))?;
+        }
+        
+        info!("Decrypted {} bytes from Faisal Swarm circuit {}", decrypted.len(), circuit_id);
+        Ok(decrypted)
     }
     
     /// Close Faisal Swarm circuit
@@ -470,6 +876,14 @@ impl FaisalSwarmManager {
     /// Allocate a new circuit ID
     fn allocate_circuit_id(&self) -> CircuitId {
         self.next_id.fetch_add(1, Ordering::SeqCst)
+    }
+    
+    /// Get the number of hops in a circuit
+    async fn get_circuit_hop_count(&self, circuit_id: CircuitId) -> Result<usize> {
+        let circuits = self.circuits.read().await;
+        let circuit = circuits.get(&circuit_id)
+            .ok_or(SwarmError::NotFound(circuit_id))?;
+        Ok(circuit.hops.len())
     }
     
     /// Encrypt cell for specific hop
@@ -547,6 +961,7 @@ impl FaisalSwarmManager {
             layers: Vec::new(), // Can't clone WasifVernam layers
             state: circuit.state.clone(),
             created_at: circuit.created_at,
+            encryption: None,
         })
     }
     
