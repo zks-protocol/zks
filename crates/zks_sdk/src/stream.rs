@@ -413,80 +413,98 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for EncryptedStream<S> {
             return Poll::Ready(Ok(()));
         }
 
-        // 2. Try to read more raw data from the inner stream into raw_read_buf
-        let mut temp_buf = [0u8; 8192];
-        let mut temp_read_buf = ReadBuf::new(&mut temp_buf);
-        match Pin::new(&mut this.inner).poll_read(cx, &mut temp_read_buf) {
-            Poll::Ready(Ok(())) => {
-                let n = temp_read_buf.filled().len();
-                if n > 0 {
-                    this.raw_read_buf.extend_from_slice(&temp_buf[..n]);
-                } else if this.raw_read_buf.is_empty() {
-                    // EOF and no pending data
-                    return Poll::Ready(Ok(()));
-                }
-            }
-            Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
-            Poll::Pending => {
-                if this.raw_read_buf.is_empty() {
-                    return Poll::Pending;
-                }
-            }
-        }
+        loop {
+            // 2. Try to read more raw data from the inner stream into raw_read_buf
+            let mut temp_buf = [0u8; 8192];
+            let mut temp_read_buf = ReadBuf::new(&mut temp_buf);
+            let poll_result = Pin::new(&mut this.inner).poll_read(cx, &mut temp_read_buf);
 
-        // 3. Parse and decrypt frames from raw_read_buf
-        while this.raw_read_buf.len() >= 4 {
-            let frame_len = u32::from_be_bytes(this.raw_read_buf[..4].try_into().unwrap()) as usize;
-            
-            // Safety check for frame size (16MB max)
-            if frame_len > 16 * 1024 * 1024 {
-                return Poll::Ready(Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Frame size exceeds 16MB limit",
-                )));
-            }
-
-            if this.raw_read_buf.len() >= 4 + frame_len {
-                // We have a full frame!
-                this.raw_read_buf.advance(4); // Skip length
-                let encrypted_frame = this.raw_read_buf.split_to(frame_len);
-                
-                match &mut this.reader_cipher {
-                    Some(cipher) => {
-                        match cipher.decrypt(&encrypted_frame) {
-                            Ok(decrypted) => {
-                                // Add to plaintext buffer
-                                this.read_buf.extend_from_slice(&decrypted);
-                            }
-                            Err(e) => {
-                                return Poll::Ready(Err(std::io::Error::new(
-                                    std::io::ErrorKind::InvalidData,
-                                    format!("Decryption failed: {}", e),
-                                )));
-                            }
-                        }
-                    }
-                    None => {
+            match poll_result {
+                Poll::Ready(Ok(())) => {
+                    let n = temp_read_buf.filled().len();
+                    if n > 0 {
+                        this.raw_read_buf.extend_from_slice(&temp_buf[..n]);
+                    } else if this.raw_read_buf.is_empty() {
+                        // EOF and no pending data
+                        return Poll::Ready(Ok(()));
+                    } else {
+                        // EOF but we have partial data?
                         return Poll::Ready(Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            "Cipher not initialized",
+                            std::io::ErrorKind::UnexpectedEof,
+                            "Unexpected EOF with partial frame",
                         )));
                     }
                 }
-            } else {
-                // Partial frame, need more data
-                break;
+                Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+                Poll::Pending => {
+                    // Try to process whatever we have in raw_read_buf even if pending
+                    if this.raw_read_buf.is_empty() {
+                        return Poll::Pending;
+                    }
+                    // Break the loop and try to parse what we have
+                    break;
+                }
             }
+
+            // 3. Parse and decrypt frames from raw_read_buf
+            let mut _processed_anything = false;
+            while this.raw_read_buf.len() >= 4 {
+                let frame_len = u32::from_be_bytes(this.raw_read_buf[..4].try_into().unwrap()) as usize;
+                
+                // Safety check for frame size (16MB max)
+                if frame_len > 16 * 1024 * 1024 {
+                    return Poll::Ready(Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "Frame size exceeds 16MB limit",
+                    )));
+                }
+
+                if this.raw_read_buf.len() >= 4 + frame_len {
+                    // We have a full frame!
+                    this.raw_read_buf.advance(4); // Skip length
+                    let encrypted_frame = this.raw_read_buf.split_to(frame_len);
+                    
+                    match &mut this.reader_cipher {
+                        Some(cipher) => {
+                            match cipher.decrypt(&encrypted_frame) {
+                                Ok(decrypted) => {
+                                    // Add to plaintext buffer
+                                    this.read_buf.extend_from_slice(&decrypted);
+                                    _processed_anything = true;
+                                }
+                                Err(e) => {
+                                    return Poll::Ready(Err(std::io::Error::new(
+                                        std::io::ErrorKind::InvalidData,
+                                        format!("Decryption failed: {}", e),
+                                    )));
+                                }
+                            }
+                        }
+                        None => {
+                            return Poll::Ready(Err(std::io::Error::new(
+                                std::io::ErrorKind::Other,
+                                "Cipher not initialized",
+                            )));
+                        }
+                    }
+                } else {
+                    // Partial frame, need more data
+                    break;
+                }
+            }
+
+            // 4. If we successfully decrypted something, return it
+            if !this.read_buf.is_empty() {
+                let to_read = std::cmp::min(buf.remaining(), this.read_buf.len());
+                buf.put_slice(&this.read_buf.split_to(to_read));
+                return Poll::Ready(Ok(()));
+            }
+
+            // If we processed nothing and it's Ready(Ok(())), loop again to read more
+            // If it was Pending, we've already broken out or returned.
         }
 
-        // 4. If we successfully decrypted something, return it
-        if !this.read_buf.is_empty() {
-            let to_read = std::cmp::min(buf.remaining(), this.read_buf.len());
-            buf.put_slice(&this.read_buf.split_to(to_read));
-            return Poll::Ready(Ok(()));
-        }
-
-        // Otherwise, if we're here it means we need more data from inner
+        // If we reach here, it means we have partial data and inner returned Pending
         Poll::Pending
     }
 }
@@ -494,22 +512,12 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for EncryptedStream<S> {
 impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for EncryptedStream<S> {
     fn poll_write(
         mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
+        _cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<std::io::Result<usize>> {
         // Buffer the data for encryption
         self.write_buf.extend_from_slice(buf);
         trace!("EncryptedStream: Buffered {} bytes for writing", buf.len());
-
-        // If buffer is getting full, flush it
-        if self.write_buf.len() >= 4096 {
-            trace!("EncryptedStream: Write buffer full, flushing...");
-            match self.as_mut().poll_flush(cx) {
-                Poll::Ready(Ok(())) => {}
-                Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
-                Poll::Pending => return Poll::Pending,
-            }
-        }
 
         Poll::Ready(Ok(buf.len()))
     }
