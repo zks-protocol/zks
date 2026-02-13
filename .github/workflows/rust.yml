@@ -36,13 +36,13 @@ jobs:
           ${{ runner.os }}-cargo-
 
     - name: Build zks-node (release)
-      run: cargo build --bin zks-node --release --verbose
+      run: cargo build --package zks_wire --bin zks-node --release --verbose
 
     - name: Build signaling-server (release)
-      run: cargo build --bin signaling-server --release --verbose
+      run: cargo build --package signaling-server --release --verbose
 
     - name: Build zks-test (release)
-      run: cargo build --bin zks-test --release --verbose
+      run: cargo build --package zks_wire --bin zks-test --release --verbose
 
     - name: Build protocol-test (release)
       run: cargo build --package protocol-test --release --verbose
