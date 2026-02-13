@@ -3,15 +3,19 @@
 //! Manages the lifecycle of Faisal Swarm circuits using libp2p relay.
 
 use super::*;
+use crate::error::WireError;
+use crate::faisal_swarm::cells::{
+    CellCommand, FaisalSwarmCell, RelayCommand, RelayPayload, CELL_PAYLOAD_SIZE,
+};
 use crate::faisal_swarm::encryption::create_encryption_manager_from_secrets;
-use crate::p2p::FaisalSwarmRequest;
+use crate::p2p::{FaisalSwarmRequest, FaisalSwarmResponse};
 use crate::signaling::{PeerInfo, SignalingClientTrait};
 use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, RwLock};
 use tracing::{debug, info, instrument, span, Level};
 use zeroize::Zeroizing;
 
@@ -75,8 +79,6 @@ pub struct CircuitStats {
     pub failed_circuits: usize,
 }
 
-/// Faisal Swarm circuit manager
-///
 /// Coordinates circuit building, peer selection, and circuit lifecycle
 /// for the Faisal Swarm topology.
 pub struct FaisalSwarmManager<S: SignalingClientTrait> {
@@ -94,6 +96,9 @@ pub struct FaisalSwarmManager<S: SignalingClientTrait> {
 
     /// Retry configuration for network operations
     retry_config: RetryConfig,
+
+    /// Active streams for data routing (CircuitId, StreamId) -> Sender
+    streams: Arc<RwLock<HashMap<(CircuitId, u16), mpsc::UnboundedSender<Vec<u8>>>>>,
 }
 
 impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
@@ -126,6 +131,7 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
             signaling,
             p2p_transport,
             retry_config,
+            streams: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -149,7 +155,22 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
             failed_circuits: total_circuits - ready_circuits - building_circuits,
         }
     }
+}
 
+#[async_trait::async_trait]
+impl<S: SignalingClientTrait> crate::PeerProvider for FaisalSwarmManager<S> {
+    async fn get_available_peers(
+        &self,
+        room_id: &str,
+    ) -> std::result::Result<Vec<PeerInfo>, WireError> {
+        self.signaling
+            .discover_peers(room_id)
+            .await
+            .map_err(|e| WireError::other(&format!("Failed to discover peers for SURB: {}", e)))
+    }
+}
+
+impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
     // =========================================================================
     // Faisal Swarm Circuit Creation
     // =========================================================================
@@ -361,7 +382,7 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
                         ))
                     })?;
 
-                circuit.encryption = Some(Arc::new(std::sync::Mutex::new(encryption)));
+                circuit.encryption = Some(Arc::new(tokio::sync::Mutex::new(encryption)));
             } else {
                 return Err(SwarmError::NotFound(circuit_id));
             }
@@ -397,7 +418,7 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
                         ))
                     })?;
 
-                circuit.encryption = Some(Arc::new(std::sync::Mutex::new(encryption)));
+                circuit.encryption = Some(Arc::new(tokio::sync::Mutex::new(encryption)));
                 info!(
                     "✅ Encryption manager updated for {} hops",
                     circuit.layers.len()
@@ -650,9 +671,7 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
 
         // 3. Encrypt payload with existing layers (Onion encryption)
         // We need to lock encryption
-        let mut encryption = encryption_mutex
-            .lock()
-            .map_err(|_| SwarmError::Encryption("Failed to lock encryption manager".into()))?;
+        let mut encryption = encryption_mutex.lock().await;
 
         let encrypted_payload = encryption
             .encrypt_onion_layers(&payload, layers_len)
@@ -829,9 +848,7 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
                     })?;
 
             // Acquire lock on encryption manager to update counters safely
-            let mut encryption = encryption_mutex
-                .lock()
-                .map_err(|_| SwarmError::Encryption("Failed to lock encryption manager".into()))?;
+            let mut encryption = encryption_mutex.lock().await;
 
             // Perform proper onion encryption - encrypt in reverse order (Exit → Guard)
             let encrypted = encryption
@@ -927,9 +944,7 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
         };
 
         // Lock encryption manager
-        let mut encryption = encryption_mutex
-            .lock()
-            .map_err(|_| SwarmError::Encryption("Failed to lock encryption manager".into()))?;
+        let mut encryption = encryption_mutex.lock().await;
 
         // Encrypt "RECV" request onion style
         let encrypted_request_data = encryption
@@ -985,6 +1000,110 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
             circuit_id
         );
         Ok(decrypted)
+    }
+
+    /// Register a new stream for routing data
+    pub async fn register_stream(
+        &self,
+        circuit_id: CircuitId,
+        stream_id: u16,
+    ) -> mpsc::UnboundedReceiver<Vec<u8>> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let mut streams = self.streams.write().await;
+        streams.insert((circuit_id, stream_id), tx);
+        rx
+    }
+
+    /// Unregister a stream
+    pub async fn unregister_stream(&self, circuit_id: CircuitId, stream_id: u16) {
+        let mut streams = self.streams.write().await;
+        streams.remove(&(circuit_id, stream_id));
+    }
+
+    /// Handle an incoming request as a client (decrypting all layers)
+    pub async fn handle_incoming_request(
+        &self,
+        _peer_id: PeerId,
+        request: FaisalSwarmRequest,
+    ) -> Result<FaisalSwarmResponse> {
+        let circuit_id = request.circuit_id;
+        let mut data = request.data;
+
+        // 1. Get circuit info
+        let encryption_mutex = {
+            let circuits = self.circuits.read().await;
+            let circuit = circuits
+                .get(&circuit_id)
+                .ok_or_else(|| SwarmError::NotFound(circuit_id))?;
+
+            circuit
+                .encryption
+                .clone()
+                .ok_or_else(|| SwarmError::InvalidState {
+                    expected: CircuitState::Ready,
+                    actual: CircuitState::Error("Encryption not ready".into()),
+                })?
+        };
+
+        // 2. Decrypt all layers (Guard -> Exit)
+        let mut encryption = encryption_mutex.lock().await;
+
+        let layers_len = encryption.backward_ciphers.len();
+        for i in 0..layers_len {
+            data = encryption.decrypt_onion_layer(&data, i).map_err(|e| {
+                SwarmError::Encryption(format!("Onion decryption failed at layer {}: {:?}", i, e))
+            })?;
+        }
+
+        // 3. Process the decrypted cell
+        let cell = FaisalSwarmCell::from_bytes(&data)
+            .map_err(|e| SwarmError::Encryption(format!("Cell deserialization failed: {:?}", e)))?;
+
+        match cell.header.command {
+            CellCommand::Relay | CellCommand::VernamRelay => {
+                let relay_payload = RelayPayload::from_bytes(&cell.payload)
+                    .map_err(|_| SwarmError::Protocol("Invalid relay payload".into()))?;
+
+                if relay_payload.relay_command == RelayCommand::Data {
+                    let streams = self.streams.read().await;
+                    if let Some(tx) = streams.get(&(circuit_id, relay_payload.stream_id)) {
+                        let _ = tx.send(relay_payload.data);
+                    }
+                }
+            }
+            _ => {
+                debug!("Received non-relay cell command: {:?}", cell.header.command);
+            }
+        }
+
+        Ok(FaisalSwarmResponse {
+            success: true,
+            data: b"ACK".to_vec(),
+        })
+    }
+
+    /// Send data through a stream over a circuit
+    pub async fn send_stream_data(
+        &self,
+        circuit_id: CircuitId,
+        stream_id: u16,
+        data: &[u8],
+    ) -> Result<()> {
+        // Chunk the data into cells
+        for chunk in data.chunks(CELL_PAYLOAD_SIZE - 3) {
+            // 3 bytes for RelayPayload header
+            let relay_payload = RelayPayload {
+                relay_command: RelayCommand::Data,
+                stream_id,
+                data: chunk.to_vec(),
+            };
+
+            // Use send_via_swarm to onion encrypt and send
+            self.send_via_swarm(circuit_id, &relay_payload.to_bytes())
+                .await?;
+        }
+
+        Ok(())
     }
 
     /// Decrypt data from Faisal Swarm circuit (direct decryption version)

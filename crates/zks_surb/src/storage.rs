@@ -99,40 +99,103 @@ impl FileSurbStorage {
 
 #[async_trait]
 impl SurbStorage for FileSurbStorage {
-    async fn store_surb(&self, _surb: ZksSurb) -> Result<()> {
-        // TODO: Implement file-based storage
-        // For now, this is a stub that always succeeds
+    async fn store_surb(&self, surb: ZksSurb) -> Result<()> {
+        let id_hex = surb.id().to_hex();
+        let file_path = std::path::Path::new(&self.path).join(format!("{}.surb", id_hex));
+
+        // Ensure directory exists
+        if let Some(parent) = file_path.parent() {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                crate::error::SurbError::StorageError(format!("Failed to create directory: {}", e))
+            })?;
+        }
+
+        let bytes = surb.to_bytes()?;
+        tokio::fs::write(file_path, bytes).await.map_err(|e| {
+            crate::error::SurbError::StorageError(format!("Failed to write SURB: {}", e))
+        })?;
+
         Ok(())
     }
 
-    async fn get_surb(&self, _id: &SurbId) -> Result<Option<ZksSurb>> {
-        // TODO: Implement file-based storage
-        // For now, this always returns None
-        Ok(None)
+    async fn get_surb(&self, id: &SurbId) -> Result<Option<ZksSurb>> {
+        let id_hex = id.to_hex();
+        let file_path = std::path::Path::new(&self.path).join(format!("{}.surb", id_hex));
+
+        if !file_path.exists() {
+            return Ok(None);
+        }
+
+        let bytes = tokio::fs::read(file_path).await.map_err(|e| {
+            crate::error::SurbError::StorageError(format!("Failed to read SURB: {}", e))
+        })?;
+
+        let surb = ZksSurb::from_bytes(&bytes)?;
+        Ok(Some(surb))
     }
 
-    async fn remove_surb(&self, _id: &SurbId) -> Result<()> {
-        // TODO: Implement file-based storage
+    async fn remove_surb(&self, id: &SurbId) -> Result<()> {
+        let id_hex = id.to_hex();
+        let file_path = std::path::Path::new(&self.path).join(format!("{}.surb", id_hex));
+
+        if file_path.exists() {
+            tokio::fs::remove_file(file_path).await.map_err(|e| {
+                crate::error::SurbError::StorageError(format!("Failed to remove SURB: {}", e))
+            })?;
+        }
+
         Ok(())
     }
 
-    async fn has_surb(&self, _id: &SurbId) -> Result<bool> {
-        // TODO: Implement file-based storage
-        Ok(false)
+    async fn has_surb(&self, id: &SurbId) -> Result<bool> {
+        let id_hex = id.to_hex();
+        let file_path = std::path::Path::new(&self.path).join(format!("{}.surb", id_hex));
+        Ok(file_path.exists())
     }
 
     async fn get_all_ids(&self) -> Result<Vec<SurbId>> {
-        // TODO: Implement file-based storage
-        Ok(Vec::new())
+        let mut ids = Vec::new();
+        let mut entries = tokio::fs::read_dir(&self.path).await.map_err(|e| {
+            crate::error::SurbError::StorageError(format!("Failed to read directory: {}", e))
+        })?;
+
+        while let Some(entry) = entries.next_entry().await.map_err(|e| {
+            crate::error::SurbError::StorageError(format!("Failed to read entry: {}", e))
+        })? {
+            let path = entry.path();
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("surb") {
+                if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    if let Ok(id_bytes) = hex::decode(file_stem) {
+                        ids.push(SurbId::from_bytes(id_bytes));
+                    }
+                }
+            }
+        }
+
+        Ok(ids)
     }
 
     async fn count(&self) -> Result<usize> {
-        // TODO: Implement file-based storage
-        Ok(0)
+        let ids = self.get_all_ids().await?;
+        Ok(ids.len())
     }
 
     async fn clear(&self) -> Result<()> {
-        // TODO: Implement file-based storage
+        let mut entries = tokio::fs::read_dir(&self.path).await.map_err(|e| {
+            crate::error::SurbError::StorageError(format!("Failed to read directory: {}", e))
+        })?;
+
+        while let Some(entry) = entries.next_entry().await.map_err(|e| {
+            crate::error::SurbError::StorageError(format!("Failed to read entry: {}", e))
+        })? {
+            let path = entry.path();
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("surb") {
+                tokio::fs::remove_file(path).await.map_err(|e| {
+                    crate::error::SurbError::StorageError(format!("Failed to remove file: {}", e))
+                })?;
+            }
+        }
+
         Ok(())
     }
 }

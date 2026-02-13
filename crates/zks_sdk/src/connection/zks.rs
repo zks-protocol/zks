@@ -16,7 +16,7 @@ pub trait ZksStream: AsyncRead + AsyncWrite + Send + Unpin + 'static {}
 impl<T: AsyncRead + AsyncWrite + Send + Unpin + 'static> ZksStream for T {}
 
 /// Swarm-based ZKS connection for maximum privacy with real onion routing
-pub struct ZksConnection<S: SignalingClientTrait> {
+pub struct ZksConnection<S: SignalingClientTrait + 'static> {
     stream: EncryptedStream<Box<dyn ZksStream>>,
     config: ConnectionConfig,
     peer_addr: String,
@@ -26,7 +26,7 @@ pub struct ZksConnection<S: SignalingClientTrait> {
     circuit_id: Option<String>,
 }
 
-impl<S: SignalingClientTrait> ZksConnection<S> {
+impl<S: SignalingClientTrait + 'static> ZksConnection<S> {
     /// Connect to a peer using zks:// protocol with real onion routing
     pub async fn connect(
         url: String,

@@ -14,10 +14,15 @@ MAX_PEERS_PER_ROOM = "50"
 MESSAGE_RATE_LIMIT = "100"
 ROOM_EXPIRY_HOURS = "24"
 
-[[kv_namespaces]]
-binding = "SIGNALING_KV"
-id = "your-kv-namespace-id"
-preview_id = "your-preview-kv-namespace-id"
+
+[durable_objects]
+bindings = [
+  { name = "SIGNALING_ROOM", class_name = "SignalingRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SignalingRoom"]
 
 [vars]
 ENVIRONMENT = "production"

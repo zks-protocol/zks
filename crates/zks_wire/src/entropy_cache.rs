@@ -10,7 +10,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
+use crate::entropy_grid::EntropyCacheInterface;
 use crate::{Result, WireError};
+use async_trait::async_trait;
 use zks_crypt::entropy_block::EntropyBlock;
 
 /// Configuration for the entropy block cache
@@ -458,6 +460,22 @@ impl EntropyCache {
         } else {
             false
         }
+    }
+}
+
+#[async_trait]
+impl EntropyCacheInterface for EntropyCache {
+    async fn get_block(&self, round_number: u64) -> std::result::Result<EntropyBlock, String> {
+        self.get_block(round_number)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Block {} not found in cache", round_number))
+    }
+
+    async fn store_block(&self, block: &EntropyBlock) -> std::result::Result<(), String> {
+        self.store_block(block.clone())
+            .await
+            .map_err(|e| e.to_string())
     }
 }
 

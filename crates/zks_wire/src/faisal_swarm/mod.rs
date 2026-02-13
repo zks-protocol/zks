@@ -40,6 +40,7 @@ use tracing::info;
 pub mod cells;
 pub mod circuit_manager;
 pub mod encryption;
+pub mod onion_stream;
 pub mod relay;
 
 // =============================================================================
@@ -228,38 +229,21 @@ impl SwarmLayer {
 
     /// Encrypt data with Wasif-Vernam (client → relay)
     pub fn encrypt_forward(&self, data: &[u8]) -> Result<Vec<u8>> {
-        let _pid = self
-            .counter
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let mut cipher = self.forward_cipher.write().map_err(|e| {
             SwarmError::Encryption(format!("Failed to acquire forward cipher lock: {}", e))
         })?;
         cipher
-            .encrypt(data)
+            .encrypt_sequenced(data)
             .map_err(|e| SwarmError::Encryption(format!("Forward encryption failed: {:?}", e)))
     }
 
     /// Decrypt data with Wasif-Vernam (relay → client)
     pub fn decrypt_backward(&self, data: &[u8]) -> Result<Vec<u8>> {
-        if data.len() < 8 {
-            return Err(SwarmError::Encryption("Packet too short".into()));
-        }
-
-        let pid =
-            u64::from_be_bytes(data[0..8].try_into().map_err(|_| {
-                SwarmError::Encryption("Invalid packet format: invalid PID".into())
-            })?);
-
-        // Constant-time anti-replay check
-        self.anti_replay
-            .validate(pid)
-            .map_err(|_| SwarmError::ReplayDetected)?;
-
-        let mut cipher = self.backward_cipher.write().map_err(|e| {
+        let cipher = self.backward_cipher.write().map_err(|e| {
             SwarmError::Encryption(format!("Failed to acquire backward cipher lock: {}", e))
         })?;
         cipher
-            .decrypt(data)
+            .decrypt_sequenced(data)
             .map_err(|e| SwarmError::Encryption(format!("Backward decryption failed: {:?}", e)))
     }
 }
@@ -284,7 +268,7 @@ pub struct FaisalSwarmCircuit {
 
     /// Encryption manager for this circuit (client-side only)
     /// Wrapped in Arc<Mutex> to allow interior mutability while holding read lock on circuit map
-    pub encryption: Option<Arc<std::sync::Mutex<encryption::FaisalSwarmEncryption>>>,
+    pub encryption: Option<Arc<tokio::sync::Mutex<encryption::FaisalSwarmEncryption>>>,
 }
 
 // No stream needed - we use request-response protocol

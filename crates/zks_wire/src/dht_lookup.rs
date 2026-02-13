@@ -59,6 +59,8 @@ pub struct DHTLookupManager {
     config: DHTLookupConfig,
     /// Active lookup operations
     active_lookups: Arc<RwLock<HashMap<u64, mpsc::Sender<()>>>>,
+    /// Reference to the real entropy swarm for fetching
+    entropy_swarm: Option<Arc<crate::entropy_swarm::EntropySwarm>>,
 }
 
 impl DHTLookupManager {
@@ -69,7 +71,13 @@ impl DHTLookupManager {
             cache,
             config,
             active_lookups: Arc::new(RwLock::new(HashMap::new())),
+            entropy_swarm: None,
         }
+    }
+
+    /// Set the entropy swarm for real block fetching
+    pub fn set_entropy_swarm(&mut self, entropy_swarm: Arc<crate::entropy_swarm::EntropySwarm>) {
+        self.entropy_swarm = Some(entropy_swarm);
     }
 
     /// Lookup entropy block providers for a specific start round
@@ -236,19 +244,43 @@ impl DHTLookupManager {
         start_round: u64,
         provider: &ProviderRecord,
     ) -> Result<Vec<u8>, DHTLookupError> {
-        if provider.addresses.is_empty() {
-            return Err(DHTLookupError::InvalidProvider(
-                "No addresses available".to_string(),
-            ));
+        debug!(
+            "Fetching entropy block {} from provider {}",
+            start_round, provider.provider
+        );
+
+        // If we have an EntropySwarm reference, use it to fetch the block
+        // This bridges the legacy DHT lookup logic with the new real GossipSub swarm
+        if let Some(ref swarm) = self.entropy_swarm {
+            match swarm.request_entropy_block(start_round).await {
+                Ok(Some(block)) => {
+                    info!(
+                        "Successfully fetched entropy block {} via EntropySwarm",
+                        start_round
+                    );
+                    return block.to_bytes().map_err(|e| {
+                        DHTLookupError::FetchFailed(format!("Serialization failed: {:?}", e))
+                    });
+                }
+                Ok(None) => {
+                    return Err(DHTLookupError::FetchFailed(format!(
+                        "Block {} not found in swarm",
+                        start_round
+                    )))
+                }
+                Err(e) => {
+                    return Err(DHTLookupError::FetchFailed(format!(
+                        "Fetch failed from swarm: {:?}",
+                        e
+                    )))
+                }
+            }
         }
 
-        // For now, we'll simulate fetching the block
-        // In a real implementation, this would establish a connection to the provider
-        // and request the entropy block data
-
-        info!(
-            "Fetching entropy block {} from provider {} at {:?}",
-            start_round, provider.provider, provider.addresses
+        // Fallback for mock/simulation
+        warn!(
+            "Returning MOCK 32MB entropy for block {} (No real swarm configured)",
+            start_round
         );
 
         // Simulate network delay
@@ -294,6 +326,10 @@ pub enum DHTLookupError {
     /// Error accessing or updating the entropy cache
     #[error("Cache error: {0}")]
     CacheError(String),
+
+    /// Failed to fetch entropy block from provider
+    #[error("Fetch failed: {0}")]
+    FetchFailed(String),
 }
 
 /// Integration with the native P2P transport

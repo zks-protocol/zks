@@ -22,8 +22,8 @@ use crate::{
 /// Encrypted stream that wraps an inner stream with post-quantum encryption
 pub struct EncryptedStream<S> {
     inner: S,
-    read_buf: BytesMut,           // Decrypted plaintext buffer
-    raw_read_buf: BytesMut,       // Raw ciphertext buffer (framed)
+    read_buf: BytesMut,     // Decrypted plaintext buffer
+    raw_read_buf: BytesMut, // Raw ciphertext buffer (framed)
     write_buf: BytesMut,
     encrypted_write_buf: BytesMut,
     is_handshake_complete: bool,
@@ -397,7 +397,6 @@ impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {
     }
 }
 
-
 impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for EncryptedStream<S> {
     fn poll_read(
         self: Pin<&mut Self>,
@@ -449,8 +448,9 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for EncryptedStream<S> {
             // 3. Parse and decrypt frames from raw_read_buf
             let mut _processed_anything = false;
             while this.raw_read_buf.len() >= 4 {
-                let frame_len = u32::from_be_bytes(this.raw_read_buf[..4].try_into().unwrap()) as usize;
-                
+                let frame_len =
+                    u32::from_be_bytes(this.raw_read_buf[..4].try_into().unwrap()) as usize;
+
                 // Safety check for frame size (16MB max)
                 if frame_len > 16 * 1024 * 1024 {
                     return Poll::Ready(Err(std::io::Error::new(
@@ -463,7 +463,7 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncRead for EncryptedStream<S> {
                     // We have a full frame!
                     this.raw_read_buf.advance(4); // Skip length
                     let encrypted_frame = this.raw_read_buf.split_to(frame_len);
-                    
+
                     match &mut this.reader_cipher {
                         Some(cipher) => {
                             match cipher.decrypt(&encrypted_frame) {
@@ -580,7 +580,8 @@ impl<S: AsyncRead + AsyncWrite + Unpin> AsyncWrite for EncryptedStream<S> {
 
             // PREPEND 4-BYTE LENGTH PREFIX
             let frame_len = encrypted_data.len() as u32;
-            this.encrypted_write_buf.extend_from_slice(&frame_len.to_be_bytes());
+            this.encrypted_write_buf
+                .extend_from_slice(&frame_len.to_be_bytes());
             this.encrypted_write_buf.extend_from_slice(&encrypted_data);
             trace!(
                 "EncryptedStream: Encrypted data ({} bytes) appended to buffer with framing, total encrypted buffered: {}",

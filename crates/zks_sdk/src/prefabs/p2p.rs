@@ -14,17 +14,17 @@ use crate::{
 };
 
 /// P2P connection manager
-pub struct P2PConnection<S: SignalingClientTrait> {
+pub struct P2PConnection<S: SignalingClientTrait + 'static> {
     connections: Arc<RwLock<HashMap<String, Connection<S>>>>,
     config: ConnectionConfig,
 }
 
-enum Connection<S: SignalingClientTrait> {
+enum Connection<S: SignalingClientTrait + 'static> {
     Zk(ZkConnection),
     Zks(ZksConnection<S>),
 }
 
-impl<S: SignalingClientTrait> P2PConnection<S> {
+impl<S: SignalingClientTrait + 'static> P2PConnection<S> {
     /// Create a new P2P connection manager
     pub fn new(config: ConnectionConfig) -> Self {
         Self {
@@ -171,7 +171,7 @@ impl<S: SignalingClientTrait> P2PConnection<S> {
     }
 }
 
-impl<S: SignalingClientTrait> Default for P2PConnection<S> {
+impl<S: SignalingClientTrait + 'static> Default for P2PConnection<S> {
     fn default() -> Self {
         Self::new(ConnectionConfig::default())
     }

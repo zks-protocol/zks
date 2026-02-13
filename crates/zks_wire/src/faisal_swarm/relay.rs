@@ -37,7 +37,8 @@ struct RelayCircuitState {
     /// Our position in the circuit (0 = guard, 1 = middle, 2 = exit, etc.)
     position: usize,
 
-    /// Shared secret with this circuit (for decryption)
+    /// Shared secret with this circuit (for decryption) - Reserved for re-keying
+    #[allow(dead_code)]
     shared_secret: [u8; 32],
 
     /// Next hop peer ID (if we're not the exit)
@@ -46,9 +47,14 @@ struct RelayCircuitState {
     /// Previous hop peer ID (for sending responses back)
     previous_hop: Option<PeerId>,
 
-    /// Response cipher for encrypting data sent back to previous hop
-    /// Relay acts as Responder for the return path
+    /// Forward cipher for decrypting data from previous hop (Initiator role: true)
+    forward_cipher: Arc<Mutex<WasifVernam>>,
+
+    /// Response cipher for encrypting data sent back to previous hop (Responder role: false)
     response_cipher: Arc<Mutex<WasifVernam>>,
+
+    /// Anti-replay protection for this circuit's forward path
+    anti_replay: Arc<Mutex<zks_crypt::anti_replay::BitmapAntiReplay>>,
 }
 
 impl std::fmt::Debug for RelayCircuitState {
@@ -56,9 +62,9 @@ impl std::fmt::Debug for RelayCircuitState {
         f.debug_struct("RelayCircuitState")
             .field("circuit_id", &self.circuit_id)
             .field("position", &self.position)
-            .field("shared_secret", &"[REDACTED]")
             .field("next_hop", &self.next_hop)
             .field("previous_hop", &self.previous_hop)
+            .field("forward_cipher", &"WasifVernam")
             .field("response_cipher", &"WasifVernam")
             .finish()
     }
@@ -96,18 +102,13 @@ enum CellCommand {
 
 impl RelayHandler {
     /// Create a new relay handler
-    pub fn new(local_peer_id: PeerId) -> Self {
+    pub fn new(local_peer_id: PeerId, transport: Option<Weak<RwLock<NativeP2PTransport>>>) -> Self {
         Self {
             local_peer_id,
             circuits: Arc::new(RwLock::new(HashMap::new())),
             connections: Arc::new(RwLock::new(HashMap::new())),
-            p2p_transport: None,
+            p2p_transport: transport,
         }
-    }
-
-    /// Set the P2P transport reference
-    pub fn set_transport(&mut self, transport: Weak<RwLock<NativeP2PTransport>>) {
-        self.p2p_transport = Some(transport);
     }
 
     /// Process incoming Faisal Swarm request
@@ -142,15 +143,15 @@ impl RelayHandler {
         &self,
         request: FaisalSwarmRequest,
         state: RelayCircuitState,
-        from_peer: PeerId,
+        _from_peer: PeerId,
     ) -> Result<FaisalSwarmResponse> {
         debug!(
             "Processing existing circuit {} at position {}",
             state.circuit_id, state.position
         );
 
-        // Decrypt the onion layer
-        let decrypted_data = self.decrypt_layer(&request.data, &state.shared_secret)?;
+        // Decrypt the onion layer using the stateful circuit cipher
+        let decrypted_data = self.decrypt_layer(&request.data, &state).await?;
 
         // Parse the cell command
         let command = self.parse_cell_command(decrypted_data)?;
@@ -236,29 +237,19 @@ impl RelayHandler {
         // If we received a direct P2P request for unknown circuit, we are Guard.
         // Position 0.
 
-        // Create response cipher for the return path (Responder role)
+        // Create forward cipher (Initiator role: true) - Relay acts as decryptor for forward traffic
+        let mut forward_cipher = WasifVernam::new(shared_secret).map_err(|e| {
+            SwarmError::Encryption(format!("Failed to create forward cipher: {:?}", e))
+        })?;
+        forward_cipher.derive_base_iv(&shared_secret, true);
+        forward_cipher.enable_sequenced_vernam(shared_secret);
+
+        // Create response cipher for the return path (Responder role: false)
         let mut response_cipher = WasifVernam::new(shared_secret).map_err(|e| {
             SwarmError::Encryption(format!("Failed to create response cipher: {:?}", e))
         })?;
-        // Use 'false' (Responder) for response path to ensure nonce separation from forward path (Initiator)
         response_cipher.derive_base_iv(&shared_secret, false);
-
-        // Since RelayCircuitState is created in establish_shared_secret (which is not shown here),
-        // we need to pass this cipher to it.
-        // Assuming establish_shared_secret takes shared_secret and other params.
-        // But wait, establish_shared_secret is a method on RelayHandler.
-        // I need to modify establish_shared_secret, but it's not in the view!
-        // The view ends at line 250 in one chunk and 670 in another... wait.
-        // I viewed relay.rs lines 1-250 and 230-300.
-        // establish_shared_secret was NOT shown in full, but called in handle_new_circuit.
-        // I need to implement the helper and call it properly, OR just inline the logic if I can't see the helper.
-        // But handle_new_circuit calls `self.establish_shared_secret`.
-        // I will replace `self.establish_shared_secret(...)` with the actual logic to create state,
-        // OR I must see `establish_shared_secret`.
-        // Let's assume I can modify `establish_shared_secret` if I can find it.
-        // Since I can't see it, I will replace the callsite in `handle_new_circuit` with the direct state insertion
-        // IF `establish_shared_secret` is just a simple helper.
-        // Actually, better to view `relay.rs` again to find `establish_shared_secret`.
+        response_cipher.enable_sequenced_vernam(shared_secret);
 
         self.establish_shared_secret(
             circuit_id,
@@ -266,6 +257,7 @@ impl RelayHandler {
             None,
             Some(from_peer),
             0,
+            forward_cipher,
             response_cipher,
         )
         .await?;
@@ -278,20 +270,17 @@ impl RelayHandler {
         })
     }
 
-    /// Decrypt one layer of onion encryption
-    fn decrypt_layer(&self, data: &[u8], shared_secret: &[u8; 32]) -> Result<Vec<u8>> {
-        // Initialize WasifVernam cipher with the shared secret
-        let mut cipher = WasifVernam::new(*shared_secret)
-            .map_err(|e| SwarmError::Encryption(format!("Failed to initialize cipher: {:?}", e)))?;
+    /// Decrypt one layer of onion encryption using stateful circuit cipher
+    async fn decrypt_layer(&self, data: &[u8], state: &RelayCircuitState) -> Result<Vec<u8>> {
+        let forward_cipher = state.forward_cipher.lock().await;
 
-        // CRITICAL FIX: Derive base IV from shared secret (security fix M3)
-        // This ensures the relay's cipher state matches the client's
-        cipher.derive_base_iv(shared_secret, true);
-
-        // Decrypt the data
-        cipher
+        // Decrypt the data using the stateful circuit cipher (Wasif-Vernam)
+        // Sequenced mode automatically handles counter extraction and anti-replay validation
+        let decrypted = forward_cipher
             .decrypt_sequenced(data)
-            .map_err(|e| SwarmError::Encryption(format!("Decryption failed: {:?}", e)))
+            .map_err(|e| SwarmError::Encryption(format!("Decryption failed: {:?}", e)))?;
+
+        Ok(decrypted)
     }
 
     /// Parse cell command from decrypted data
@@ -394,7 +383,7 @@ impl RelayHandler {
 
             // Send via libp2p to next hop
             // We need write lock to send
-            let mut transport = transport_arc.write().await;
+            let transport = transport_arc.write().await;
             let response = transport
                 .send_faisal_request(next_hop, request)
                 .await
@@ -404,7 +393,7 @@ impl RelayHandler {
             // We are the Responder for the return path
             let mut cipher = state.response_cipher.lock().await;
 
-            // Encrypt the response data using our shared secret (sequenced mode for reliability)
+            // Encrypt the response data using our shared secret (sequenced mode for reliability/security)
             let encrypted_response_data =
                 cipher.encrypt_sequenced(&response.data).map_err(|e| {
                     SwarmError::Encryption(format!("Response encryption failed: {:?}", e))
@@ -449,7 +438,7 @@ impl RelayHandler {
         // We use write lock to perform actions like Dial/Send
         // But Dial is async.
         {
-            let mut transport: tokio::sync::RwLockWriteGuard<NativeP2PTransport> =
+            let transport: tokio::sync::RwLockWriteGuard<NativeP2PTransport> =
                 transport_arc.write().await;
             if !transport.is_connected(&next_hop).await {
                 debug!("Dialing next hop {} at {}", next_hop, next_hop_addr);
@@ -471,7 +460,7 @@ impl RelayHandler {
 
         // Send via transport
         let response = {
-            let mut transport = transport_arc.write().await;
+            let transport = transport_arc.write().await;
             transport
                 .send_faisal_request(next_hop, create_request)
                 .await
@@ -554,7 +543,7 @@ impl RelayHandler {
 
         let mut cipher = state.response_cipher.lock().await;
 
-        // Encrypt the response (echo)
+        // Encrypt the response (echo) using sequenced mode for post-quantum security
         let encrypted_data = cipher.encrypt_sequenced(&data).map_err(|e| {
             SwarmError::Encryption(format!("Exit response encryption failed: {:?}", e))
         })?;
@@ -609,6 +598,7 @@ impl RelayHandler {
         next_hop: Option<PeerId>,
         previous_hop: Option<PeerId>,
         position: usize,
+        forward_cipher: WasifVernam,
         response_cipher: WasifVernam,
     ) -> Result<()> {
         let state = RelayCircuitState {
@@ -617,12 +607,14 @@ impl RelayHandler {
             shared_secret,
             next_hop,
             previous_hop,
+            forward_cipher: Arc::new(Mutex::new(forward_cipher)),
             response_cipher: Arc::new(Mutex::new(response_cipher)),
+            anti_replay: Arc::new(Mutex::new(zks_crypt::anti_replay::BitmapAntiReplay::new())),
         };
 
         self.circuits.write().await.insert(circuit_id, state);
         info!(
-            "🔑 Established shared secret for circuit {} at position {}",
+            "🔑 Established stateful circuit {} at position {}",
             circuit_id, position
         );
 
@@ -659,7 +651,7 @@ mod tests {
     async fn test_relay_handler_creation() {
         let keypair = Keypair::generate_ed25519();
         let peer_id = keypair.public().to_peer_id();
-        let handler = RelayHandler::new(peer_id);
+        let handler = RelayHandler::new(peer_id, None);
 
         let stats = handler.get_stats().await;
         assert_eq!(stats.active_circuits, 0);
@@ -670,7 +662,7 @@ mod tests {
     async fn test_handle_new_circuit() {
         let keypair = Keypair::generate_ed25519();
         let peer_id = keypair.public().to_peer_id();
-        let handler = RelayHandler::new(peer_id);
+        let handler = RelayHandler::new(peer_id, None);
 
         let request = FaisalSwarmRequest {
             circuit_id: 12345,
@@ -702,7 +694,7 @@ mod tests {
 
         let keypair = Keypair::generate_ed25519();
         let peer_id = keypair.public().to_peer_id();
-        let handler = RelayHandler::new(peer_id);
+        let handler = RelayHandler::new(peer_id, None);
 
         // Construct Extend payload
         let next_hop = PeerId::random();

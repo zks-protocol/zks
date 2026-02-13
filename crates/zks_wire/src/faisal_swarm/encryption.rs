@@ -4,7 +4,6 @@
 //! Provides 256-bit post-quantum computational security at each hop.
 
 use super::*;
-use bytes::{BufMut, BytesMut};
 use sha2::{Digest, Sha256};
 use tracing::debug;
 use zks_crypt::true_entropy::get_sync_entropy;
@@ -16,10 +15,10 @@ use zks_crypt::wasif_vernam::WasifVernam;
 /// Each hop has its own Wasif-Vernam cipher for 256-bit post-quantum computational security.
 pub struct FaisalSwarmEncryption {
     /// Wasif-Vernam ciphers for forward path (Client -> Relay)
-    forward_ciphers: Vec<WasifVernam>,
+    pub(crate) forward_ciphers: Vec<WasifVernam>,
 
     /// Wasif-Vernam ciphers for backward path (Relay -> Client)
-    backward_ciphers: Vec<WasifVernam>,
+    pub(crate) backward_ciphers: Vec<WasifVernam>,
 
     /// Anti-replay protection for each hop (backward path)
     anti_replay: Vec<zks_crypt::anti_replay::BitmapAntiReplay>,
@@ -52,6 +51,7 @@ impl FaisalSwarmEncryption {
                 SwarmError::Encryption(format!("Forward cipher creation failed: {:?}", e))
             })?;
             f_cipher.derive_base_iv(key, true);
+            f_cipher.enable_sequenced_vernam(*key);
             forward_ciphers.push(f_cipher);
 
             // Backward cipher (Responder role: false)
@@ -60,6 +60,7 @@ impl FaisalSwarmEncryption {
                 SwarmError::Encryption(format!("Backward cipher creation failed: {:?}", e))
             })?;
             b_cipher.derive_base_iv(key, false);
+            b_cipher.enable_sequenced_vernam(*key);
             backward_ciphers.push(b_cipher);
 
             anti_replay.push(zks_crypt::anti_replay::BitmapAntiReplay::new());
@@ -93,6 +94,7 @@ impl FaisalSwarmEncryption {
                 super::SwarmError::Encryption(format!("Cipher creation failed: {:?}", e))
             })?;
             f_cipher.derive_base_iv(&key, true);
+            f_cipher.enable_sequenced_vernam(key);
             forward_ciphers.push(f_cipher);
 
             // Backward cipher (Responder: false)
@@ -100,6 +102,7 @@ impl FaisalSwarmEncryption {
                 super::SwarmError::Encryption(format!("Cipher creation failed: {:?}", e))
             })?;
             b_cipher.derive_base_iv(&key, false);
+            b_cipher.enable_sequenced_vernam(key);
             backward_ciphers.push(b_cipher);
 
             anti_replay.push(zks_crypt::anti_replay::BitmapAntiReplay::new());
@@ -153,17 +156,9 @@ impl FaisalSwarmEncryption {
         // Serialize cell to bytes
         let cell_bytes = cell.to_bytes();
 
-        // Get packet counter for anti-replay
-        let counter = self.counters[hop_index].fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-        // Create packet with counter
-        let mut packet = BytesMut::with_capacity(8 + cell_bytes.len());
-        packet.put_u64(counter);
-        packet.extend_from_slice(&cell_bytes);
-
-        // Encrypt with Wasif-Vernam (Forward Cipher)
+        // Encrypt with Wasif-Vernam (Forward Cipher) - Sequenced mode handles counters
         let encrypted = self.forward_ciphers[hop_index]
-            .encrypt(&packet)
+            .encrypt_sequenced(&cell_bytes)
             .map_err(|e| {
                 super::SwarmError::Encryption(format!("Vernam encryption failed: {:?}", e))
             })?;
@@ -190,37 +185,15 @@ impl FaisalSwarmEncryption {
 
         debug!("Decrypting cell with Wasif-Vernam for hop {}", hop_index);
 
-        // Decrypt with Wasif-Vernam (Backward Cipher)
+        // Decrypt with Wasif-Vernam (Backward Cipher) - Sequenced mode handles anti-replay
         let decrypted = self.backward_ciphers[hop_index]
-            .decrypt(encrypted_data)
+            .decrypt_sequenced(encrypted_data)
             .map_err(|e| {
                 super::SwarmError::Encryption(format!("Vernam decryption failed: {:?}", e))
             })?;
 
-        if decrypted.len() < 8 {
-            return Err(super::SwarmError::Encryption(format!(
-                "Invalid decrypted size: {}",
-                decrypted.len()
-            )));
-        }
-
-        // Extract counter
-        let counter = u64::from_be_bytes(
-            decrypted[0..8]
-                .try_into()
-                .map_err(|_| super::SwarmError::Encryption("Counter parse failed".to_string()))?,
-        );
-
-        // Check anti-replay
-        self.anti_replay[hop_index]
-            .validate(counter)
-            .map_err(|_| super::SwarmError::ReplayDetected)?;
-
-        // Extract cell data
-        let cell_data = &decrypted[8..];
-
         // Deserialize cell
-        let cell = super::cells::FaisalSwarmCell::from_bytes(cell_data).map_err(|e| {
+        let cell = super::cells::FaisalSwarmCell::from_bytes(&decrypted).map_err(|e| {
             super::SwarmError::Encryption(format!("Cell deserialization failed: {:?}", e))
         })?;
 
@@ -282,22 +255,8 @@ impl FaisalSwarmEncryption {
     /// Encrypt single layer with Wasif-Vernam
     #[must_use]
     fn encrypt_layer(&mut self, data: &[u8], hop_index: usize) -> Result<Vec<u8>> {
-        // Add counter for anti-replay
-        let counter = self.counters[hop_index].fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
-        // Check for counter overflow
-        if counter == u64::MAX {
-            return Err(super::SwarmError::Encryption(
-                "Counter exhausted - re-key required".to_string(),
-            ));
-        }
-
-        let mut packet = BytesMut::with_capacity(8 + data.len());
-        packet.put_u64(counter);
-        packet.extend_from_slice(data);
-
         self.forward_ciphers[hop_index]
-            .encrypt(&packet)
+            .encrypt_sequenced(data)
             .map_err(|e| {
                 super::SwarmError::Encryption(format!("Vernam encryption failed: {:?}", e))
             })
@@ -306,33 +265,11 @@ impl FaisalSwarmEncryption {
     /// Decrypt single layer with Wasif-Vernam
     #[must_use]
     fn decrypt_layer(&mut self, encrypted_data: &[u8], hop_index: usize) -> Result<Vec<u8>> {
-        let decrypted = self.backward_ciphers[hop_index]
-            .decrypt(encrypted_data)
+        self.backward_ciphers[hop_index]
+            .decrypt_sequenced(encrypted_data)
             .map_err(|e| {
                 super::SwarmError::Encryption(format!("Vernam decryption failed: {:?}", e))
-            })?;
-
-        if decrypted.len() < 8 {
-            return Err(super::SwarmError::Encryption(format!(
-                "Invalid decrypted size: {}",
-                decrypted.len()
-            )));
-        }
-
-        // Extract counter
-        let counter = u64::from_be_bytes(
-            decrypted[0..8]
-                .try_into()
-                .map_err(|_| super::SwarmError::Encryption("Counter parse failed".to_string()))?,
-        );
-
-        // Check anti-replay
-        self.anti_replay[hop_index]
-            .validate(counter)
-            .map_err(|_| super::SwarmError::ReplayDetected)?;
-
-        // Extract data
-        Ok(decrypted[8..].to_vec())
+            })
     }
 }
 
@@ -409,31 +346,30 @@ mod tests {
         // Relay Decrypt (Fwd): Must match Client Encrypt (Fwd) = Initiator/True
         let mut relay_fwd_decrypt = WasifVernam::new(key).unwrap();
         relay_fwd_decrypt.derive_base_iv(&key, true);
+        relay_fwd_decrypt.enable_sequenced_vernam(key);
 
         // Relay Encrypt (Bwd): Must match Client Decrypt (Bwd) = Responder/False
         let mut relay_bwd_encrypt = WasifVernam::new(key).unwrap();
         relay_bwd_encrypt.derive_base_iv(&key, false);
+        relay_bwd_encrypt.enable_sequenced_vernam(key);
 
         let original_data = vec![0x42; 50];
 
         // 1. Client Encrypts (Forward)
-        // Simulate encrypt_cell call logic (onion layer)
+        // Uses encrypt_layer (which now uses encrypt_sequenced)
         let fwd_encrypted = client_enc.encrypt_layer(&original_data, 0).unwrap();
 
         // 2. Relay Decrypts (Forward)
-        let fwd_decrypted = relay_fwd_decrypt.decrypt(&fwd_encrypted).unwrap();
-        // Skip 8 bytes counter
-        let payload = &fwd_decrypted[8..];
-        assert_eq!(payload, original_data);
+        // Relay must use decrypt_sequenced to match
+        let fwd_decrypted = relay_fwd_decrypt.decrypt_sequenced(&fwd_encrypted).unwrap();
+        assert_eq!(fwd_decrypted, original_data);
 
         // 3. Relay Encrypts (Backward)
-        // Simulate response from relay
-        let mut bwd_packet = BytesMut::new();
-        bwd_packet.put_u64(0u64); // Counter 0
-        bwd_packet.extend_from_slice(payload);
-        let bwd_encrypted = relay_bwd_encrypt.encrypt(&bwd_packet).unwrap();
+        // Simulate response from relay using encrypt_sequenced
+        let bwd_encrypted = relay_bwd_encrypt.encrypt_sequenced(&original_data).unwrap();
 
         // 4. Client Decrypts (Backward)
+        // Uses decrypt_layer (which now uses decrypt_sequenced)
         let bwd_decrypted = client_enc.decrypt_layer(&bwd_encrypted, 0).unwrap();
         assert_eq!(bwd_decrypted, original_data);
     }
@@ -449,21 +385,16 @@ mod tests {
         // Setup Relay Encrypt (Bwd) as source of packets
         let mut relay_bwd_encrypt = WasifVernam::new(key).unwrap();
         relay_bwd_encrypt.derive_base_iv(&key, false); // Match backward_ciphers
+        relay_bwd_encrypt.enable_sequenced_vernam(key);
 
         let data = vec![0x42; 50];
 
-        // Create packet with counter 5
-        let mut packet = BytesMut::new();
-        packet.put_u64(5u64);
-        packet.extend_from_slice(&data);
-        let encrypted1 = relay_bwd_encrypt.encrypt(&packet).unwrap();
+        // Create packet
+        let encrypted1 = relay_bwd_encrypt.encrypt_sequenced(&data).unwrap();
 
         // First validation should succeed
         let decrypted1 = encryption.decrypt_layer(&encrypted1, 0);
-        assert!(
-            decrypted1.is_ok(),
-            "First packet (counter 5) should succeed"
-        );
+        assert!(decrypted1.is_ok(), "First packet should succeed");
 
         // Create duplicate packet with counter 5 (Replay)
         // To properly simulate replay with WasifVernam (which is stateful), we must reuse the EXACT ciphertext
@@ -477,34 +408,17 @@ mod tests {
         // "Check for replay attacks using counter from nonce bytes 4-12"
         // It XORs back with base_iv.
 
-        // So, if we re-submit encrypted1, decoding the SAME outer nonce will yield SAME PID (5).
-        // Verify replay of EXACT same ciphertext.
+        // Replayed ciphertext should fail anti-replay check
         let decrypted2 = encryption.decrypt_layer(&encrypted1, 0);
         assert!(
             decrypted2.is_err(),
-            "Replayed ciphertext (counter 5) should fail anti-replay check"
+            "Replayed ciphertext should fail anti-replay check"
         );
 
-        // Use a more permissible check since WasifVernam catches it first
-        match decrypted2 {
-            Err(super::SwarmError::ReplayDetected) => {}
-            Err(super::SwarmError::Encryption(_)) => {
-                // WasifVernam caught it (returns AeadError -> Encryption)
-            }
-            _ => panic!(
-                "Expected ReplayDetected or Encryption error, got {:?}",
-                decrypted2
-            ),
-        }
-
-        // Different counter (6) should succeed
-        let mut packet2 = BytesMut::new();
-        packet2.put_u64(6u64);
-        packet2.extend_from_slice(&data);
-        // Relay cipher state advanced by first encrypt, so we are good.
-        let encrypted2 = relay_bwd_encrypt.encrypt(&packet2).unwrap();
+        // Different packet should succeed
+        let encrypted2 = relay_bwd_encrypt.encrypt_sequenced(&data).unwrap();
 
         let decrypted3 = encryption.decrypt_layer(&encrypted2, 0);
-        assert!(decrypted3.is_ok(), "New packet (counter 6) should succeed");
+        assert!(decrypted3.is_ok(), "New packet should succeed");
     }
 }

@@ -1,19 +1,19 @@
-//! Utility functions for SURB operations
-
 use crate::{Result, SurbId, ZksSurb};
+use zks_wire::PeerProvider;
 
 /// Generate multiple SURBs for a recipient
 ///
 /// Returns a tuple of (public_surbs, private_data_vec) where private_data_vec contains the encryption keys
-pub fn generate_surbs(
+pub async fn generate_surbs(
     count: usize,
     recipient_pk: &[u8],
+    peer_provider: &dyn PeerProvider,
 ) -> Result<(Vec<ZksSurb>, Vec<crate::surb::PrivateSurbData>)> {
     let mut public_surbs = Vec::with_capacity(count);
     let mut private_data_vec = Vec::with_capacity(count);
 
     for _ in 0..count {
-        let (surb, private_data) = ZksSurb::create(recipient_pk)?;
+        let (surb, private_data) = ZksSurb::create(recipient_pk, peer_provider).await?;
         public_surbs.push(surb);
         private_data_vec.push(private_data);
     }
@@ -24,16 +24,18 @@ pub fn generate_surbs(
 /// Generate multiple SURBs for a recipient with custom configuration
 ///
 /// Returns a tuple of (public_surbs, private_data_vec) where private_data_vec contains the encryption keys
-pub fn generate_surbs_with_config(
+pub async fn generate_surbs_with_config(
     count: usize,
     recipient_pk: &[u8],
     config: &crate::config::SurbConfig,
+    peer_provider: &dyn PeerProvider,
 ) -> Result<(Vec<ZksSurb>, Vec<crate::surb::PrivateSurbData>)> {
     let mut public_surbs = Vec::with_capacity(count);
     let mut private_data_vec = Vec::with_capacity(count);
 
     for _ in 0..count {
-        let (surb, private_data) = ZksSurb::create_with_config(recipient_pk, config)?;
+        let (surb, private_data) =
+            ZksSurb::create_with_config(recipient_pk, config, peer_provider).await?;
         public_surbs.push(surb);
         private_data_vec.push(private_data);
     }

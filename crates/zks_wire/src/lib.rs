@@ -51,6 +51,16 @@ pub mod swarm;
 pub mod swarm_controller;
 pub mod wire;
 
+use async_trait::async_trait;
+// Removed redundant imports of PeerInfo and Result
+
+/// Trait for providing peers for route generation (e.g., SURBs)
+#[async_trait]
+pub trait PeerProvider: Send + Sync {
+    /// Get available peers in a room
+    async fn get_available_peers(&self, room_id: &str) -> Result<Vec<PeerInfo>>;
+}
+
 pub use circuit::{CircuitBuilder, SwarmCircuit};
 pub use cloudflare_signaling::{
     CloudflareSignalingClient, CloudflareSignalingConfig, CloudflareSignalingMessage,

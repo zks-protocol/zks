@@ -2,10 +2,16 @@ import re
 
 # Read raw log bytes
 with open(r'd:\ZKS Protocol_Research\ZKS Protocol\server_vps.log', 'rb') as f:
-    data = f.read()
+    raw_data = f.read()
+
+# Try to decode as UTF-16LE (common in PowerShell redirects) or UTF-8
+try:
+    clean = raw_data.decode('utf-16le')
+except:
+    clean = raw_data.decode('utf-8', errors='ignore')
 
 # Strip ANSI escape codes
-clean = re.sub(rb'\x1b\[[0-9;]*m', b'', data).decode('utf-8', errors='ignore')
+clean = re.sub(r'\x1b\[[0-9;]*m', '', clean)
 
 # Extract key after "VK): "
 m = re.search(r'VK\): ([A-Za-z0-9+/=]+)', clean)

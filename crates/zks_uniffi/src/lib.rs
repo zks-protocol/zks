@@ -8,6 +8,7 @@ use zks_wire::signaling::{
     PeerCapabilities as WirePeerCapabilities, PeerInfo as WirePeerInfo, SignalingClient,
     SignalingError,
 };
+use zks_wire::swarm_controller::SwarmController;
 
 const DEFAULT_SIGNALING_URL: &str = "wss://signal.zks-protocol.org";
 
@@ -34,7 +35,7 @@ pub struct PeerInfo {
 pub enum ConnectionState {
     Disconnected,
     Matching,
-    Connected { peer: PeerInfo },
+    Connected { peer: PeerInfo, circuit_id: String },
 }
 
 #[derive(uniffi::Object)]
@@ -43,6 +44,7 @@ pub struct ZksMeetClient {
     state: Arc<RwLock<ConnectionState>>,
     runtime: Arc<Runtime>,
     signaling_client: Arc<RwLock<Option<SignalingClient>>>,
+    swarm_controller: Arc<RwLock<Option<SwarmController<SignalingClient>>>>,
 }
 
 impl Default for ZksMeetClient {
@@ -52,6 +54,7 @@ impl Default for ZksMeetClient {
             state: Arc::new(RwLock::new(ConnectionState::Disconnected)),
             runtime: Arc::new(Runtime::new().unwrap()),
             signaling_client: Arc::new(RwLock::new(None)),
+            swarm_controller: Arc::new(RwLock::new(None)),
         }
     }
 }
@@ -65,6 +68,7 @@ impl ZksMeetClient {
             state: Arc::new(RwLock::new(ConnectionState::Disconnected)),
             runtime: Arc::new(Runtime::new().unwrap()),
             signaling_client: Arc::new(RwLock::new(None)),
+            swarm_controller: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -75,6 +79,7 @@ impl ZksMeetClient {
             state: Arc::new(RwLock::new(ConnectionState::Disconnected)),
             runtime: Arc::new(Runtime::new().unwrap()),
             signaling_client: Arc::new(RwLock::new(None)),
+            swarm_controller: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -100,22 +105,51 @@ impl ZksMeetClient {
                 .await
                 .map_err(signaling_error_to_zks_error)?;
 
-            *signaling_client.write().await = Some(client);
+            *signaling_client.write().await = Some(client.clone());
+
+            // Initialize SwarmController
+            let controller =
+                SwarmController::new()
+                    .await
+                    .map_err(|e| ZksError::ConnectionFailed {
+                        message: e.to_string(),
+                    })?;
+            controller
+                .connect_with_signaling(client)
+                .await
+                .map_err(|e| ZksError::ConnectionFailed {
+                    message: e.to_string(),
+                })?;
+
+            *self.swarm_controller.write().await = Some(controller);
             Ok(())
         })
     }
 
-    pub fn send(&self, _data: Vec<u8>) -> Result<(), ZksError> {
+    pub fn send(&self, data: Vec<u8>) -> Result<(), ZksError> {
         let runtime = self.runtime.clone();
         let state = self.state.clone();
+        let swarm_controller = self.swarm_controller.clone();
 
         runtime.block_on(async {
             let current_state = state.read().await;
             match &*current_state {
-                ConnectionState::Connected { peer: _ } => {
-                    // TODO: Implement actual P2P data sending
-                    // For now, this is a placeholder
-                    Ok(())
+                ConnectionState::Connected {
+                    peer: _,
+                    circuit_id,
+                } => {
+                    let controller_guard = swarm_controller.read().await;
+                    if let Some(ref controller) = *controller_guard {
+                        controller
+                            .send_through_circuit(circuit_id, &data)
+                            .await
+                            .map_err(|e| ZksError::AsyncError {
+                                message: e.to_string(),
+                            })?;
+                        Ok(())
+                    } else {
+                        Err(ZksError::NotConnected)
+                    }
                 }
                 _ => Err(ZksError::NotConnected),
             }
@@ -125,14 +159,28 @@ impl ZksMeetClient {
     pub fn receive(&self) -> Result<Vec<u8>, ZksError> {
         let runtime = self.runtime.clone();
         let state = self.state.clone();
+        let swarm_controller = self.swarm_controller.clone();
 
         runtime.block_on(async {
             let current_state = state.read().await;
             match &*current_state {
-                ConnectionState::Connected { peer: _ } => {
-                    // TODO: Implement actual P2P data receiving
-                    // For now, this is a placeholder
-                    Ok(vec![])
+                ConnectionState::Connected {
+                    peer: _,
+                    circuit_id,
+                } => {
+                    let controller_guard = swarm_controller.read().await;
+                    if let Some(ref controller) = *controller_guard {
+                        let data =
+                            controller
+                                .receive_from_circuit(circuit_id)
+                                .await
+                                .map_err(|e| ZksError::AsyncError {
+                                    message: e.to_string(),
+                                })?;
+                        Ok(data.unwrap_or_default())
+                    } else {
+                        Err(ZksError::NotConnected)
+                    }
                 }
                 _ => Err(ZksError::NotConnected),
             }
@@ -149,6 +197,7 @@ impl ZksMeetClient {
             match &*current_state {
                 ConnectionState::Connected {
                     peer: _current_peer,
+                    ..
                 } => {
                     // Disconnect from current peer
                     drop(current_state);
@@ -170,8 +219,22 @@ impl ZksMeetClient {
                         let new_peer = &peers[0];
                         let uniffi_peer = wire_peer_to_uniffi_peer(new_peer);
 
+                        // Build a circuit for the new peer
+                        let controller_guard = self.swarm_controller.read().await;
+                        let circuit_id = if let Some(ref controller) = *controller_guard {
+                            controller
+                                .build_onion_circuit(&uniffi_peer.peer_id, 3, 3)
+                                .await
+                                .map_err(|e| ZksError::AsyncError {
+                                    message: e.to_string(),
+                                })?
+                        } else {
+                            return Err(ZksError::NotConnected);
+                        };
+
                         *state.write().await = ConnectionState::Connected {
                             peer: uniffi_peer.clone(),
+                            circuit_id,
                         };
                         Ok(uniffi_peer)
                     } else {
@@ -238,8 +301,22 @@ impl ZksMeetClient {
                 let selected_peer = &peers[0];
                 let uniffi_peer = wire_peer_to_uniffi_peer(selected_peer);
 
+                // Build a circuit for the selected peer
+                let controller_guard = self.swarm_controller.read().await;
+                let circuit_id = if let Some(ref controller) = *controller_guard {
+                    controller
+                        .build_onion_circuit(&uniffi_peer.peer_id, 3, 3)
+                        .await
+                        .map_err(|e| ZksError::AsyncError {
+                            message: e.to_string(),
+                        })?
+                } else {
+                    return Err(ZksError::NotConnected);
+                };
+
                 *state.write().await = ConnectionState::Connected {
                     peer: uniffi_peer.clone(),
+                    circuit_id,
                 };
                 Ok(uniffi_peer)
             } else {

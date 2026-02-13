@@ -6,7 +6,8 @@
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
+use zks_crypt::drand::DrandEntropy;
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::signaling::SignalingClient;
@@ -14,7 +15,11 @@ use crate::signaling::SignalingClient;
 #[cfg(target_arch = "wasm32")]
 use crate::signaling::SignalingClient;
 
-use crate::faisal_swarm::FaisalSwarmManager;
+use crate::entropy_cache::EntropyCache;
+use crate::entropy_grid::{EntropyGrid, EntropyGridConfig};
+use crate::entropy_swarm::{EntropySwarm, EntropySwarmConfig};
+use crate::faisal_swarm::relay::RelayHandler;
+use crate::faisal_swarm::{FaisalSwarmManager, SwarmError};
 use crate::p2p::NativeP2PTransport;
 use crate::signaling::SignalingClientTrait;
 
@@ -47,13 +52,19 @@ pub struct SwarmController<S: SignalingClientTrait> {
     signaling_client: Arc<RwLock<Option<S>>>,
 
     /// Faisal Swarm manager for onion routing circuits
-    faisal_swarm_manager: Arc<RwLock<Option<FaisalSwarmManager<S>>>>,
+    faisal_swarm_manager: Arc<RwLock<Option<Arc<FaisalSwarmManager<S>>>>>,
+
+    /// Faisal Swarm relay handler for processing multi-hop traffic
+    relay_handler: Arc<RwLock<Option<Arc<crate::faisal_swarm::relay::RelayHandler>>>>,
+
+    /// Entropy Grid for high-quality entropy fetching
+    entropy_grid: Arc<RwLock<Option<Arc<EntropyGrid>>>>,
 
     is_connected: Arc<RwLock<bool>>,
     local_peer_id: Arc<RwLock<Option<String>>>,
 }
 
-impl<S: SignalingClientTrait> SwarmController<S> {
+impl<S: SignalingClientTrait + 'static> SwarmController<S> {
     /// Create a new swarm controller
     pub async fn new() -> Result<Self, SwarmControllerError> {
         let platform = Platform::detect();
@@ -65,6 +76,8 @@ impl<S: SignalingClientTrait> SwarmController<S> {
 
             // Faisal Swarm manager for onion routing circuits
             faisal_swarm_manager: Arc::new(RwLock::new(None)),
+            relay_handler: Arc::new(RwLock::new(None)),
+            entropy_grid: Arc::new(RwLock::new(None)),
             is_connected: Arc::new(RwLock::new(false)),
             local_peer_id: Arc::new(RwLock::new(None)),
         })
@@ -86,16 +99,9 @@ impl<S: SignalingClientTrait> SwarmController<S> {
         *self.signaling_client.write().await = Some(signaling_client.clone());
 
         // Create Native P2P transport
-        let (mut p2p_transport, driver) = NativeP2PTransport::new(None, None).map_err(|e| {
+        let (p2p_transport, mut driver) = NativeP2PTransport::new(None, None).map_err(|e| {
             SwarmControllerError::TransportError(format!("Failed to create P2P transport: {}", e))
         })?;
-
-        // Spawn the P2P driver loop
-        tokio::spawn(async move {
-            if let Err(e) = driver.run().await {
-                error!("P2P Driver failed: {:?}", e);
-            }
-        });
 
         // Start listening on a random port
         let listen_addr = "/ip4/0.0.0.0/tcp/0".parse().map_err(|e| {
@@ -105,13 +111,88 @@ impl<S: SignalingClientTrait> SwarmController<S> {
             SwarmControllerError::TransportError(format!("Failed to listen on address: {}", e))
         })?;
 
-        // Create Faisal Swarm manager with the P2P transport
-        let faisal_swarm_manager = FaisalSwarmManager::new(
-            Arc::new(signaling_client),
-            Arc::new(RwLock::new(p2p_transport)),
-        );
+        // Wrap P2P transport in Arc/RwLock so it can be shared with manager and relay
+        let p2p_transport_arc = Arc::new(RwLock::new(p2p_transport));
+        let local_libp2p_peer_id = p2p_transport_arc.read().await.local_peer_id();
 
-        *self.faisal_swarm_manager.write().await = Some(faisal_swarm_manager);
+        // Create Faisal Swarm manager with the P2P transport
+        let faisal_swarm_manager = Arc::new(FaisalSwarmManager::new(
+            Arc::new(signaling_client),
+            p2p_transport_arc.clone(),
+        ));
+
+        // Create Relay Handler for this peer (symmetric P2P: everyone is a potential relay)
+        let relay_handler = Arc::new(RelayHandler::new(
+            local_libp2p_peer_id,
+            Some(Arc::downgrade(&p2p_transport_arc)),
+        ));
+
+        // Initialize Entropy Grid
+        let drand_client = Arc::new(DrandEntropy::new());
+        let entropy_grid = Arc::new(EntropyGrid::new(EntropyGridConfig::default(), drand_client));
+
+        // Set interfaces
+        let entropy_cache = Arc::new(EntropyCache::with_defaults());
+        let entropy_swarm = Arc::new(EntropySwarm::new(EntropySwarmConfig::default()));
+
+        entropy_grid.set_cache(entropy_cache).await;
+        entropy_grid.set_swarm(entropy_swarm).await;
+
+        *self.entropy_grid.write().await = Some(entropy_grid);
+        *self.faisal_swarm_manager.write().await = Some(faisal_swarm_manager.clone());
+        *self.relay_handler.write().await = Some(relay_handler.clone());
+
+        // Set the Faisal request handler to route incoming requests to the manager or relay handler
+        let manager_clone = faisal_swarm_manager.clone();
+        let relay_clone = relay_handler.clone();
+
+        driver.set_faisal_request_handler(move |peer_id, request| {
+            let manager = manager_clone.clone();
+            let relay = relay_clone.clone();
+            let circuit_id = request.circuit_id;
+
+            Box::pin(async move {
+                // 1. Try handling as a locally-initiated circuit (Initiator role)
+                match manager
+                    .handle_incoming_request(peer_id, request.clone())
+                    .await
+                {
+                    Ok(response) => response,
+                    Err(e) => {
+                        // If not found in locally-initiated circuits, try relaying it
+                        if let SwarmError::NotFound(_) = e {
+                            match relay.handle_request(request, peer_id).await {
+                                Ok(response) => response,
+                                Err(relay_err) => {
+                                    debug!(
+                                        "Relay failed for circuit {}: {:?}",
+                                        circuit_id, relay_err
+                                    );
+                                    crate::p2p::FaisalSwarmResponse {
+                                        success: false,
+                                        data: format!("Relay error: {:?}", relay_err).into_bytes(),
+                                    }
+                                }
+                            }
+                        } else {
+                            error!("Faisal manager error for circuit {}: {:?}", circuit_id, e);
+                            crate::p2p::FaisalSwarmResponse {
+                                success: false,
+                                data: format!("Error: {:?}", e).into_bytes(),
+                            }
+                        }
+                    }
+                }
+            })
+        });
+
+        // Spawn the P2P driver loop (now with handler set)
+        tokio::spawn(async move {
+            if let Err(e) = driver.run().await {
+                error!("P2P Driver failed: {:?}", e);
+            }
+        });
+
         *self.is_connected.write().await = true;
 
         info!("Successfully connected to swarm via signaling server");
@@ -398,7 +479,7 @@ impl<S: SignalingClientTrait> SwarmController<S> {
     pub async fn create_onion_stream(
         &self,
         circuit_id: &str,
-    ) -> Result<OnionStream, SwarmControllerError> {
+    ) -> Result<OnionStream<S>, SwarmControllerError> {
         if let Some(ref faisal_manager) = *self.faisal_swarm_manager.read().await {
             // Parse circuit ID from string to CircuitId
             let circuit_id_u32 = circuit_id.parse::<u32>().map_err(|e| {
@@ -421,11 +502,13 @@ impl<S: SignalingClientTrait> SwarmController<S> {
             debug!("Circuit {} verified, creating onion stream", circuit_id);
 
             // Create an onion stream that will route through Faisal Swarm
-            // The stream will use the Faisal Swarm manager for actual data transmission
-            let stream = OnionStream::new(circuit_id.to_string());
+            let stream = crate::faisal_swarm::onion_stream::OnionStream::new(
+                faisal_manager.clone(), // This is now already an Arc
+                circuit_id_u32,
+                1, // Default stream ID
+            )
+            .await;
 
-            // In a full implementation, we would establish the actual stream connection here
-            // For now, we return a stream that can be used with send_via_swarm/receive_from_swarm
             info!(
                 "✅ Successfully created onion stream for Faisal Swarm circuit {}",
                 circuit_id
@@ -483,71 +566,11 @@ pub enum SwarmControllerError {
 
     /// I/O operation error
     #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    Io(String),
 }
 
 /// An onion routing stream that routes data through an established circuit
-pub struct OnionStream {
-    circuit_id: String,
-    read_buffer: std::collections::VecDeque<u8>,
-    write_buffer: std::collections::VecDeque<u8>,
-}
-
-impl OnionStream {
-    /// Create a new onion stream for the specified circuit
-    pub fn new(circuit_id: String) -> Self {
-        Self {
-            circuit_id,
-            read_buffer: std::collections::VecDeque::new(),
-            write_buffer: std::collections::VecDeque::new(),
-        }
-    }
-
-    /// Get the circuit ID this stream is associated with
-    pub fn circuit_id(&self) -> &str {
-        &self.circuit_id
-    }
-}
-
-impl tokio::io::AsyncRead for OnionStream {
-    fn poll_read(
-        mut self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
-        let n = std::cmp::min(buf.remaining(), self.read_buffer.len());
-        if n > 0 {
-            let data: Vec<u8> = self.read_buffer.drain(..n).collect();
-            buf.put_slice(&data);
-        }
-        std::task::Poll::Ready(Ok(()))
-    }
-}
-
-impl tokio::io::AsyncWrite for OnionStream {
-    fn poll_write(
-        mut self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-        buf: &[u8],
-    ) -> std::task::Poll<std::io::Result<usize>> {
-        self.write_buffer.extend(buf);
-        std::task::Poll::Ready(Ok(buf.len()))
-    }
-
-    fn poll_flush(
-        self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
-        std::task::Poll::Ready(Ok(()))
-    }
-
-    fn poll_shutdown(
-        self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
-        std::task::Poll::Ready(Ok(()))
-    }
-}
+pub type OnionStream<S> = crate::faisal_swarm::onion_stream::OnionStream<S>;
 
 #[cfg(test)]
 mod tests {

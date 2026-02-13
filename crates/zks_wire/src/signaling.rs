@@ -114,6 +114,7 @@ pub struct SignalingClient {
         Arc<Mutex<WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>,
     peer_id: String,
     is_connected: Arc<Mutex<bool>>,
+    advertised_addresses: Arc<Mutex<Vec<String>>>,
 }
 
 impl SignalingClient {
@@ -137,7 +138,13 @@ impl SignalingClient {
             ws_stream: Arc::new(Mutex::new(ws_stream)),
             peer_id,
             is_connected: Arc::new(Mutex::new(true)),
+            advertised_addresses: Arc::new(Mutex::new(vec![])),
         })
+    }
+
+    /// Set the list of addresses to advertise to peers
+    pub async fn set_advertised_addresses(&self, addresses: Vec<String>) {
+        *self.advertised_addresses.lock().await = addresses;
     }
 
     /// Join a swarm room for peer discovery
@@ -154,7 +161,7 @@ impl SignalingClient {
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs(),
-            addresses: vec![],
+            addresses: self.advertised_addresses.lock().await.clone(),
         };
 
         let message = SignalingMessage::Join {

@@ -162,7 +162,9 @@ impl ZksConnectionBuilder {
     }
 
     /// Build the ZKS connection
-    pub async fn build<S: SignalingClientTrait + From<zks_wire::signaling::SignalingClient>>(
+    pub async fn build<
+        S: SignalingClientTrait + From<zks_wire::signaling::SignalingClient> + 'static,
+    >(
         self,
     ) -> Result<ZksConnection<S>> {
         let url = self

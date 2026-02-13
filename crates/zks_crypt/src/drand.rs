@@ -408,7 +408,9 @@ impl Default for DrandConfig {
                 "https://api2.drand.sh".to_string(),
             ],
             // Quicknet chain hash (3s period, unchained, G1)
-            chain_hash: Some("52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971".to_string()),
+            chain_hash: Some(
+                "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971".to_string(),
+            ),
             cache_duration_secs: 3,
             max_retries: 3,
             timeout_secs: 5,
@@ -736,7 +738,7 @@ impl DrandEntropy {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        
+
         let genesis = 1692803367;
         let period = 3;
 

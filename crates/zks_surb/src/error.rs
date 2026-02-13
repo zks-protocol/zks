@@ -38,6 +38,14 @@ pub enum SurbError {
     /// SURB serialization/deserialization failed
     #[error("Serialization error: {0}")]
     SerializationError(String),
+
+    /// Network error during SURB creation or use
+    #[error("Network error: {0}")]
+    NetworkError(String),
+
+    /// Invalid argument provided
+    #[error("Invalid argument: {0}")]
+    InvalidArgument(String),
 }
 
 /// Result type for SURB operations

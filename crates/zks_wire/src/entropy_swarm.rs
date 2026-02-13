@@ -9,7 +9,9 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tracing::{debug, error, info, warn};
 
+use crate::entropy_grid::EntropySwarmInterface;
 use crate::{PeerId, Result, WireError};
+use async_trait::async_trait;
 use zks_crypt::entropy_block::EntropyBlock;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -412,7 +414,7 @@ impl EntropySwarm {
     pub async fn subscribe_entropy_topic(&self) -> Result<()> {
         let transport_guard = self.transport.read().await;
         if let Some(transport) = transport_guard.as_ref() {
-            let mut transport_lock = transport.write().await;
+            let transport_lock = transport.write().await;
             transport_lock.subscribe_entropy_topic().await.map_err(|e| {
                 WireError::other(&format!("Failed to subscribe to entropy topic: {}", e))
             })
@@ -428,7 +430,7 @@ impl EntropySwarm {
     pub async fn unsubscribe_entropy_topic(&self) -> Result<()> {
         let transport_guard = self.transport.read().await;
         if let Some(transport) = transport_guard.as_ref() {
-            let mut transport_lock = transport.write().await;
+            let transport_lock = transport.write().await;
             transport_lock
                 .unsubscribe_entropy_topic()
                 .await
@@ -513,7 +515,7 @@ impl EntropySwarm {
                     {
                         let transport_guard = self.transport.read().await;
                         if let Some(transport) = transport_guard.as_ref() {
-                            let mut transport_lock = transport.write().await;
+                            let transport_lock = transport.write().await;
                             if let Err(e) =
                                 transport_lock.publish_entropy_message(message_data).await
                             {
@@ -571,7 +573,7 @@ impl EntropySwarm {
             {
                 let transport_guard = self.transport.read().await;
                 if let Some(transport) = transport_guard.as_ref() {
-                    let mut transport_lock = transport.write().await;
+                    let transport_lock = transport.write().await;
                     if let Err(e) = transport_lock.publish_entropy_message(message_data).await {
                         warn!("Failed to broadcast block request: {}", e);
                     } else {
@@ -634,7 +636,7 @@ impl EntropySwarm {
         {
             let transport_guard = self.transport.read().await;
             if let Some(transport) = transport_guard.as_ref() {
-                let mut transport_lock = transport.write().await;
+                let transport_lock = transport.write().await;
                 transport_lock
                     .publish_entropy_message(message_data)
                     .await
@@ -852,7 +854,7 @@ impl EntropySwarm {
                         {
                             let transport_guard = self.transport.read().await;
                             if let Some(transport) = transport_guard.as_ref() {
-                                let mut transport_lock = transport.write().await;
+                                let transport_lock = transport.write().await;
                                 transport_lock
                                     .publish_entropy_message(message_data)
                                     .await
@@ -937,6 +939,22 @@ impl EntropySwarm {
             // Small delay to prevent busy waiting
             tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         }
+    }
+}
+
+#[async_trait]
+impl EntropySwarmInterface for EntropySwarm {
+    async fn get_block(&self, round_number: u64) -> std::result::Result<EntropyBlock, String> {
+        self.request_entropy_block(round_number)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| format!("Block {} not found in swarm", round_number))
+    }
+
+    async fn broadcast_block(&self, block: &EntropyBlock) -> std::result::Result<(), String> {
+        self.publish_entropy_block(block.clone())
+            .await
+            .map_err(|e| e.to_string())
     }
 }
 

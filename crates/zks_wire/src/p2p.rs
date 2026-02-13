@@ -9,12 +9,12 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 use libp2p::{
-    dcutr, gossipsub,
+    dcutr, dns, gossipsub,
     identity::Keypair,
     kad, noise, ping, relay, request_response,
     swarm::{Swarm, SwarmEvent},
     tcp::{tokio::Transport as TcpTransport, Config as TcpConfig},
-    yamux, Multiaddr, PeerId, Transport,
+    websocket, yamux, Multiaddr, PeerId, Transport,
 };
 use std::time::{Duration, Instant};
 
@@ -49,18 +49,25 @@ pub enum P2PCommand {
         request: FaisalSwarmRequest,
         response_sender: oneshot::Sender<Result<FaisalSwarmResponse, NativeP2PError>>,
     },
+    /// Subscribe to entropy gossip topic
     SubscribeEntropy,
+    /// Unsubscribe from entropy gossip topic
     UnsubscribeEntropy,
+    /// Publish an entropy message to the swarm
     PublishEntropy(Vec<u8>),
+    /// Register a remote entropy provider
     AddEntropyProvider(Vec<u8>, PeerId),
-    /// Start providing an entropy block
+    /// Start providing an entropy block via DHT
     StartProvidingEntropy(Vec<u8>),
-    /// Stop providing an entropy block
+    /// Stop providing an entropy block via DHT
     StopProvidingEntropy(Vec<u8>),
-    /// Listen on an address
+    /// Listen on a specific multiaddress and signal completion
     ListenOn(Multiaddr, oneshot::Sender<Result<(), NativeP2PError>>),
+    /// Fetch entropy providers for a specific block key
     GetEntropyProviders(Vec<u8>, oneshot::Sender<Vec<PeerId>>),
+    /// Add a bootstrap node to the Kademlia DHT
     AddKadBootstrap(PeerId, Multiaddr),
+    /// Bootstrap the Kademlia DHT
     BootstrapKad(oneshot::Sender<Result<(), NativeP2PError>>),
 }
 
@@ -414,7 +421,7 @@ impl NativeP2PTransport {
     /// Create a new native P2P transport client and driver
     pub fn new(
         keypair: Option<Keypair>,
-        faisal_request_timeout: Option<Duration>,
+        _faisal_request_timeout: Option<Duration>,
     ) -> Result<(Self, NativeP2PDriver), NativeP2PError> {
         let keypair = keypair.unwrap_or_else(Keypair::generate_ed25519);
         let local_peer_id = PeerId::from(keypair.public());
@@ -425,7 +432,19 @@ impl NativeP2PTransport {
         );
 
         // Create transport
-        let _transport = TcpTransport::new(TcpConfig::default())
+        // Create transport stack for WebSocket
+        let tcp_transport_ws = TcpTransport::new(TcpConfig::default());
+        let dns_tcp_ws = dns::tokio::Transport::system(tcp_transport_ws)
+            .map_err(|e| NativeP2PError::Transport(libp2p::TransportError::Other(e)))?;
+        let ws_transport = websocket::WsConfig::new(dns_tcp_ws);
+
+        // Create transport stack for direct TCP (fallback)
+        let tcp_transport_direct = TcpTransport::new(TcpConfig::default());
+        let dns_tcp_direct = dns::tokio::Transport::system(tcp_transport_direct)
+            .map_err(|e| NativeP2PError::Transport(libp2p::TransportError::Other(e)))?;
+
+        let _transport = ws_transport
+            .or_transport(dns_tcp_direct)
             .upgrade(libp2p::core::upgrade::Version::V1)
             .authenticate(
                 noise::Config::new(&keypair).map_err(|e| NativeP2PError::Noise(e.to_string()))?,
@@ -567,6 +586,7 @@ impl NativeP2PTransport {
 }
 
 impl NativeP2PDriver {
+    /// Set the request handler for Faisal Swarm requests
     pub fn set_faisal_request_handler<F>(&mut self, handler: F)
     where
         F: Fn(PeerId, FaisalSwarmRequest) -> BoxFuture<'static, FaisalSwarmResponse>
@@ -577,6 +597,7 @@ impl NativeP2PDriver {
         self.faisal_request_handler = Some(Arc::new(handler));
     }
 
+    /// Set the message sender for entropy gossip messages
     pub fn set_entropy_message_sender(
         &mut self,
         sender: mpsc::UnboundedSender<(EntropyGossipMessage, PeerId)>,
@@ -584,11 +605,13 @@ impl NativeP2PDriver {
         self.entropy_message_sender = Some(sender);
     }
 
+    /// Start listening on the specified multiaddress
     pub async fn listen_on(&mut self, addr: Multiaddr) -> Result<(), NativeP2PError> {
         self.swarm.listen_on(addr)?;
         Ok(())
     }
 
+    /// Run the P2P transport event loop
     pub async fn run(mut self) -> Result<(), NativeP2PError> {
         info!("Starting native P2P transport event loop");
         let cleanup_interval = Duration::from_secs(30);
@@ -767,7 +790,7 @@ impl NativeP2PDriver {
                 request_response::Event::Message { peer, message },
             )) => match message {
                 request_response::Message::Request {
-                    request_id,
+                    request_id: _request_id,
                     request,
                     channel,
                 } => {

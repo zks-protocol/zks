@@ -578,21 +578,19 @@ impl<S: crate::signaling::SignalingClientTrait> CellProcessor<S> {
             cell.header.circuit_id
         );
 
-        // For Vernam relay cells, we need to decrypt the payload first
-        // In a real implementation, this would use the circuit's Wasif-Vernam cipher
-        // For now, we'll treat it as a regular relay cell (simulated)
+        // Real implementation: use the circuit's Wasif-Vernam cipher to decrypt the payload
+        let decrypted_payload = self
+            .circuit_manager
+            .decrypt_swarm_data(cell.header.circuit_id, &cell.payload)
+            .await
+            .map_err(|e| CellError::DecryptionFailed(format!("{:?}", e)))?;
 
-        debug!("Decrypting Vernam relay payload (simulated)");
+        // Process as a regular relay cell after decryption
+        let mut decrypted_cell = cell;
+        decrypted_cell.payload = decrypted_payload;
+        decrypted_cell.header.command = CellCommand::Relay;
 
-        // Simulate decryption - in reality this would use the circuit's backward cipher
-        let decrypted_payload = cell.payload.clone();
-
-        // Process as a regular relay cell after "decryption"
-        let mut simulated_cell = cell;
-        simulated_cell.payload = decrypted_payload;
-        simulated_cell.header.command = CellCommand::Relay;
-
-        self.process_relay_cell(simulated_cell).await
+        self.process_relay_cell(decrypted_cell).await
     }
 
     /// Process destroy cell
@@ -645,6 +643,10 @@ pub enum CellError {
     /// Relay payload is invalid
     #[error("Invalid relay payload")]
     InvalidRelayPayload,
+
+    /// Decryption failed
+    #[error("Decryption failed: {0}")]
+    DecryptionFailed(String),
 
     /// Cell validation failed
     #[error("Cell validation failed")]

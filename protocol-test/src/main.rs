@@ -49,19 +49,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let content = std::fs::read_to_string(&args[i + 1])?;
                 // Robust cleanup: remove BOM, whitespace and newlines
                 let content_no_bom = content.trim_start_matches('\u{feff}');
-                let key_b64: String = content_no_bom.chars().filter(|c| !c.is_whitespace()).collect();
-                
+                let key_b64: String = content_no_bom
+                    .chars()
+                    .filter(|c| !c.is_whitespace())
+                    .collect();
+
                 info!("Key string length (raw): {}", key_b64.len());
                 if key_b64.len() > 3456 {
                     warn!("Key too long, truncating to 3456 chars");
                 }
                 let key_b64: String = key_b64.chars().take(3456).collect();
-                
+
                 info!("Key string length (truncated): {}", key_b64.len());
 
                 let key_bytes =
                     base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &key_b64)?;
-                info!("🔑 Loaded trusted key from file: {} ({} bytes)", &args[i + 1], key_bytes.len());
+                info!(
+                    "🔑 Loaded trusted key from file: {} ({} bytes)",
+                    &args[i + 1],
+                    key_bytes.len()
+                );
                 trusted_key = Some(key_bytes);
                 i += 2;
             } else if args[i] == "--benchmark" {
@@ -194,8 +201,15 @@ async fn run_benchmark(
     let total_bytes = total_payload * 2; // round-trip
     let mb_per_sec = (total_bytes as f64 / 1024.0 / 1024.0) / duration.as_secs_f64();
 
-    info!("🚀 Throughput: {:.2} MB/s (send+recv, {} chunks)", mb_per_sec, num_chunks);
-    info!("⏱️  Total time for {}KB round-trip: {:?}", total_payload / 1024, duration);
+    info!(
+        "🚀 Throughput: {:.2} MB/s (send+recv, {} chunks)",
+        mb_per_sec, num_chunks
+    );
+    info!(
+        "⏱️  Total time for {}KB round-trip: {:?}",
+        total_payload / 1024,
+        duration
+    );
 
     conn.close().await?;
     info!("✅ Benchmark complete");

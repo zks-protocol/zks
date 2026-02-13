@@ -4,12 +4,12 @@ use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use zks_pqcrypto::ml_kem::MlKem;
-use zks_wire::faisal_swarm::HopRole;
-
 use crate::config::SurbConfig;
 use crate::encryption::{EncryptedReply, SurbEncryption};
 use crate::error::{Result, SurbError};
+use zks_pqcrypto::ml_kem::MlKem;
+use zks_wire::faisal_swarm::HopRole;
+use zks_wire::PeerProvider;
 
 /// Unique identifier for a SURB
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -92,17 +92,21 @@ impl ZksSurb {
     /// Create a new SURB for the given recipient's ML-KEM public key
     ///
     /// Returns a tuple of (public_surb, private_data) where private_data contains the encryption key
-    pub fn create(recipient_pk: &[u8]) -> Result<(Self, PrivateSurbData)> {
+    pub async fn create(
+        recipient_pk: &[u8],
+        peer_provider: &dyn PeerProvider,
+    ) -> Result<(Self, PrivateSurbData)> {
         let config = SurbConfig::default();
-        Self::create_with_config(recipient_pk, &config)
+        Self::create_with_config(recipient_pk, &config, peer_provider).await
     }
 
     /// Create a new SURB with custom configuration
     ///
     /// Returns a tuple of (public_surb, private_data) where private_data contains the encryption key
-    pub fn create_with_config(
+    pub async fn create_with_config(
         recipient_pk: &[u8],
         config: &SurbConfig,
+        peer_provider: &dyn PeerProvider,
     ) -> Result<(Self, PrivateSurbData)> {
         if !config.enabled {
             return Err(SurbError::InvalidConfig("SURBs are disabled".to_string()));
@@ -115,8 +119,8 @@ impl ZksSurb {
         // Derive encryption key from shared secret using SHA256
         let encryption_key = Self::derive_encryption_key(&encapsulation.shared_secret);
 
-        // Generate route header for Faisal Swarm
-        let route_header = Self::generate_route_header(config)?;
+        // Generate route header for Faisal Swarm using real peers
+        let route_header = Self::generate_route_header(config, peer_provider).await?;
 
         // Generate SURB ID
         let id = SurbId::new(config.surb_id_length);
@@ -144,25 +148,15 @@ impl ZksSurb {
         Ok((surb, private_data))
     }
 
-    /// Generate a route header for Faisal Swarm
+    /// Generate a route header for Faisal Swarm using real peers
     ///
-    /// # ⚠️ SECURITY WARNING: MOCK IMPLEMENTATION (M5 Fix)
-    ///
-    /// **THIS IS A PLACEHOLDER IMPLEMENTATION FOR TESTING ONLY.**
-    ///
-    /// This function generates MOCK peer IDs and localhost addresses, which means:
-    /// - NO REAL ANONYMOUS ROUTING is provided
-    /// - All SURBs point to localhost (no actual P2P routing)
-    /// - Peer IDs are deterministic and trivially linkable
-    ///
-    /// **TODO: Production Implementation Required**
-    /// 1. Integrate with Faisal Swarm peer discovery
-    /// 2. Use real libp2p Multiaddrs from active network nodes
-    /// 3. Select route hops based on diversity and bandwidth criteria
-    /// 4. Add integration tests with actual P2P routing
-    ///
-    /// For Tor-style anonymity, see: Dingledine et al., "Tor: Second-Generation Onion Router"
-    fn generate_route_header(config: &SurbConfig) -> Result<Vec<u8>> {
+    /// # Security
+    /// Integrates with Faisal Swarm peer discovery via the `PeerProvider` trait.
+    /// Selects multiple hops (Guard → Middle → Exit) from the active swarm.
+    async fn generate_route_header(
+        config: &SurbConfig,
+        peer_provider: &dyn PeerProvider,
+    ) -> Result<Vec<u8>> {
         // TODO(M5): Replace mock implementation with real Faisal Swarm peer discovery
         // See: https://github.com/libp2p/specs for peer discovery specifications
 
@@ -172,37 +166,58 @@ impl ZksSurb {
             peer_id: Vec<u8>,
             role: HopRole,
             multiaddr: Vec<u8>,
-            can_relay: bool,
-            can_exit: bool,
-            bandwidth_tier: u8,
+            supports_relay: bool,
+            supports_onion_routing: bool,
         }
 
         let mut route_hops = Vec::new();
 
-        for i in 0..config.route_length {
-            // ⚠️ MOCK: Generate mock peer IDs for each hop
-            // In production, these MUST be real peers from Faisal Swarm discovery
-            let peer_id_bytes = format!("peer_{:0>44}", i).as_bytes().to_vec();
+        // Get discovered peers from the provider
+        let room_id = "default"; // TODO: Allow configuring room ID
+        let available_peers = peer_provider
+            .get_available_peers(room_id)
+            .await
+            .map_err(|e| SurbError::NetworkError(format!("Discovery failed: {}", e)))?;
 
+        if available_peers.len() < config.route_length {
+            return Err(SurbError::InvalidArgument(format!(
+                "Not enough peers available for {}-hop route (have {})",
+                config.route_length,
+                available_peers.len()
+            )));
+        }
+
+        // Simple random selection (could be improved with bandwidth-aware selection)
+        use rand::seq::SliceRandom;
+        let mut rng = rand::thread_rng();
+        let selected_peers: Vec<_> = available_peers
+            .choose_multiple(&mut rng, config.route_length)
+            .cloned()
+            .collect();
+
+        for (i, peer) in selected_peers.into_iter().enumerate() {
             let role = match i {
                 0 => HopRole::Guard,
                 n if n == config.route_length - 1 => HopRole::Exit,
                 _ => HopRole::Middle,
             };
 
-            // ⚠️ MOCK: localhost addresses provide NO anonymity
-            // In production, use real libp2p Multiaddrs from active nodes
-            let multiaddr_bytes = format!("/ip4/127.0.0.1/tcp/{}", 4000 + i)
-                .as_bytes()
-                .to_vec();
+            // Use real multiaddr (address) from discovered peer
+            let multiaddr_bytes = if !peer.addresses.is_empty() {
+                peer.addresses[0].as_bytes().to_vec()
+            } else {
+                // Fallback (should not happen in production)
+                format!("/ip4/127.0.0.1/tcp/{}", 4000 + i)
+                    .as_bytes()
+                    .to_vec()
+            };
 
             route_hops.push(RouteHop {
-                peer_id: peer_id_bytes,
+                peer_id: peer.peer_id.as_bytes().to_vec(),
                 role,
                 multiaddr: multiaddr_bytes,
-                can_relay: true,
-                can_exit: role == HopRole::Exit,
-                bandwidth_tier: 3, // Medium bandwidth tier
+                supports_relay: peer.capabilities.supports_relay,
+                supports_onion_routing: peer.capabilities.supports_onion_routing,
             });
         }
 
@@ -443,27 +458,30 @@ pub mod surb_utils {
     /// Generate multiple SURBs at once
     ///
     /// Returns a tuple of (public_surbs, private_data_list)
-    pub fn generate_surbs(
+    pub async fn generate_surbs(
         count: usize,
         recipient_pk: &[u8],
+        peer_provider: &dyn PeerProvider,
     ) -> Result<(Vec<ZksSurb>, Vec<PrivateSurbData>)> {
         let config = SurbConfig::default();
-        generate_surbs_with_config(count, recipient_pk, &config)
+        generate_surbs_with_config(count, recipient_pk, &config, peer_provider).await
     }
 
     /// Generate multiple SURBs with custom configuration
     ///
     /// Returns a tuple of (public_surbs, private_data_list)
-    pub fn generate_surbs_with_config(
+    pub async fn generate_surbs_with_config(
         count: usize,
         recipient_pk: &[u8],
         config: &SurbConfig,
+        peer_provider: &dyn PeerProvider,
     ) -> Result<(Vec<ZksSurb>, Vec<PrivateSurbData>)> {
         let mut public_surbs = Vec::with_capacity(count);
         let mut private_data_list = Vec::with_capacity(count);
 
         for _ in 0..count {
-            let (surb, private_data) = ZksSurb::create_with_config(recipient_pk, config)?;
+            let (surb, private_data) =
+                ZksSurb::create_with_config(recipient_pk, config, peer_provider).await?;
             public_surbs.push(surb);
             private_data_list.push(private_data);
         }
