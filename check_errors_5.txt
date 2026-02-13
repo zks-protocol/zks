@@ -1,0 +1,696 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   D:\ZKS Protocol_Research\ZKS Protocol\crates\zks_wasm\Cargo.toml
+workspace: D:\ZKS Protocol_Research\ZKS Protocol\Cargo.toml
+    Checking zks_wire v0.1.0 (D:\ZKS Protocol_Research\ZKS Protocol\crates\zks_wire)
+warning: unused import: `debug`
+  --> crates\zks_wire\src\faisal_swarm\onion_stream.rs:13:15
+   |
+13 | use tracing::{debug, error};
+   |               ^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::collections::HashMap`
+ --> crates\zks_wire\src\swarm_controller.rs:6:5
+  |
+6 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `warn`
+ --> crates\zks_wire\src\swarm_controller.rs:9:35
+  |
+9 | use tracing::{debug, error, info, warn};
+  |                                   ^^^^
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\entropy_swarm.rs:417:17
+    |
+417 |             let mut transport_lock = transport.write().await;
+    |                 ----^^^^^^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\entropy_swarm.rs:433:17
+    |
+433 |             let mut transport_lock = transport.write().await;
+    |                 ----^^^^^^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\entropy_swarm.rs:518:33
+    |
+518 | ...                   let mut transport_lock = transport.write().await;
+    |                           ----^^^^^^^^^^^^^^
+    |                           |
+    |                           help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\entropy_swarm.rs:576:25
+    |
+576 |                     let mut transport_lock = transport.write().await;
+    |                         ----^^^^^^^^^^^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\entropy_swarm.rs:639:21
+    |
+639 |                 let mut transport_lock = transport.write().await;
+    |                     ----^^^^^^^^^^^^^^
+    |                     |
+    |                     help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\entropy_swarm.rs:857:37
+    |
+857 | ...                   let mut transport_lock = transport.write().await;
+    |                           ----^^^^^^^^^^^^^^
+    |                           |
+    |                           help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\faisal_swarm\relay.rs:397:17
+    |
+397 |             let mut transport = transport_arc.write().await;
+    |                 ----^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\faisal_swarm\relay.rs:452:17
+    |
+452 |             let mut transport: tokio::sync::RwLockWriteGuard<NativeP2PTransport> =
+    |                 ----^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\faisal_swarm\relay.rs:474:17
+    |
+474 |             let mut transport = transport_arc.write().await;
+    |                 ----^^^^^^^^^
+    |                 |
+    |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> crates\zks_wire\src\swarm_controller.rs:97:14
+   |
+97 |         let (mut p2p_transport, mut driver) = NativeP2PTransport::new(None, None).map_err(|e| {
+   |              ----^^^^^^^^^^^^^
+   |              |
+   |              help: remove this `mut`
+
+warning: unused variable: `from_peer`
+   --> crates\zks_wire\src\faisal_swarm\relay.rs:145:9
+    |
+145 |         from_peer: PeerId,
+    |         ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_from_peer`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\faisal_swarm\mod.rs:259:13
+    |
+259 |         let mut cipher = self.backward_cipher.write().map_err(|e| {
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `faisal_request_timeout`
+   --> crates\zks_wire\src\p2p.rs:417:9
+    |
+417 |         faisal_request_timeout: Option<Duration>,
+    |         ^^^^^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_faisal_request_timeout`
+
+warning: unused variable: `request_id`
+   --> crates\zks_wire\src\p2p.rs:770:21
+    |
+770 |                     request_id,
+    |                     ^^^^^^^^^^ help: try ignoring the field: `request_id: _`
+
+warning: methods `create_extend_payload`, `encrypt_cell_for_hop`, and `encrypt_data_for_hop` are never used
+    --> crates\zks_wire\src\faisal_swarm\circuit_manager.rs:757:8
+     |
+ 167 | impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
+     | --------------------------------------------------- methods in this implementation
+...
+ 757 |     fn create_extend_payload(&self, next_hop: &SwarmHop) -> Result<Vec<u8>> {
+     |        ^^^^^^^^^^^^^^^^^^^^^
+...
+1172 |     fn encrypt_cell_for_hop(
+     |        ^^^^^^^^^^^^^^^^^^^^
+...
+1207 |     fn encrypt_data_for_hop(
+     |        ^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated function `generate_vernam_key` is never used
+   --> crates\zks_wire\src\faisal_swarm\encryption.rs:119:8
+    |
+ 39 | impl FaisalSwarmEncryption {
+    | -------------------------- associated function in this implementation
+...
+119 |     fn generate_vernam_key(hop_index: usize) -> Result<[u8; 32]> {
+    |        ^^^^^^^^^^^^^^^^^^^
+
+warning: fields `peer_id`, `multiaddr`, and `connected` are never read
+  --> crates\zks_wire\src\faisal_swarm\relay.rs:69:5
+   |
+68 | struct RelayConnection {
+   |        --------------- fields in this struct
+69 |     peer_id: PeerId,
+   |     ^^^^^^^
+70 |     multiaddr: Multiaddr,
+   |     ^^^^^^^^^
+71 |     connected: bool,
+   |     ^^^^^^^^^
+   |
+   = note: `RelayConnection` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `local_peer_id` is never read
+   --> crates\zks_wire\src\p2p.rs:369:5
+    |
+365 | pub struct NativeP2PDriver {
+    |            --------------- field in this struct
+...
+369 |     local_peer_id: PeerId,
+    |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:457:9
+    |
+457 |         room_id: String,
+    |         ^^^^^^^^^^^^^^^
+    |
+note: the lint level is defined here
+   --> crates\zks_wire\src\lib.rs:33:9
+    |
+ 33 | #![warn(missing_docs)]
+    |         ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:458:9
+    |
+458 |         peer_info: PeerInfo,
+    |         ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:461:13
+    |
+461 |     Leave { room_id: String },
+    |             ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:463:16
+    |
+463 |     Discover { room_id: String },
+    |                ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:465:13
+    |
+465 |     Peers { peers: Vec<PeerInfo> },
+    |             ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:467:22
+    |
+467 |     EntropyRequest { room_id: String, request_id: String },
+    |                      ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:467:39
+    |
+467 |     EntropyRequest { room_id: String, request_id: String },
+    |                                       ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:470:9
+    |
+470 |         request_id: String,
+    |         ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:471:9
+    |
+471 |         entropy: Vec<u8>,
+    |         ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:472:9
+    |
+472 |         signature: Vec<u8>,
+    |         ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:476:13
+    |
+476 |     Error { code: String, message: String },
+    |             ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:476:27
+    |
+476 |     Error { code: String, message: String },
+    |                           ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:478:19
+    |
+478 |     JoinSuccess { room_id: String, peer_count: usize },
+    |                   ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:478:36
+    |
+478 |     JoinSuccess { room_id: String, peer_count: usize },
+    |                                    ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:480:20
+    |
+480 |     LeaveSuccess { room_id: String },
+    |                    ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:482:18
+    |
+482 |     PeerJoined { peer_info: PeerInfo },
+    |                  ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\cloudflare_signaling.rs:484:16
+    |
+484 |     PeerLeft { peer_id: String },
+    |                ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:491:5
+    |
+491 |     ConnectionFailed(String),
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:494:5
+    |
+494 |     ConnectionTimeout,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:497:5
+    |
+497 |     ConnectionClosed,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:500:5
+    |
+500 |     SendFailed(String),
+    |     ^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:503:5
+    |
+503 |     SendTimeout,
+    |     ^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:506:5
+    |
+506 |     ConnectionError(String),
+    |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:509:5
+    |
+509 |     ReceiveFailed(String),
+    |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:512:5
+    |
+512 |     ReceiveTimeout,
+    |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:515:5
+    |
+515 |     ResponseTimeout,
+    |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:518:5
+    |
+518 |     SerializationFailed(String),
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:521:5
+    |
+521 |     DeserializationFailed(String),
+    |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:524:5
+    |
+524 |     ServerError(String),
+    |     ^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:527:5
+    |
+527 |     UnexpectedMessage(&'static str),
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:530:5
+    |
+530 |     InvalidEntropy(&'static str),
+    |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:533:5
+    |
+533 |     NoAvailableEndpoints,
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\zks_wire\src\cloudflare_signaling.rs:536:5
+    |
+536 |     HttpRequestError(String),
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\faisal_swarm\circuit_manager.rs:23:5
+   |
+23 |     pub max_attempts: u32,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\faisal_swarm\circuit_manager.rs:24:5
+   |
+24 |     pub initial_delay: Duration,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\faisal_swarm\circuit_manager.rs:25:5
+   |
+25 |     pub max_delay: Duration,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\faisal_swarm\circuit_manager.rs:26:5
+   |
+26 |     pub backoff_multiplier: f64,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\faisal_swarm\circuit_manager.rs:74:5
+   |
+74 |     pub total_circuits: usize,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\faisal_swarm\circuit_manager.rs:75:5
+   |
+75 |     pub ready_circuits: usize,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\faisal_swarm\circuit_manager.rs:76:5
+   |
+76 |     pub building_circuits: usize,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\faisal_swarm\circuit_manager.rs:77:5
+   |
+77 |     pub failed_circuits: usize,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\faisal_swarm\relay.rs:648:5
+    |
+648 |     pub active_circuits: usize,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\faisal_swarm\relay.rs:649:5
+    |
+649 |     pub active_connections: usize,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\zks_wire\src\faisal_swarm\relay.rs:650:5
+    |
+650 |     pub total_circuits: usize,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\p2p.rs:38:9
+   |
+38 |         channel: request_response::ResponseChannel<FaisalSwarmResponse>,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\p2p.rs:39:9
+   |
+39 |         response: FaisalSwarmResponse,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\p2p.rs:43:9
+   |
+43 |         addr: Multiaddr,
+   |         ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\p2p.rs:44:9
+   |
+44 |         response: oneshot::Sender<Result<(), NativeP2PError>>,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\p2p.rs:48:9
+   |
+48 |         peer_id: PeerId,
+   |         ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\p2p.rs:49:9
+   |
+49 |         request: FaisalSwarmRequest,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\zks_wire\src\p2p.rs:50:9
+   |
+50 |         response_sender: oneshot::Sender<Result<FaisalSwarmResponse, NativeP2PError>>,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\zks_wire\src\p2p.rs:52:5
+   |
+52 |     SubscribeEntropy,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\zks_wire\src\p2p.rs:53:5
+   |
+53 |     UnsubscribeEntropy,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\zks_wire\src\p2p.rs:54:5
+   |
+54 |     PublishEntropy(Vec<u8>),
+   |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\zks_wire\src\p2p.rs:55:5
+   |
+55 |     AddEntropyProvider(Vec<u8>, PeerId),
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\zks_wire\src\p2p.rs:62:5
+   |
+62 |     GetEntropyProviders(Vec<u8>, oneshot::Sender<Vec<PeerId>>),
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\zks_wire\src\p2p.rs:63:5
+   |
+63 |     AddKadBootstrap(PeerId, Multiaddr),
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\zks_wire\src\p2p.rs:64:5
+   |
+64 |     BootstrapKad(oneshot::Sender<Result<(), NativeP2PError>>),
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\zks_wire\src\p2p.rs:570:5
+    |
+570 | /     pub fn set_faisal_request_handler<F>(&mut self, handler: F)
+571 | |     where
+572 | |         F: Fn(PeerId, FaisalSwarmRequest) -> BoxFuture<'static, FaisalSwarmResponse>
+573 | |             + Send
+574 | |             + Sync
+575 | |             + 'static,
+    | |______________________^
+
+warning: missing documentation for a method
+   --> crates\zks_wire\src\p2p.rs:580:5
+    |
+580 | /     pub fn set_entropy_message_sender(
+581 | |         &mut self,
+582 | |         sender: mpsc::UnboundedSender<(EntropyGossipMessage, PeerId)>,
+583 | |     ) {
+    | |_____^
+
+warning: missing documentation for a method
+   --> crates\zks_wire\src\p2p.rs:587:5
+    |
+587 |     pub async fn listen_on(&mut self, addr: Multiaddr) -> Result<(), NativeP2PError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\zks_wire\src\p2p.rs:592:5
+    |
+592 |     pub async fn run(mut self) -> Result<(), NativeP2PError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `zks_wire` (lib) generated 83 warnings (run `cargo fix --lib -p zks_wire` to apply 17 suggestions)
+    Checking zks_cover v0.1.0 (D:\ZKS Protocol_Research\ZKS Protocol\crates\zks_cover)
+    Checking zks_proto v0.1.0 (D:\ZKS Protocol_Research\ZKS Protocol\crates\zks_proto)
+    Checking zks_surb v0.1.0 (D:\ZKS Protocol_Research\ZKS Protocol\crates\zks_surb)
+error[E0599]: no variant or associated item named `NetworkError` found for enum `SurbError` in the current scope
+   --> crates\zks_surb\src\surb.rs:181:37
+    |
+181 |             .map_err(|e| SurbError::NetworkError(format!("Discovery failed: {}", e)))?;
+    |                                     ^^^^^^^^^^^^ variant or associated item not found in `SurbError`
+    |
+   ::: crates\zks_surb\src\error.rs:5:1
+    |
+  5 | pub enum SurbError {
+    | ------------------ variant or associated item `NetworkError` not found for this enum
+
+error[E0599]: no variant or associated item named `InvalidArgument` found for enum `SurbError` in the current scope
+   --> crates\zks_surb\src\surb.rs:184:35
+    |
+184 |             return Err(SurbError::InvalidArgument(format!(
+    |                                   ^^^^^^^^^^^^^^^ variant or associated item not found in `SurbError`
+    |
+   ::: crates\zks_surb\src\error.rs:5:1
+    |
+  5 | pub enum SurbError {
+    | ------------------ variant or associated item `InvalidArgument` not found for this enum
+
+error[E0061]: this function takes 2 arguments but 1 argument was supplied
+  --> crates\zks_surb\src\surb_utils.rs:16:36
+   |
+16 |         let (surb, private_data) = ZksSurb::create(recipient_pk)?;
+   |                                    ^^^^^^^^^^^^^^^-------------- argument #2 of type `&dyn zks_wire::PeerProvider` is missing
+   |
+note: associated function defined here
+  --> crates\zks_surb\src\surb.rs:95:18
+   |
+95 |     pub async fn create(
+   |                  ^^^^^^
+96 |         recipient_pk: &[u8],
+97 |         peer_provider: &dyn PeerProvider,
+   |         --------------------------------
+help: provide the argument
+   |
+16 |         let (surb, private_data) = ZksSurb::create(recipient_pk, /* &dyn zks_wire::PeerProvider */)?;
+   |                                                                +++++++++++++++++++++++++++++++++++
+
+error[E0277]: the `?` operator can only be applied to values that implement `Try`
+  --> crates\zks_surb\src\surb_utils.rs:16:36
+   |
+16 |         let (surb, private_data) = ZksSurb::create(recipient_pk)?;
+   |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the `?` operator cannot be applied to type `impl Future<Output = std::result::Result<(surb::ZksSurb, surb::PrivateSurbData), SurbError>>`
+   |
+   = help: the trait `Try` is not implemented for `impl Future<Output = std::result::Result<(surb::ZksSurb, surb::PrivateSurbData), SurbError>>`
+note: this implements `Future` and its output type supports `?`, but the future cannot be awaited in a synchronous function
+  --> crates\zks_surb\src\surb_utils.rs:16:65
+   |
+ 8 | / pub fn generate_surbs(
+ 9 | |     count: usize,
+10 | |     recipient_pk: &[u8],
+11 | | ) -> Result<(Vec<ZksSurb>, Vec<crate::surb::PrivateSurbData>)> {
+   | |______________________________________________________________- this is not `async`
+...
+16 |           let (surb, private_data) = ZksSurb::create(recipient_pk)?;
+   |                                                                   ^
+
+error[E0061]: this function takes 3 arguments but 2 arguments were supplied
+   --> crates\zks_surb\src\surb_utils.rs:36:36
+    |
+ 36 |         let (surb, private_data) = ZksSurb::create_with_config(recipient_pk, config)?;
+    |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^---------------------- argument #3 of type `&dyn zks_wire::PeerProvider` is missing
+    |
+note: associated function defined here
+   --> crates\zks_surb\src\surb.rs:106:18
+    |
+106 |     pub async fn create_with_config(
+    |                  ^^^^^^^^^^^^^^^^^^
+...
+109 |         peer_provider: &dyn PeerProvider,
+    |         --------------------------------
+help: provide the argument
+    |
+ 36 |         let (surb, private_data) = ZksSurb::create_with_config(recipient_pk, config, /* &dyn zks_wire::PeerProvider */)?;
+    |                                                                                    +++++++++++++++++++++++++++++++++++
+
+error[E0277]: the `?` operator can only be applied to values that implement `Try`
+  --> crates\zks_surb\src\surb_utils.rs:36:36
+   |
+36 |         let (surb, private_data) = ZksSurb::create_with_config(recipient_pk, config)?;
+   |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the `?` operator cannot be applied to type `impl Future<Output = std::result::Result<(surb::ZksSurb, surb::PrivateSurbData), SurbError>>`
+   |
+   = help: the trait `Try` is not implemented for `impl Future<Output = std::result::Result<(surb::ZksSurb, surb::PrivateSurbData), SurbError>>`
+note: this implements `Future` and its output type supports `?`, but the future cannot be awaited in a synchronous function
+  --> crates\zks_surb\src\surb_utils.rs:36:85
+   |
+27 | / pub fn generate_surbs_with_config(
+28 | |     count: usize,
+29 | |     recipient_pk: &[u8],
+30 | |     config: &crate::config::SurbConfig,
+31 | | ) -> Result<(Vec<ZksSurb>, Vec<crate::surb::PrivateSurbData>)> {
+   | |______________________________________________________________- this is not `async`
+...
+36 |           let (surb, private_data) = ZksSurb::create_with_config(recipient_pk, config)?;
+   |                                                                                       ^
+
+warning: unused import: `rand::Rng`
+  --> crates\zks_cover\src\mixing_delay.rs:46:5
+   |
+46 | use rand::Rng;
+   |     ^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `config` is never read
+  --> crates\zks_cover\src\transport.rs:21:5
+   |
+20 | pub struct CoverTransport {
+   |            -------------- field in this struct
+21 |     config: CoverConfig,
+   |     ^^^^^^
+   |
+   = note: `CoverTransport` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+Some errors have detailed explanations: E0061, E0277, E0599.
+For more information about an error, try `rustc --explain E0061`.
+error: could not compile `zks_surb` (lib) due to 6 previous errors
+warning: build failed, waiting for other jobs to finish...
+warning: `zks_cover` (lib) generated 2 warnings

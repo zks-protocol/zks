@@ -1,0 +1,6 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   D:\ZKS Protocol_Research\ZKS Protocol\crates\zks_wasm\Cargo.toml
+workspace: D:\ZKS Protocol_Research\ZKS Protocol\Cargo.toml
+error: package ID specification `zks_sdk` did not match any packages
+
+help: a package with a similar name exists: `zks_surb`
