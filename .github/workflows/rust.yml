@@ -17,6 +17,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Install System Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libssl-dev pkg-config build-essential
+
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
       with:
@@ -47,13 +52,17 @@ jobs:
     - name: Build protocol-test (release)
       run: cargo build --package protocol-test --release --verbose
 
+    - name: Prepare Binaries for Upload
+      run: |
+        mkdir -p dist
+        cp target/release/zks-node dist/
+        cp target/release/signaling-server dist/
+        cp target/release/zks-test dist/
+        cp target/release/protocol-test dist/
+
     - name: Upload binaries
       uses: actions/upload-artifact@v4
       with:
         name: zks-release-bundle-linux
-        path: |
-          target/release/zks-node
-          target/release/signaling-server
-          target/release/zks-test
-          target/release/protocol-test
+        path: dist/
         retention-days: 30
