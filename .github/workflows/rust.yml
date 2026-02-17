@@ -70,14 +70,26 @@ jobs:
         path: dist/
         retention-days: 30
 
-    # --- Release job: creates a GitHub Release on tag push or manual trigger ---
+    - name: Set Release Tag
+      if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+      id: release_tag
+      run: |
+        if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          echo "name=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "tag=build-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "name=Build #${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=true" >> "$GITHUB_OUTPUT"
+        fi
 
     - name: Create GitHub Release
       if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('build-{0}', github.run_number) }}
-        name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('Build #{0}', github.run_number) }}
+        tag_name: ${{ steps.release_tag.outputs.tag }}
+        name: ${{ steps.release_tag.outputs.name }}
         body: |
           ## ZKS Protocol Release
 
@@ -88,21 +100,14 @@ jobs:
           - `protocol-test` — Protocol integration tests
 
           **Deploy to VPS:**
-          ```bash
-          # Download and extract
-          wget https://github.com/${{ github.repository }}/releases/download/${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('build-{0}', github.run_number) }}/zks-linux-x86_64.tar.gz
+          Download `zks-linux-x86_64.tar.gz`, extract, and run:
+          ```
           tar xzf zks-linux-x86_64.tar.gz
           chmod +x zks-node zks-test
-
-          # Run
-          RUST_LOG=debug ./zks-node \
-              --bind-addr 0.0.0.0:4001 \
-              --signaling-url wss://zks-protocol-signaling.md-wasif-faisal.workers.dev \
-              --network zks-test-v1 \
-              --verbose
+          RUST_LOG=debug ./zks-node --bind-addr 0.0.0.0:4001 --signaling-url wss://zks-protocol-signaling.md-wasif-faisal.workers.dev --network zks-test-v1 --verbose
           ```
         draft: false
-        prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        prerelease: ${{ steps.release_tag.outputs.prerelease }}
         files: |
           zks-linux-x86_64.tar.gz
           dist/zks-node
