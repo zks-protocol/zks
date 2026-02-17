@@ -32,6 +32,39 @@ pub enum Platform {
     WebAssembly,
 }
 
+/// Configuration for SwarmController
+#[derive(Debug, Clone)]
+pub struct SwarmControllerConfig {
+    /// Default room ID for swarm operations
+    pub default_room_id: String,
+}
+
+impl Default for SwarmControllerConfig {
+    fn default() -> Self {
+        Self {
+            default_room_id: "default".to_string(),
+        }
+    }
+}
+
+impl SwarmControllerConfig {
+    /// Create a new configuration with custom room_id
+    pub fn new(default_room_id: impl Into<String>) -> Self {
+        Self {
+            default_room_id: default_room_id.into(),
+        }
+    }
+
+    /// Create configuration from environment variable
+    /// Reads ZKS_ROOM_ID env var, defaults to "default"
+    pub fn from_env() -> Self {
+        Self {
+            default_room_id: std::env::var("ZKS_ROOM_ID")
+                .unwrap_or_else(|_| "default".to_string()),
+        }
+    }
+}
+
 impl Platform {
     /// Detect the current platform at runtime
     pub fn detect() -> Self {
@@ -60,15 +93,26 @@ pub struct SwarmController<S: SignalingClientTrait> {
     /// Entropy Grid for high-quality entropy fetching
     entropy_grid: Arc<RwLock<Option<Arc<EntropyGrid>>>>,
 
+    /// Configuration for swarm operations
+    config: SwarmControllerConfig,
+
     is_connected: Arc<RwLock<bool>>,
     local_peer_id: Arc<RwLock<Option<String>>>,
 }
 
 impl<S: SignalingClientTrait + 'static> SwarmController<S> {
-    /// Create a new swarm controller
+    /// Create a new swarm controller with default configuration
     pub async fn new() -> Result<Self, SwarmControllerError> {
+        Self::with_config(SwarmControllerConfig::default()).await
+    }
+
+    /// Create a new swarm controller with custom configuration
+    pub async fn with_config(config: SwarmControllerConfig) -> Result<Self, SwarmControllerError> {
         let platform = Platform::detect();
-        info!("Initializing SwarmController for platform: {:?}", platform);
+        info!(
+            "Initializing SwarmController for platform: {:?}, room: {}",
+            platform, config.default_room_id
+        );
 
         Ok(Self {
             platform,
@@ -78,9 +122,15 @@ impl<S: SignalingClientTrait + 'static> SwarmController<S> {
             faisal_swarm_manager: Arc::new(RwLock::new(None)),
             relay_handler: Arc::new(RwLock::new(None)),
             entropy_grid: Arc::new(RwLock::new(None)),
+            config,
             is_connected: Arc::new(RwLock::new(false)),
             local_peer_id: Arc::new(RwLock::new(None)),
         })
+    }
+
+    /// Get the configuration
+    pub fn config(&self) -> &SwarmControllerConfig {
+        &self.config
     }
 
     /// Get the current platform
@@ -336,8 +386,8 @@ impl<S: SignalingClientTrait + 'static> SwarmController<S> {
             )));
         }
 
-        // Use Faisal Swarm Manager to build the circuit
-        let room_id = "default"; // TODO: Get from configuration
+        // Use Faisal Swarm Manager to build the circuit with configured room_id
+        let room_id = &self.config.default_room_id;
 
         if let Some(ref faisal_manager) = *self.faisal_swarm_manager.read().await {
             info!(

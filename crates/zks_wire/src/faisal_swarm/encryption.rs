@@ -75,9 +75,48 @@ impl FaisalSwarmEncryption {
         })
     }
 
+    /// Add a new encryption layer incrementally without reconstructing existing ciphers
+    ///
+    /// This is more efficient than reconstructing the entire encryption manager
+    /// when extending a circuit by one hop.
+    ///
+    /// # Arguments
+    /// * `shared_secret` - The new shared secret negotiated with the next hop
+    ///
+    /// # Returns
+    /// Number of layers after adding the new one
+    #[must_use]
+    pub fn add_layer(&mut self, shared_secret: [u8; 32]) -> Result<usize> {
+        // Forward cipher (Initiator role: true)
+        let mut f_cipher = WasifVernam::new(shared_secret).map_err(|e| {
+            SwarmError::Encryption(format!("Forward cipher creation failed: {:?}", e))
+        })?;
+        f_cipher.derive_base_iv(&shared_secret, true);
+        f_cipher.enable_sequenced_vernam(shared_secret);
+        self.forward_ciphers.push(f_cipher);
+
+        // Backward cipher (Responder role: false)
+        let mut b_cipher = WasifVernam::new(shared_secret).map_err(|e| {
+            SwarmError::Encryption(format!("Backward cipher creation failed: {:?}", e))
+        })?;
+        b_cipher.derive_base_iv(&shared_secret, false);
+        b_cipher.enable_sequenced_vernam(shared_secret);
+        self.backward_ciphers.push(b_cipher);
+
+        self.anti_replay.push(zks_crypt::anti_replay::BitmapAntiReplay::new());
+        self.counters.push(std::sync::atomic::AtomicU64::new(0));
+
+        Ok(self.forward_ciphers.len())
+    }
+
+    /// Get the number of encryption layers
+    #[must_use]
+    pub fn layer_count(&self) -> usize {
+        self.forward_ciphers.len()
+    }
+
     /// Create a new encryption manager (legacy - for tests only)
     #[cfg(test)]
-    #[must_use]
     #[must_use]
     pub fn new(hops: usize) -> Result<Self> {
         let mut forward_ciphers = Vec::with_capacity(hops);

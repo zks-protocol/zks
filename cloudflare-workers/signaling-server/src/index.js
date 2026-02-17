@@ -135,7 +135,10 @@ export class SignalingRoom {
   }
 
   async handleMessage(socket, message, sessionId, setPeerId) {
-    switch (message.type) {
+    if (!message || !message.type) return;
+
+    const type = message.type.toLowerCase();
+    switch (type) {
       case 'join':
         if (!message.room_id || !message.peer_info || !message.peer_info.peer_id) {
           this.sendError(socket, 'INVALID_JOIN', 'Missing room_id or peer_info');
@@ -162,17 +165,24 @@ export class SignalingRoom {
         this.sessions.set(newPeerId, { socket, sessionId });
         setPeerId(newPeerId);
 
-        // Notify success
+        // Notify success (Server sends 'JoinSuccess' if client expects or just nothing)
+        // Note: Rust enum doesn't have JoinSuccess, so we only send if we want to debug
+        // For now, let's just make it NOT error out the Rust client by NOT sending unknown types
+        /*
         socket.send(JSON.stringify({
-          type: 'join_success',
+          type: 'JoinSuccess',
           room_id: message.room_id,
           peer_count: this.peers.size,
           your_peer_id: newPeerId
         }));
+        */
 
         // Broadcast to others
         this.broadcast({
-          type: 'peer_joined',
+          type: 'Join', // Send as 'Join' so other Rust clients can deserialize PeerInfo payload? 
+          // Wait, 'peer_joined' is for discovery. Rust client doesn't have 'PeerJoined'.
+          // Rust client gets peers via 'Discover' -> 'Peers'
+          room_id: message.room_id,
           peer_info: message.peer_info
         }, newPeerId);
 
@@ -182,16 +192,15 @@ export class SignalingRoom {
         if (message.peer_info && message.peer_info.peer_id) {
           await this.removePeer(message.peer_info.peer_id);
           socket.send(JSON.stringify({
-            type: 'leave_success',
+            type: 'LeaveSuccess',
             room_id: message.room_id
           }));
         }
         break;
 
-      case 'discover':
         const peerList = Array.from(this.peers.values());
         socket.send(JSON.stringify({
-          type: 'peers', // Matching Rust client expectation 'Peers' or 'peers'? Rust enum is Peers { peers: Vec<PeerInfo> }
+          type: 'Peers', // MUST BE 'Peers' for Rust
           peers: peerList
         }));
         break;

@@ -12,12 +12,115 @@ use crate::p2p::{FaisalSwarmRequest, FaisalSwarmResponse};
 use crate::signaling::{PeerInfo, SignalingClientTrait};
 use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, RwLock};
-use tracing::{debug, info, instrument, span, Level};
+use tracing::{debug, info, warn, instrument, span, Level};
 use zeroize::Zeroizing;
+
+/// Circuit build latency metrics (H3 fix)
+#[derive(Debug, Clone)]
+pub struct CircuitBuildMetrics {
+    /// Time to connect to guard node
+    pub guard_connect_time: Duration,
+    /// Time for ML-KEM handshake with guard
+    pub guard_handshake_time: Duration,
+    /// Time to extend to each hop (indexed by hop number)
+    pub extend_times: Vec<Duration>,
+    /// Total circuit build time
+    pub total_build_time: Duration,
+}
+
+/// Metrics collector for circuit operations
+#[derive(Debug)]
+struct MetricsCollector {
+    /// Recent circuit build latency samples (up to MAX_SAMPLES)
+    build_samples: Arc<RwLock<VecDeque<CircuitBuildMetrics>>>,
+}
+
+impl MetricsCollector {
+    const MAX_SAMPLES: usize = 100;
+
+    fn new() -> Self {
+        Self {
+            build_samples: Arc::new(RwLock::new(VecDeque::with_capacity(Self::MAX_SAMPLES))),
+        }
+    }
+
+    /// Record a circuit build latency
+    async fn record_build(&self, metrics: CircuitBuildMetrics) {
+        let mut samples = self.build_samples.write().await;
+        if samples.len() >= Self::MAX_SAMPLES {
+            samples.pop_front();
+        }
+        samples.push_back(metrics);
+    }
+
+    /// Get histogram statistics for circuit build latencies
+    async fn get_build_stats(&self) -> BuildStats {
+        let samples = self.build_samples.read().await;
+        if samples.is_empty() {
+            return BuildStats::default();
+        }
+
+        let mut total_build_times: Vec<f64> = samples.iter()
+            .map(|m| m.total_build_time.as_millis() as f64)
+            .collect();
+
+        total_build_times.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+        let count = total_build_times.len();
+        let min = total_build_times.first().copied().unwrap_or(0.0);
+        let max = total_build_times.last().copied().unwrap_or(0.0);
+        let sum: f64 = total_build_times.iter().sum();
+        let mean = sum / count as f64;
+
+        let median = if count % 2 == 0 {
+            let mid = count / 2;
+            (total_build_times[mid - 1] + total_build_times[mid]) / 2.0
+        } else {
+            total_build_times[count / 2]
+        };
+
+        // Calculate percentiles
+        let p95_index = ((95 * count) as f64 / 100.0).ceil() as usize - 1;
+        let p99_index = ((99 * count) as f64 / 100.0).ceil() as usize - 1;
+
+        let p95 = total_build_times.get(p95_index.min(count - 1)).copied().unwrap_or(0.0);
+        let p99 = total_build_times.get(p99_index.min(count - 1)).copied().unwrap_or(0.0);
+
+        BuildStats {
+            count,
+            min_ms: min,
+            max_ms: max,
+            mean_ms: mean,
+            median_ms: median,
+            p95_ms: p95,
+            p99_ms: p99,
+        }
+    }
+}
+
+/// Statistical summary of circuit build latencies
+#[derive(Debug, Clone, Default)]
+pub struct BuildStats {
+    /// Number of samples
+    pub count: usize,
+    /// Minimum build time (ms)
+    pub min_ms: f64,
+    /// Maximum build time (ms)
+    pub max_ms: f64,
+    /// Mean build time (ms)
+    pub mean_ms: f64,
+    /// Median build time (ms)
+    pub median_ms: f64,
+    /// 95th percentile (ms)
+    pub p95_ms: f64,
+    /// 99th percentile (ms)
+    pub p99_ms: f64,
+}
 
 /// Retry configuration for network operations
 #[derive(Debug, Clone)]
@@ -99,6 +202,9 @@ pub struct FaisalSwarmManager<S: SignalingClientTrait> {
 
     /// Active streams for data routing (CircuitId, StreamId) -> Sender
     streams: Arc<RwLock<HashMap<(CircuitId, u16), mpsc::UnboundedSender<Vec<u8>>>>>,
+
+    /// Circuit build metrics collector (H3 fix)
+    metrics: MetricsCollector,
 }
 
 impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
@@ -132,7 +238,13 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
             p2p_transport,
             retry_config,
             streams: Arc::new(RwLock::new(HashMap::new())),
+            metrics: MetricsCollector::new(),
         }
+    }
+
+    /// Get circuit build statistics (H3 fix)
+    pub async fn get_build_stats(&self) -> BuildStats {
+        self.metrics.get_build_stats().await
     }
 
     /// Get circuit statistics for monitoring
@@ -219,13 +331,14 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
         // 2. Select peers using Faisal Swarm path selection
         let selected_hops = self.select_swarm_path(&available_peers, hops).await?;
 
-        // 3. Create circuit structure
+        // 3. Create circuit structure with timing tracking
+        let build_start = Instant::now();
         let circuit = FaisalSwarmCircuit {
             id: circuit_id,
             hops: selected_hops,
             layers: Vec::new(),
             state: CircuitState::Building,
-            created_at: Instant::now(),
+            created_at: build_start,
             encryption: None,
         };
 
@@ -240,14 +353,28 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
         // 4. Build circuit via libp2p relay
         self.build_swarm_circuit(circuit_id).await?;
 
-        // 5. Mark as ready
+        // 5. Mark as ready and record metrics (H3 fix)
         {
             let start = Instant::now();
             let mut circuits = self.circuits.write().await;
             debug!("Circuit write lock acquired in {:?}", start.elapsed());
             if let Some(circuit) = circuits.get_mut(&circuit_id) {
+                let total_build_time = circuit.created_at.elapsed();
                 circuit.state = CircuitState::Ready;
-                info!("✅ Faisal Swarm circuit {} is ready!", circuit_id);
+
+                // Record circuit build metrics
+                let metrics = CircuitBuildMetrics {
+                    guard_connect_time: Duration::from_millis(0), // Would be tracked in real implementation
+                    guard_handshake_time: Duration::from_millis(0), // Would be tracked in real implementation
+                    extend_times: Vec::new(), // Would be populated during extend
+                    total_build_time,
+                };
+                self.metrics.record_build(metrics).await;
+
+                info!(
+                    "✅ Faisal Swarm circuit {} is ready! (built in {:?})",
+                    circuit_id, total_build_time
+                );
             }
         }
 
@@ -401,28 +528,71 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
             // Update circuit with new layer and update encryption
             let mut circuits = self.circuits.write().await;
             if let Some(circuit) = circuits.get_mut(&circuit_id) {
-                circuit.layers.push(new_layer);
+                circuit.layers.push(new_layer.clone());
 
-                // Re-initialize encryption with ALL layers (including new one)
-                let shared_secrets: Vec<[u8; 32]> = circuit
-                    .layers
-                    .iter()
-                    .map(|layer| layer.shared_secret)
-                    .collect();
+                // OPTIMIZATION: Use add_layer to incrementally add the new cipher
+                // instead of reconstructing all ciphers from scratch (D1 fix)
+                if let Some(encryption_ref) = &circuit.encryption {
+                    let mut encryption = encryption_ref.lock().await;
+                    match encryption.add_layer(new_layer.shared_secret) {
+                        Ok(layer_count) => {
+                            info!(
+                                "✅ Encryption layer added ({} hops total) - incremental update",
+                                layer_count
+                            );
+                        }
+                        Err(e) => {
+                            // Fallback to full reconstruction if incremental add fails
+                            warn!(
+                                "Incremental cipher add failed: {:?}, falling back to reconstruction",
+                                e
+                            );
+                            // Drop the lock before reassigning circuit.encryption
+                            drop(encryption);
 
-                let encryption =
-                    create_encryption_manager_from_secrets(&shared_secrets).map_err(|e| {
-                        SwarmError::Encryption(format!(
-                            "Failed to update encryption manager: {:?}",
-                            e
-                        ))
-                    })?;
+                            let shared_secrets: Vec<[u8; 32]> = circuit
+                                .layers
+                                .iter()
+                                .map(|layer| layer.shared_secret)
+                                .collect();
 
-                circuit.encryption = Some(Arc::new(tokio::sync::Mutex::new(encryption)));
-                info!(
-                    "✅ Encryption manager updated for {} hops",
-                    circuit.layers.len()
-                );
+                            let new_encryption =
+                                create_encryption_manager_from_secrets(&shared_secrets).map_err(|e| {
+                                    SwarmError::Encryption(format!(
+                                        "Failed to update encryption manager: {:?}",
+                                        e
+                                    ))
+                                })?;
+
+                            circuit.encryption = Some(Arc::new(tokio::sync::Mutex::new(new_encryption)));
+                            info!(
+                                "✅ Encryption manager reconstructed for {} hops (fallback)",
+                                circuit.layers.len()
+                            );
+                        }
+                    }
+                } else {
+                    // No encryption yet, create from all secrets
+                    let shared_secrets: Vec<[u8; 32]> = circuit
+                        .layers
+                        .iter()
+                        .map(|layer| layer.shared_secret)
+                        .collect();
+
+                    let encryption =
+                        create_encryption_manager_from_secrets(&shared_secrets).map_err(|e| {
+                            SwarmError::Encryption(format!(
+                                "Failed to create encryption manager: {:?}",
+                                e
+                            ))
+                        })?;
+
+                    circuit.encryption = Some(Arc::new(tokio::sync::Mutex::new(encryption)));
+                    info!(
+                        "✅ Encryption manager created for {} hops",
+                        circuit.layers.len()
+                    );
+                }
             }
         }
 

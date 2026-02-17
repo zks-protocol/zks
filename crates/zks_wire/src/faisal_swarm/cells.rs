@@ -100,6 +100,21 @@ pub struct CellHeader {
 }
 
 impl CellHeader {
+    /// Clamp delay_ms to maximum allowed value
+    ///
+    /// This is a helper method to ensure delay never exceeds MAX_DELAY_MS.
+    /// Used internally during serialization and validation.
+    fn clamp_delay(delay_ms: u16) -> u16 {
+        delay_ms.min(MAX_DELAY_MS)
+    }
+
+    /// Validate and return delay_ms
+    ///
+    /// Ensures the delay value is within valid bounds.
+    pub fn validate_delay(delay_ms: u16) -> Result<u16, CellError> {
+        Ok(Self::clamp_delay(delay_ms))
+    }
+
     /// Create a new cell header with no delay
     pub fn new(circuit_id: u32, command: CellCommand, payload_len: u16) -> Self {
         Self {
@@ -166,7 +181,7 @@ impl CellHeader {
         buf.put_u8(self.command as u8);
         buf.put_u16(self.payload_len);
         buf.put_u8(self.flags);
-        buf.put_u16(self.delay_ms);
+        buf.put_u16(self.delay_ms.min(MAX_DELAY_MS));
 
         bytes
     }
