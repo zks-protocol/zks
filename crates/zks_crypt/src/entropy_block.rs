@@ -328,15 +328,15 @@ mod tests {
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
 
-        block.add_round(round1).unwrap();
-        block.add_round(round2).unwrap();
+        block.add_round(round1).expect("Failed to add round1");
+        block.add_round(round2).expect("Failed to add round2");
 
         // Test serialization
-        let bytes = block.to_bytes().unwrap();
+        let bytes = block.to_bytes().expect("Failed to serialize block");
         assert!(bytes.len() > 0);
 
         // Test deserialization
-        let deserialized = EntropyBlock::from_bytes(&bytes).unwrap();
+        let deserialized = EntropyBlock::from_bytes(&bytes).expect("Failed to deserialize block");
         assert_eq!(deserialized.start_round, block.start_round);
         assert_eq!(deserialized.end_round, block.end_round);
         assert_eq!(deserialized.len(), block.len());
@@ -351,8 +351,8 @@ mod tests {
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
 
-        block.add_round(round1).unwrap();
-        block.add_round(round2).unwrap();
+        block.add_round(round1).expect("Failed to add round1");
+        block.add_round(round2).expect("Failed to add round2");
 
         let test_path = "test_entropy_block.bin";
 
@@ -360,13 +360,13 @@ mod tests {
         assert!(block.save_to_file(test_path).is_ok());
 
         // Test load
-        let loaded = EntropyBlock::load_from_file(test_path).unwrap();
+        let loaded = EntropyBlock::load_from_file(test_path).expect("Failed to load block from file");
         assert_eq!(loaded.start_round, block.start_round);
         assert_eq!(loaded.end_round, block.end_round);
         assert_eq!(loaded.len(), block.len());
 
         // Cleanup
-        std::fs::remove_file(test_path).unwrap();
+        std::fs::remove_file(test_path).expect("Failed to remove test file");
     }
 
     #[test]
@@ -376,9 +376,9 @@ mod tests {
         let round2 = create_test_round(1001);
         let round3 = create_test_round(1002);
 
-        block.add_round(round1.clone()).unwrap();
-        block.add_round(round2.clone()).unwrap();
-        block.add_round(round3.clone()).unwrap();
+        block.add_round(round1.clone()).expect("Failed to add round1");
+        block.add_round(round2.clone()).expect("Failed to add round2");
+        block.add_round(round3.clone()).expect("Failed to add round3");
 
         assert!(block.get_round(1000).is_some());
         assert!(block.get_round(1001).is_some());
@@ -393,8 +393,8 @@ mod tests {
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
 
-        block.add_round(round1).unwrap();
-        block.add_round(round2).unwrap();
+        block.add_round(round1).expect("Failed to add round1");
+        block.add_round(round2).expect("Failed to add round2");
 
         assert!(block.verify_integrity());
 
@@ -415,7 +415,7 @@ mod tests {
         let mut block = EntropyBlock::new(1000);
         let round = create_test_round(1000);
 
-        block.add_round(round).unwrap();
+        block.add_round(round).expect("Failed to add round");
         assert_eq!(block.len(), 1);
         assert_eq!(block.start_round, 1000);
         assert_eq!(block.end_round, 1000);
@@ -429,7 +429,7 @@ mod tests {
         // Add 100 rounds
         for i in 1..=100 {
             let round = create_test_round(i);
-            block.add_round(round).unwrap();
+            block.add_round(round).expect("Failed to add round");
         }
 
         assert_eq!(block.len(), 100);
@@ -438,8 +438,8 @@ mod tests {
         assert!(block.verify_integrity());
 
         // Test serialization of large block
-        let bytes = block.to_bytes().unwrap();
-        let deserialized = EntropyBlock::from_bytes(&bytes).unwrap();
+        let bytes = block.to_bytes().expect("Failed to serialize large block");
+        let deserialized = EntropyBlock::from_bytes(&bytes).expect("Failed to deserialize large block");
         assert!(deserialized.verify_integrity());
         assert_eq!(deserialized.len(), 100);
     }
@@ -452,11 +452,11 @@ mod tests {
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
 
-        block1.add_round(round1.clone()).unwrap();
-        block1.add_round(round2.clone()).unwrap();
+        block1.add_round(round1.clone()).expect("Failed to add round1 to block1");
+        block1.add_round(round2.clone()).expect("Failed to add round2 to block1");
 
-        block2.add_round(round1).unwrap();
-        block2.add_round(round2).unwrap();
+        block2.add_round(round1).expect("Failed to add round1 to block2");
+        block2.add_round(round2).expect("Failed to add round2 to block2");
 
         // Blocks with same rounds should have same hash
         assert_eq!(block1.block_hash, block2.block_hash);
@@ -468,8 +468,8 @@ mod tests {
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
 
-        block.add_round(round1).unwrap();
-        block.add_round(round2).unwrap();
+        block.add_round(round1).expect("Failed to add round1");
+        block.add_round(round2).expect("Failed to add round2");
 
         assert!(block.contains_round(1000));
         assert!(block.contains_round(1001));
@@ -485,7 +485,7 @@ mod tests {
             create_test_round(1002),
         ];
 
-        let block = EntropyBlock::from_rounds(rounds).unwrap();
+        let block = EntropyBlock::from_rounds(rounds).expect("Failed to create block from rounds");
         assert_eq!(block.len(), 3);
         assert_eq!(block.start_round, 1000);
         assert_eq!(block.end_round, 1002);
@@ -503,12 +503,12 @@ mod tests {
     fn test_serialized_size() {
         let mut block = EntropyBlock::new(1000);
         let round = create_test_round(1000);
-        block.add_round(round).unwrap();
+        block.add_round(round).expect("Failed to add round");
 
-        let size = block.serialized_size().unwrap();
+        let size = block.serialized_size().expect("Failed to get serialized size");
         assert!(size > 0);
 
-        let bytes = block.to_bytes().unwrap();
+        let bytes = block.to_bytes().expect("Failed to serialize block");
         assert_eq!(size, bytes.len());
     }
 
@@ -530,8 +530,8 @@ mod tests {
         let round1 = create_test_round(1000);
         let round2 = create_test_round(1001);
 
-        block.add_round(round1).unwrap();
-        block.add_round(round2).unwrap();
+        block.add_round(round1).expect("Failed to add round1");
+        block.add_round(round2).expect("Failed to add round2");
 
         // Test various corruption scenarios
         let mut corrupted = block.clone();

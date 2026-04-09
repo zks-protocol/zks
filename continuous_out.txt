@@ -1,0 +1,676 @@
+[2m2026-02-20T05:33:43.803090Z[0m [32m INFO[0m Starting ZKS Protocol Test Client
+[2m2026-02-20T05:33:43.803267Z[0m [32m INFO[0m Initializing SwarmController for platform: Native, room: zks-test-v1
+[2m2026-02-20T05:33:43.803311Z[0m [32m INFO[0m Local Peer ID: client-d498c0cd-6184-4215-a0f9-4fcd4b6d226f
+[2m2026-02-20T05:33:43.803320Z[0m [32m INFO[0m Connecting to signaling server: wss://zks-protocol-signaling.md-wasif-faisal.workers.dev
+[2m2026-02-20T05:33:43.803334Z[0m [32m INFO[0m Connecting to signaling server at wss://zks-protocol-signaling.md-wasif-faisal.workers.dev
+[2m2026-02-20T05:33:44.216288Z[0m [32m INFO[0m Connected to signaling server
+[2m2026-02-20T05:33:44.216447Z[0m [32m INFO[0m Creating native P2P transport with peer ID: 12D3KooWECyHnNun1TYj9hP1YStvnCeWB7buLh9Fnv9cBx4Htu1x
+[2m2026-02-20T05:33:44.224748Z[0m [32m INFO[0m [3mlocal_peer_id[0m[2m=[0m12D3KooWECyHnNun1TYj9hP1YStvnCeWB7buLh9Fnv9cBx4Htu1x
+[2m2026-02-20T05:33:44.225082Z[0m [32m INFO[0m 🌐 Global HTTP client initialized for drand connection pooling
+[2m2026-02-20T05:33:44.225197Z[0m [32m INFO[0m Starting native P2P transport event loop
+[2m2026-02-20T05:33:44.226526Z[0m [32m INFO[0m Successfully connected to swarm via signaling server
+[2m2026-02-20T05:33:44.227851Z[0m [32m INFO[0m Listening on /ip4/192.168.56.1/tcp/64685
+[2m2026-02-20T05:33:44.227890Z[0m [32m INFO[0m Listening on /ip4/192.168.0.107/tcp/64685
+[2m2026-02-20T05:33:44.227899Z[0m [32m INFO[0m Listening on /ip4/127.0.0.1/tcp/64685
+[2m2026-02-20T05:33:45.241005Z[0m [32m INFO[0m Joined swarm room: zks-test-v1
+[2m2026-02-20T05:33:45.241056Z[0m [32m INFO[0m Joined room: zks-test-v1
+[2m2026-02-20T05:33:45.241060Z[0m [32m INFO[0m 🔍 Discovering peers in room 'zks-test-v1'...
+[2m2026-02-20T05:33:45.561476Z[0m [32m INFO[0m ✅ Initial discovery: 2 peers in room 'zks-test-v1'
+[2m2026-02-20T05:33:45.561507Z[0m [32m INFO[0m   - Peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o [RELAY, ONION] (addresses: ["/ip4/192.168.56.1/tcp/4001", "/ip4/192.168.0.107/tcp/4001", "/ip4/127.0.0.1/tcp/4001"])
+[2m2026-02-20T05:33:45.561514Z[0m [32m INFO[0m   - Peer: 12D3KooWECyHnNun1TYj9hP1YStvnCeWB7buLh9Fnv9cBx4Htu1x [RELAY] (addresses: [])
+[2m2026-02-20T05:33:45.561520Z[0m [32m INFO[0m Running continuous test mode:
+[2m2026-02-20T05:33:45.561522Z[0m [32m INFO[0m   Hops: 1
+[2m2026-02-20T05:33:45.561525Z[0m [32m INFO[0m   Circuits: 10
+[2m2026-02-20T05:33:45.561528Z[0m [32m INFO[0m   Messages per circuit: 10
+[2m2026-02-20T05:33:45.561531Z[0m [32m INFO[0m   Message size: 512 bytes
+[2m2026-02-20T05:33:45.561533Z[0m [32m INFO[0m   Message delay: 100 ms
+[2m2026-02-20T05:33:45.561538Z[0m [32m INFO[0m Starting continuous test...
+[2m2026-02-20T05:33:45.882173Z[0m [32m INFO[0m Building 1-hop Faisal Swarm circuit to 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o via room zks-test-v1
+[2m2026-02-20T05:33:45.882235Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔧 Creating 1-hop Faisal Swarm circuit in room zks-test-v1
+[2m2026-02-20T05:33:45.882250Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔍 Discovering Faisal Swarm peers in room zks-test-v1
+[2m2026-02-20T05:33:46.201779Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Found 2 relay-capable peers in swarm
+[2m2026-02-20T05:33:46.201830Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 📍 Faisal Swarm path selected:
+[2m2026-02-20T05:33:46.201834Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   Hop 1: Guard - 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:46.201848Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔗 Building Faisal Swarm circuit 2147483649
+[2m2026-02-20T05:33:46.201851Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   → Connecting to Guard: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:46.201898Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Connecting to swarm peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483649
+[2m2026-02-20T05:33:46.718634Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Successfully connected to peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483649
+[2m2026-02-20T05:33:46.718679Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🤝 ML-KEM handshake with swarm peer 0 (12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o)
+[2m2026-02-20T05:33:46.718700Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m 🤝 Performing REAL post-quantum ML-KEM handshake with peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:46.718838Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m 🔑 Generated ML-KEM-1024 keypair (pk: 1568 bytes, sk: 3168 bytes) - NIST Level 5 (256-bit)
+[2m2026-02-20T05:33:46.723989Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m ✅ REAL ML-KEM handshake completed with peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:46.724144Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:46.724151Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:46.724162Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:46.724170Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:46.724173Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:46.724177Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:46.724182Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Wasif-Vernam layer established for hop 0
+[2m2026-02-20T05:33:46.724271Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:46.724275Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:46.724329Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:46.724332Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:46.724336Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:46.724386Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:46.724390Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:46.724393Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:46.724433Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:46.724469Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:46.724489Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Faisal Swarm circuit 2147483649 is ready! (built in 522.6471ms)
+[2m2026-02-20T05:33:46.724502Z[0m [32m INFO[0m ✅ Faisal Swarm circuit 2147483649 created successfully
+[2m2026-02-20T05:33:46.724506Z[0m [32m INFO[0m ✅ Circuit 2147483649 built in 842ms (1 circuits total)
+[2m2026-02-20T05:33:46.724511Z[0m [32m INFO[0m Creating onion stream for Faisal Swarm circuit 2147483649
+[2m2026-02-20T05:33:46.724521Z[0m [32m INFO[0m ✅ Successfully created onion stream for Faisal Swarm circuit 2147483649
+[2m2026-02-20T05:33:46.724558Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:46.725100Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:46.725129Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:46.725398Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:46.826866Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:46.828247Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:46.828288Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:46.829124Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:46.935704Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:46.937084Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:46.937109Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:46.937569Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.044660Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.050207Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.050236Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.050923Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.154501Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.155677Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.155704Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.156129Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.263800Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.265295Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.265342Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.266866Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.371286Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.372544Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.372582Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.373155Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.480420Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.482232Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.482314Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.482888Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.589228Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.590243Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.590279Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.590758Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.699181Z[0m [32m INFO[0m ✅ Sent 10/10 messages through circuit 2147483649
+[2m2026-02-20T05:33:47.699231Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:47.699273Z[0m [32m INFO[0m Tearing down Faisal Swarm circuit 2147483649
+[2m2026-02-20T05:33:47.699286Z[0m [32m INFO[0m 🚪 Faisal Swarm circuit 2147483649 closed
+[2m2026-02-20T05:33:47.699304Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:47.699357Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:47.699382Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:47.699406Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:47.699433Z[0m [32m INFO[0m ✅ Successfully tore down Faisal Swarm circuit 2147483649
+[2m2026-02-20T05:33:47.700271Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483649[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483649 via libp2p
+[2m2026-02-20T05:33:47.700297Z[0m [31mERROR[0m Failed to send stream data: NotFound(2147483649)
+[2m2026-02-20T05:33:49.027549Z[0m [32m INFO[0m Building 1-hop Faisal Swarm circuit to 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o via room zks-test-v1
+[2m2026-02-20T05:33:49.027597Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔧 Creating 1-hop Faisal Swarm circuit in room zks-test-v1
+[2m2026-02-20T05:33:49.027609Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔍 Discovering Faisal Swarm peers in room zks-test-v1
+[2m2026-02-20T05:33:49.347663Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Found 2 relay-capable peers in swarm
+[2m2026-02-20T05:33:49.347712Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 📍 Faisal Swarm path selected:
+[2m2026-02-20T05:33:49.347720Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   Hop 1: Guard - 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:49.347745Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔗 Building Faisal Swarm circuit 2147483650
+[2m2026-02-20T05:33:49.347755Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   → Connecting to Guard: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:49.347767Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Connecting to swarm peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483650
+[2m2026-02-20T05:33:49.853920Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Successfully connected to peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483650
+[2m2026-02-20T05:33:49.853976Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🤝 ML-KEM handshake with swarm peer 0 (12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o)
+[2m2026-02-20T05:33:49.854004Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m 🤝 Performing REAL post-quantum ML-KEM handshake with peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:49.854298Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m 🔑 Generated ML-KEM-1024 keypair (pk: 1568 bytes, sk: 3168 bytes) - NIST Level 5 (256-bit)
+[2m2026-02-20T05:33:49.862821Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m ✅ REAL ML-KEM handshake completed with peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:49.863044Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:49.863063Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:49.863073Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:49.863083Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:49.863092Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:49.863099Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:49.863107Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Wasif-Vernam layer established for hop 0
+[2m2026-02-20T05:33:49.863231Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:49.863239Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:49.863318Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:49.863327Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:49.863334Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:49.863394Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:49.863409Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:49.863420Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:49.863429Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:49.863462Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:49.863490Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Faisal Swarm circuit 2147483650 is ready! (built in 515.7453ms)
+[2m2026-02-20T05:33:49.863505Z[0m [32m INFO[0m ✅ Faisal Swarm circuit 2147483650 created successfully
+[2m2026-02-20T05:33:49.863512Z[0m [32m INFO[0m ✅ Circuit 2147483650 built in 835ms (2 circuits total)
+[2m2026-02-20T05:33:49.863519Z[0m [32m INFO[0m Creating onion stream for Faisal Swarm circuit 2147483650
+[2m2026-02-20T05:33:49.863534Z[0m [32m INFO[0m ✅ Successfully created onion stream for Faisal Swarm circuit 2147483650
+[2m2026-02-20T05:33:49.863589Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:49.864435Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:49.864471Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:49.865128Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:49.978700Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:49.979432Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:49.979453Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:49.979929Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.087150Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.088240Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.088267Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.088833Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.195668Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.197260Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.197294Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.197863Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.303665Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.304803Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.304825Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.305161Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.412124Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.413488Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.413522Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.413943Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.521034Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.522194Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.522239Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.522679Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.629012Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.630617Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.630667Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.631553Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.736557Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.738017Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.738053Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.738541Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.844005Z[0m [32m INFO[0m ✅ Sent 10/10 messages through circuit 2147483650
+[2m2026-02-20T05:33:50.844049Z[0m [32m INFO[0m Tearing down Faisal Swarm circuit 2147483650
+[2m2026-02-20T05:33:50.844044Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:50.844100Z[0m [32m INFO[0m 🚪 Faisal Swarm circuit 2147483650 closed
+[2m2026-02-20T05:33:50.844106Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:50.844147Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:50.844172Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:50.844198Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:50.844221Z[0m [32m INFO[0m ✅ Successfully tore down Faisal Swarm circuit 2147483650
+[2m2026-02-20T05:33:50.845262Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483650[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483650 via libp2p
+[2m2026-02-20T05:33:50.845294Z[0m [31mERROR[0m Failed to send stream data: NotFound(2147483650)
+[2m2026-02-20T05:33:52.174815Z[0m [32m INFO[0m Building 1-hop Faisal Swarm circuit to 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o via room zks-test-v1
+[2m2026-02-20T05:33:52.174861Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔧 Creating 1-hop Faisal Swarm circuit in room zks-test-v1
+[2m2026-02-20T05:33:52.174873Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔍 Discovering Faisal Swarm peers in room zks-test-v1
+[2m2026-02-20T05:33:52.495013Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Found 2 relay-capable peers in swarm
+[2m2026-02-20T05:33:52.495082Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 📍 Faisal Swarm path selected:
+[2m2026-02-20T05:33:52.495092Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   Hop 1: Guard - 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:52.495108Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔗 Building Faisal Swarm circuit 2147483651
+[2m2026-02-20T05:33:52.495115Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   → Connecting to Guard: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:52.495126Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Connecting to swarm peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483651
+[2m2026-02-20T05:33:53.003269Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Successfully connected to peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483651
+[2m2026-02-20T05:33:53.003329Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🤝 ML-KEM handshake with swarm peer 0 (12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o)
+[2m2026-02-20T05:33:53.003358Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m 🤝 Performing REAL post-quantum ML-KEM handshake with peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:53.003539Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m 🔑 Generated ML-KEM-1024 keypair (pk: 1568 bytes, sk: 3168 bytes) - NIST Level 5 (256-bit)
+[2m2026-02-20T05:33:53.006345Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m ✅ REAL ML-KEM handshake completed with peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:53.006484Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:53.006495Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:53.006504Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:53.006513Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:53.006521Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:53.006528Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:53.006536Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Wasif-Vernam layer established for hop 0
+[2m2026-02-20T05:33:53.006640Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:53.006648Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:53.006709Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:53.006719Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:53.006732Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:53.006793Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:53.006802Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:53.006809Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:53.006818Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:53.006853Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:53.006881Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Faisal Swarm circuit 2147483651 is ready! (built in 511.7737ms)
+[2m2026-02-20T05:33:53.006894Z[0m [32m INFO[0m ✅ Faisal Swarm circuit 2147483651 created successfully
+[2m2026-02-20T05:33:53.006902Z[0m [32m INFO[0m ✅ Circuit 2147483651 built in 832ms (3 circuits total)
+[2m2026-02-20T05:33:53.006909Z[0m [32m INFO[0m Creating onion stream for Faisal Swarm circuit 2147483651
+[2m2026-02-20T05:33:53.006923Z[0m [32m INFO[0m ✅ Successfully created onion stream for Faisal Swarm circuit 2147483651
+[2m2026-02-20T05:33:53.006984Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.007704Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.007733Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.008358Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.112310Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.114114Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.114150Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.114854Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.222223Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.223818Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.223866Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.224524Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.330208Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.331702Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.331736Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.332459Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.438307Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.439669Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.439706Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.440371Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.546206Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.547473Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.547506Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.548121Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.671122Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.672849Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.672908Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.673923Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.780284Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.782290Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.782371Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.783339Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.888599Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.890193Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.890237Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.891403Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:53.999158Z[0m [32m INFO[0m ✅ Sent 10/10 messages through circuit 2147483651
+[2m2026-02-20T05:33:53.999197Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:53.999224Z[0m [32m INFO[0m Tearing down Faisal Swarm circuit 2147483651
+[2m2026-02-20T05:33:53.999272Z[0m [32m INFO[0m 🚪 Faisal Swarm circuit 2147483651 closed
+[2m2026-02-20T05:33:53.999287Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:53.999426Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:53.999496Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:53.999552Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:53.999599Z[0m [32m INFO[0m ✅ Successfully tore down Faisal Swarm circuit 2147483651
+[2m2026-02-20T05:33:54.001206Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483651[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483651 via libp2p
+[2m2026-02-20T05:33:54.001272Z[0m [31mERROR[0m Failed to send stream data: NotFound(2147483651)
+[2m2026-02-20T05:33:55.330562Z[0m [32m INFO[0m Building 1-hop Faisal Swarm circuit to 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o via room zks-test-v1
+[2m2026-02-20T05:33:55.330629Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔧 Creating 1-hop Faisal Swarm circuit in room zks-test-v1
+[2m2026-02-20T05:33:55.330661Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔍 Discovering Faisal Swarm peers in room zks-test-v1
+[2m2026-02-20T05:33:55.651824Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Found 2 relay-capable peers in swarm
+[2m2026-02-20T05:33:55.651909Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 📍 Faisal Swarm path selected:
+[2m2026-02-20T05:33:55.651926Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   Hop 1: Guard - 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:55.651955Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔗 Building Faisal Swarm circuit 2147483652
+[2m2026-02-20T05:33:55.651968Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   → Connecting to Guard: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:55.651989Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Connecting to swarm peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483652
+[2m2026-02-20T05:33:56.160547Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Successfully connected to peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483652
+[2m2026-02-20T05:33:56.160605Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🤝 ML-KEM handshake with swarm peer 0 (12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o)
+[2m2026-02-20T05:33:56.160632Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m 🤝 Performing REAL post-quantum ML-KEM handshake with peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:56.160789Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m 🔑 Generated ML-KEM-1024 keypair (pk: 1568 bytes, sk: 3168 bytes) - NIST Level 5 (256-bit)
+[2m2026-02-20T05:33:56.165853Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m ✅ REAL ML-KEM handshake completed with peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:56.165999Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:56.166010Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:56.166019Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:56.166028Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:56.166035Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:56.166042Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:56.166050Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Wasif-Vernam layer established for hop 0
+[2m2026-02-20T05:33:56.166144Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:56.166152Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:56.166227Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:56.166239Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:56.166247Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:56.166302Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:56.166309Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:56.166316Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:56.166325Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:56.166360Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:56.166386Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Faisal Swarm circuit 2147483652 is ready! (built in 514.4328ms)
+[2m2026-02-20T05:33:56.166398Z[0m [32m INFO[0m ✅ Faisal Swarm circuit 2147483652 created successfully
+[2m2026-02-20T05:33:56.166405Z[0m [32m INFO[0m ✅ Circuit 2147483652 built in 835ms (4 circuits total)
+[2m2026-02-20T05:33:56.166412Z[0m [32m INFO[0m Creating onion stream for Faisal Swarm circuit 2147483652
+[2m2026-02-20T05:33:56.166425Z[0m [32m INFO[0m ✅ Successfully created onion stream for Faisal Swarm circuit 2147483652
+[2m2026-02-20T05:33:56.166476Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:56.167213Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483652 via libp2p
+[2m2026-02-20T05:33:56.167245Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:56.168047Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483652 via libp2p
+[2m2026-02-20T05:33:56.270261Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:57.141901Z[0m [32m INFO[0m ✅ Sent 10/10 messages through circuit 2147483652
+[2m2026-02-20T05:33:57.141985Z[0m [32m INFO[0m Tearing down Faisal Swarm circuit 2147483652
+[2m2026-02-20T05:33:57.141994Z[0m [32m INFO[0m 🚪 Faisal Swarm circuit 2147483652 closed
+[2m2026-02-20T05:33:57.142002Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:57.142043Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:57.142071Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:57.142099Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:57.142125Z[0m [32m INFO[0m ✅ Successfully tore down Faisal Swarm circuit 2147483652
+[2m2026-02-20T05:33:58.477218Z[0m [32m INFO[0m Building 1-hop Faisal Swarm circuit to 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o via room zks-test-v1
+[2m2026-02-20T05:33:58.477266Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔧 Creating 1-hop Faisal Swarm circuit in room zks-test-v1
+[2m2026-02-20T05:33:58.477279Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔍 Discovering Faisal Swarm peers in room zks-test-v1
+[2m2026-02-20T05:33:58.797055Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Found 2 relay-capable peers in swarm
+[2m2026-02-20T05:33:58.797107Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 📍 Faisal Swarm path selected:
+[2m2026-02-20T05:33:58.797115Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   Hop 1: Guard - 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:58.797130Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔗 Building Faisal Swarm circuit 2147483653
+[2m2026-02-20T05:33:58.797137Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   → Connecting to Guard: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:58.797147Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Connecting to swarm peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483653
+[2m2026-02-20T05:33:59.309044Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Successfully connected to peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483653
+[2m2026-02-20T05:33:59.309099Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🤝 ML-KEM handshake with swarm peer 0 (12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o)
+[2m2026-02-20T05:33:59.309127Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483653[1m}[0m[2m:[0m 🤝 Performing REAL post-quantum ML-KEM handshake with peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:59.309286Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483653[1m}[0m[2m:[0m 🔑 Generated ML-KEM-1024 keypair (pk: 1568 bytes, sk: 3168 bytes) - NIST Level 5 (256-bit)
+[2m2026-02-20T05:33:59.315081Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483653[1m}[0m[2m:[0m ✅ REAL ML-KEM handshake completed with peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:59.315243Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:59.315256Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:59.315266Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:59.315275Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:59.315283Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:59.315290Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:59.315355Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Wasif-Vernam layer established for hop 0
+[2m2026-02-20T05:33:59.315473Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:59.315483Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:59.315555Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:59.315566Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:59.315573Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:59.315631Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:59.315639Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:59.315646Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:59.315655Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:59.315692Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:33:59.315721Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Faisal Swarm circuit 2147483653 is ready! (built in 518.5919ms)
+[2m2026-02-20T05:33:59.315736Z[0m [32m INFO[0m ✅ Faisal Swarm circuit 2147483653 created successfully
+[2m2026-02-20T05:33:59.315744Z[0m [32m INFO[0m ✅ Circuit 2147483653 built in 838ms (5 circuits total)
+[2m2026-02-20T05:33:59.315750Z[0m [32m INFO[0m Creating onion stream for Faisal Swarm circuit 2147483653
+[2m2026-02-20T05:33:59.315771Z[0m [32m INFO[0m ✅ Successfully created onion stream for Faisal Swarm circuit 2147483653
+[2m2026-02-20T05:33:59.315795Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483653[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483653 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:59.316715Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483653[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483653 via libp2p
+[2m2026-02-20T05:33:59.316756Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483653[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483653 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:33:59.317452Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483653[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483653 via libp2p
+[2m2026-02-20T05:33:59.419037Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483653[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483653 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:00.289753Z[0m [32m INFO[0m ✅ Sent 10/10 messages through circuit 2147483653
+[2m2026-02-20T05:34:00.289800Z[0m [32m INFO[0m Tearing down Faisal Swarm circuit 2147483653
+[2m2026-02-20T05:34:00.289809Z[0m [32m INFO[0m 🚪 Faisal Swarm circuit 2147483653 closed
+[2m2026-02-20T05:34:00.289817Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:00.289865Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:00.289897Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:00.289925Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:00.289956Z[0m [32m INFO[0m ✅ Successfully tore down Faisal Swarm circuit 2147483653
+[2m2026-02-20T05:34:00.289964Z[0m [32m INFO[0m 
+=== Continuous Test Metrics ===
+[2m2026-02-20T05:34:00.289970Z[0m [32m INFO[0m Circuits Built: 5
+[2m2026-02-20T05:34:00.289975Z[0m [32m INFO[0m Circuits Failed: 0
+[2m2026-02-20T05:34:00.289980Z[0m [32m INFO[0m Messages Sent: 50
+[2m2026-02-20T05:34:00.289986Z[0m [32m INFO[0m Messages Failed: 0
+[2m2026-02-20T05:34:00.290002Z[0m [32m INFO[0m Total Bytes Sent: 25600
+[2m2026-02-20T05:34:00.290008Z[0m [32m INFO[0m 
+Circuit Build Times:
+[2m2026-02-20T05:34:00.290013Z[0m [32m INFO[0m   Min: 832ms
+[2m2026-02-20T05:34:00.290024Z[0m [32m INFO[0m   Max: 842ms
+[2m2026-02-20T05:34:00.290029Z[0m [32m INFO[0m   Avg: 836.40ms
+[2m2026-02-20T05:34:00.290044Z[0m [32m INFO[0m 
+Success Rates:
+[2m2026-02-20T05:34:00.290050Z[0m [32m INFO[0m   Circuit Success: 100.00%
+[2m2026-02-20T05:34:00.290063Z[0m [32m INFO[0m   Message Success: 100.00%
+[2m2026-02-20T05:34:00.290070Z[0m [32m INFO[0m =============================
+
+[2m2026-02-20T05:34:01.623612Z[0m [32m INFO[0m Building 1-hop Faisal Swarm circuit to 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o via room zks-test-v1
+[2m2026-02-20T05:34:01.623664Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔧 Creating 1-hop Faisal Swarm circuit in room zks-test-v1
+[2m2026-02-20T05:34:01.623680Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔍 Discovering Faisal Swarm peers in room zks-test-v1
+[2m2026-02-20T05:34:01.944033Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Found 2 relay-capable peers in swarm
+[2m2026-02-20T05:34:01.944086Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 📍 Faisal Swarm path selected:
+[2m2026-02-20T05:34:01.944095Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   Hop 1: Guard - 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:01.944110Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔗 Building Faisal Swarm circuit 2147483654
+[2m2026-02-20T05:34:01.944116Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   → Connecting to Guard: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:01.944127Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Connecting to swarm peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483654
+[2m2026-02-20T05:34:02.459057Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Successfully connected to peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483654
+[2m2026-02-20T05:34:02.459176Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🤝 ML-KEM handshake with swarm peer 0 (12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o)
+[2m2026-02-20T05:34:02.459209Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m 🤝 Performing REAL post-quantum ML-KEM handshake with peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:02.459371Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m 🔑 Generated ML-KEM-1024 keypair (pk: 1568 bytes, sk: 3168 bytes) - NIST Level 5 (256-bit)
+[2m2026-02-20T05:34:02.464973Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m ✅ REAL ML-KEM handshake completed with peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:02.465153Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:02.465173Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:02.465184Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:02.465193Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:02.465200Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:02.465208Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:02.465216Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Wasif-Vernam layer established for hop 0
+[2m2026-02-20T05:34:02.465315Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:02.465323Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:02.465380Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:02.465391Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:02.465399Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:02.465457Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:02.465465Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:02.465473Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:02.465483Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:02.465519Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:02.465548Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Faisal Swarm circuit 2147483654 is ready! (built in 521.4388ms)
+[2m2026-02-20T05:34:02.465620Z[0m [32m INFO[0m ✅ Faisal Swarm circuit 2147483654 created successfully
+[2m2026-02-20T05:34:02.465634Z[0m [32m INFO[0m ✅ Circuit 2147483654 built in 842ms (6 circuits total)
+[2m2026-02-20T05:34:02.465642Z[0m [32m INFO[0m Creating onion stream for Faisal Swarm circuit 2147483654
+[2m2026-02-20T05:34:02.465657Z[0m [32m INFO[0m ✅ Successfully created onion stream for Faisal Swarm circuit 2147483654
+[2m2026-02-20T05:34:02.465706Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483653[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483653 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:02.466600Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483652 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483653[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483653 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483654 via libp2p
+[2m2026-02-20T05:34:02.466640Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:02.467236Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483654 via libp2p
+[2m2026-02-20T05:34:02.568155Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:03.441253Z[0m [32m INFO[0m ✅ Sent 10/10 messages through circuit 2147483654
+[2m2026-02-20T05:34:03.441318Z[0m [32m INFO[0m Tearing down Faisal Swarm circuit 2147483654
+[2m2026-02-20T05:34:03.441333Z[0m [32m INFO[0m 🚪 Faisal Swarm circuit 2147483654 closed
+[2m2026-02-20T05:34:03.441342Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:03.441386Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:03.441416Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:03.441444Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:03.441474Z[0m [32m INFO[0m ✅ Successfully tore down Faisal Swarm circuit 2147483654
+[2m2026-02-20T05:34:04.775420Z[0m [32m INFO[0m Building 1-hop Faisal Swarm circuit to 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o via room zks-test-v1
+[2m2026-02-20T05:34:04.775478Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔧 Creating 1-hop Faisal Swarm circuit in room zks-test-v1
+[2m2026-02-20T05:34:04.775490Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔍 Discovering Faisal Swarm peers in room zks-test-v1
+[2m2026-02-20T05:34:05.096899Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Found 2 relay-capable peers in swarm
+[2m2026-02-20T05:34:05.096958Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 📍 Faisal Swarm path selected:
+[2m2026-02-20T05:34:05.096967Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   Hop 1: Guard - 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:05.096986Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔗 Building Faisal Swarm circuit 2147483655
+[2m2026-02-20T05:34:05.096993Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   → Connecting to Guard: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:05.097004Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Connecting to swarm peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483655
+[2m2026-02-20T05:34:05.603582Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Successfully connected to peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483655
+[2m2026-02-20T05:34:05.603949Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🤝 ML-KEM handshake with swarm peer 0 (12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o)
+[2m2026-02-20T05:34:05.603987Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483655[1m}[0m[2m:[0m 🤝 Performing REAL post-quantum ML-KEM handshake with peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:05.604159Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483655[1m}[0m[2m:[0m 🔑 Generated ML-KEM-1024 keypair (pk: 1568 bytes, sk: 3168 bytes) - NIST Level 5 (256-bit)
+[2m2026-02-20T05:34:05.609973Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483655[1m}[0m[2m:[0m ✅ REAL ML-KEM handshake completed with peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:05.610150Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:05.610161Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:05.610170Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:05.610179Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:05.610186Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:05.610193Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:05.610201Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Wasif-Vernam layer established for hop 0
+[2m2026-02-20T05:34:05.610320Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:05.610328Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:05.610405Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:05.610417Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:05.610501Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:05.610565Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:05.610576Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:05.610584Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:05.610594Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:05.610632Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:05.610661Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Faisal Swarm circuit 2147483655 is ready! (built in 513.676ms)
+[2m2026-02-20T05:34:05.610677Z[0m [32m INFO[0m ✅ Faisal Swarm circuit 2147483655 created successfully
+[2m2026-02-20T05:34:05.610687Z[0m [32m INFO[0m ✅ Circuit 2147483655 built in 835ms (7 circuits total)
+[2m2026-02-20T05:34:05.610696Z[0m [32m INFO[0m Creating onion stream for Faisal Swarm circuit 2147483655
+[2m2026-02-20T05:34:05.610713Z[0m [32m INFO[0m ✅ Successfully created onion stream for Faisal Swarm circuit 2147483655
+[2m2026-02-20T05:34:05.610743Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483655[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483655 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:05.611767Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483655[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483655 via libp2p
+[2m2026-02-20T05:34:05.611814Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483655[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483655 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:05.612580Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483655[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483655 via libp2p
+[2m2026-02-20T05:34:05.713508Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483654 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483655[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483655 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:06.575648Z[0m [32m INFO[0m ✅ Sent 10/10 messages through circuit 2147483655
+[2m2026-02-20T05:34:06.576094Z[0m [32m INFO[0m Tearing down Faisal Swarm circuit 2147483655
+[2m2026-02-20T05:34:06.576116Z[0m [32m INFO[0m 🚪 Faisal Swarm circuit 2147483655 closed
+[2m2026-02-20T05:34:06.576128Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:06.576190Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:06.576229Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:06.576267Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:06.576302Z[0m [32m INFO[0m ✅ Successfully tore down Faisal Swarm circuit 2147483655
+[2m2026-02-20T05:34:07.900727Z[0m [32m INFO[0m Building 1-hop Faisal Swarm circuit to 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o via room zks-test-v1
+[2m2026-02-20T05:34:07.900776Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔧 Creating 1-hop Faisal Swarm circuit in room zks-test-v1
+[2m2026-02-20T05:34:07.900788Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔍 Discovering Faisal Swarm peers in room zks-test-v1
+[2m2026-02-20T05:34:08.218785Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Found 2 relay-capable peers in swarm
+[2m2026-02-20T05:34:08.218844Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 📍 Faisal Swarm path selected:
+[2m2026-02-20T05:34:08.218852Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   Hop 1: Guard - 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:08.218868Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔗 Building Faisal Swarm circuit 2147483656
+[2m2026-02-20T05:34:08.218874Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   → Connecting to Guard: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:08.218885Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Connecting to swarm peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483656
+[2m2026-02-20T05:34:08.725462Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Successfully connected to peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483656
+[2m2026-02-20T05:34:08.725520Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🤝 ML-KEM handshake with swarm peer 0 (12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o)
+[2m2026-02-20T05:34:08.725548Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m 🤝 Performing REAL post-quantum ML-KEM handshake with peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:08.725706Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m 🔑 Generated ML-KEM-1024 keypair (pk: 1568 bytes, sk: 3168 bytes) - NIST Level 5 (256-bit)
+[2m2026-02-20T05:34:08.731688Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m ✅ REAL ML-KEM handshake completed with peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:08.731926Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:08.731944Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:08.732053Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:08.732075Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:08.732083Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:08.732092Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:08.732103Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Wasif-Vernam layer established for hop 0
+[2m2026-02-20T05:34:08.732252Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:08.732262Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:08.732335Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:08.732346Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:08.732353Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:08.732418Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:08.732426Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:08.732434Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:08.732442Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:08.732483Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:08.732517Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Faisal Swarm circuit 2147483656 is ready! (built in 513.6498ms)
+[2m2026-02-20T05:34:08.732534Z[0m [32m INFO[0m ✅ Faisal Swarm circuit 2147483656 created successfully
+[2m2026-02-20T05:34:08.732542Z[0m [32m INFO[0m ✅ Circuit 2147483656 built in 831ms (8 circuits total)
+[2m2026-02-20T05:34:08.732550Z[0m [32m INFO[0m Creating onion stream for Faisal Swarm circuit 2147483656
+[2m2026-02-20T05:34:08.732567Z[0m [32m INFO[0m ✅ Successfully created onion stream for Faisal Swarm circuit 2147483656
+[2m2026-02-20T05:34:08.732598Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:08.733594Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483656 via libp2p
+[2m2026-02-20T05:34:08.733628Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:08.734284Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483656 via libp2p
+[2m2026-02-20T05:34:08.834368Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:09.705500Z[0m [32m INFO[0m ✅ Sent 10/10 messages through circuit 2147483656
+[2m2026-02-20T05:34:09.705584Z[0m [32m INFO[0m Tearing down Faisal Swarm circuit 2147483656
+[2m2026-02-20T05:34:09.705596Z[0m [32m INFO[0m 🚪 Faisal Swarm circuit 2147483656 closed
+[2m2026-02-20T05:34:09.705605Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:09.705660Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:09.705695Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:09.705733Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:09.705768Z[0m [32m INFO[0m ✅ Successfully tore down Faisal Swarm circuit 2147483656
+[2m2026-02-20T05:34:11.035686Z[0m [32m INFO[0m Building 1-hop Faisal Swarm circuit to 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o via room zks-test-v1
+[2m2026-02-20T05:34:11.035729Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔧 Creating 1-hop Faisal Swarm circuit in room zks-test-v1
+[2m2026-02-20T05:34:11.035741Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔍 Discovering Faisal Swarm peers in room zks-test-v1
+[2m2026-02-20T05:34:11.356212Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Found 2 relay-capable peers in swarm
+[2m2026-02-20T05:34:11.356264Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 📍 Faisal Swarm path selected:
+[2m2026-02-20T05:34:11.356272Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   Hop 1: Guard - 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:11.356288Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔗 Building Faisal Swarm circuit 2147483657
+[2m2026-02-20T05:34:11.356295Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   → Connecting to Guard: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:11.356305Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Connecting to swarm peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483657
+[2m2026-02-20T05:34:11.868644Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Successfully connected to peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483657
+[2m2026-02-20T05:34:11.868706Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🤝 ML-KEM handshake with swarm peer 0 (12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o)
+[2m2026-02-20T05:34:11.868735Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m 🤝 Performing REAL post-quantum ML-KEM handshake with peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:11.868894Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m 🔑 Generated ML-KEM-1024 keypair (pk: 1568 bytes, sk: 3168 bytes) - NIST Level 5 (256-bit)
+[2m2026-02-20T05:34:11.874582Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m ✅ REAL ML-KEM handshake completed with peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:11.874764Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:11.874781Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:11.874790Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:11.874798Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:11.874806Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:11.874813Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:11.874821Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Wasif-Vernam layer established for hop 0
+[2m2026-02-20T05:34:11.874932Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:11.874940Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:11.875005Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:11.875014Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:11.875022Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:11.875080Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:11.875087Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:11.875095Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:11.875107Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:11.875142Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:11.875170Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Faisal Swarm circuit 2147483657 is ready! (built in 518.8828ms)
+[2m2026-02-20T05:34:11.875184Z[0m [32m INFO[0m ✅ Faisal Swarm circuit 2147483657 created successfully
+[2m2026-02-20T05:34:11.875191Z[0m [32m INFO[0m ✅ Circuit 2147483657 built in 839ms (9 circuits total)
+[2m2026-02-20T05:34:11.875198Z[0m [32m INFO[0m Creating onion stream for Faisal Swarm circuit 2147483657
+[2m2026-02-20T05:34:11.875214Z[0m [32m INFO[0m ✅ Successfully created onion stream for Faisal Swarm circuit 2147483657
+[2m2026-02-20T05:34:11.875259Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:11.876108Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483657 via libp2p
+[2m2026-02-20T05:34:11.876146Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:11.876765Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483657 via libp2p
+[2m2026-02-20T05:34:11.977144Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:12.843622Z[0m [32m INFO[0m ✅ Sent 10/10 messages through circuit 2147483657
+[2m2026-02-20T05:34:12.843679Z[0m [32m INFO[0m Tearing down Faisal Swarm circuit 2147483657
+[2m2026-02-20T05:34:12.843693Z[0m [32m INFO[0m 🚪 Faisal Swarm circuit 2147483657 closed
+[2m2026-02-20T05:34:12.843702Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:12.843762Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:12.843803Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:12.843843Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:12.843881Z[0m [32m INFO[0m ✅ Successfully tore down Faisal Swarm circuit 2147483657
+[2m2026-02-20T05:34:14.175034Z[0m [32m INFO[0m Building 1-hop Faisal Swarm circuit to 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o via room zks-test-v1
+[2m2026-02-20T05:34:14.175076Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔧 Creating 1-hop Faisal Swarm circuit in room zks-test-v1
+[2m2026-02-20T05:34:14.175088Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mcreate_circuit[0m[1m{[0m[3mroom_id[0m[2m=[0m"zks-test-v1" [3mhops[0m[2m=[0m1[1m}[0m[2m:[0m 🔍 Discovering Faisal Swarm peers in room zks-test-v1
+[2m2026-02-20T05:34:14.494800Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Found 2 relay-capable peers in swarm
+[2m2026-02-20T05:34:14.494860Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 📍 Faisal Swarm path selected:
+[2m2026-02-20T05:34:14.494870Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   Hop 1: Guard - 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:14.494888Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔗 Building Faisal Swarm circuit 2147483658
+[2m2026-02-20T05:34:14.494896Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m   → Connecting to Guard: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:14.494908Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m Connecting to swarm peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483658
+[2m2026-02-20T05:34:15.007187Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Successfully connected to peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o at /ip4/192.168.56.1/tcp/4001 for circuit 2147483658
+[2m2026-02-20T05:34:15.007244Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🤝 ML-KEM handshake with swarm peer 0 (12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o)
+[2m2026-02-20T05:34:15.007273Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483658[1m}[0m[2m:[0m 🤝 Performing REAL post-quantum ML-KEM handshake with peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:15.007428Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483658[1m}[0m[2m:[0m 🔑 Generated ML-KEM-1024 keypair (pk: 1568 bytes, sk: 3168 bytes) - NIST Level 5 (256-bit)
+[2m2026-02-20T05:34:15.013832Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m[1mperform_post_quantum_handshake[0m[1m{[0m[3mpeer_id[0m[2m=[0m"12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o" [3mcircuit_id[0m[2m=[0m2147483658[1m}[0m[2m:[0m ✅ REAL ML-KEM handshake completed with peer 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:34:15.013989Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:15.014001Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:15.014010Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:15.014019Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:15.014026Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:15.014033Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:15.014041Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Wasif-Vernam layer established for hop 0
+[2m2026-02-20T05:34:15.014138Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:15.014146Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:15.014207Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:15.014217Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:15.014225Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:15.014269Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:15.014277Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:15.014284Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:15.014292Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:15.014325Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:15.014356Z[0m [32m INFO[0m [1mcreate_circuit[0m[2m:[0m ✅ Faisal Swarm circuit 2147483658 is ready! (built in 519.4686ms)
+[2m2026-02-20T05:34:15.014372Z[0m [32m INFO[0m ✅ Faisal Swarm circuit 2147483658 created successfully
+[2m2026-02-20T05:34:15.014380Z[0m [32m INFO[0m ✅ Circuit 2147483658 built in 839ms (10 circuits total)
+[2m2026-02-20T05:34:15.014387Z[0m [32m INFO[0m Creating onion stream for Faisal Swarm circuit 2147483658
+[2m2026-02-20T05:34:15.014401Z[0m [32m INFO[0m ✅ Successfully created onion stream for Faisal Swarm circuit 2147483658
+[2m2026-02-20T05:34:15.014446Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483658[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483658 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:15.015208Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483658[1m}[0m[2m:[0m Sent 543 bytes through Faisal Swarm circuit 2147483658 via libp2p
+[2m2026-02-20T05:34:15.015243Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483658[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483658 [3mdata_len[0m[2m=[0m16[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:15.015855Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483658[1m}[0m[2m:[0m Sent 57 bytes through Faisal Swarm circuit 2147483658 via libp2p
+[2m2026-02-20T05:34:15.129556Z[0m [32m INFO[0m [1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483656 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483657 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483658[1m}[0m[2m:[0m[1msend_via_swarm[0m[1m{[0m[3mcircuit_id[0m[2m=[0m2147483658 [3mdata_len[0m[2m=[0m502[1m}[0m[2m:[0m Creating 1 Wasif-Vernam onion layers
+[2m2026-02-20T05:34:16.004032Z[0m [32m INFO[0m ✅ Sent 10/10 messages through circuit 2147483658
+[2m2026-02-20T05:34:16.004084Z[0m [32m INFO[0m Tearing down Faisal Swarm circuit 2147483658
+[2m2026-02-20T05:34:16.004100Z[0m [32m INFO[0m 🚪 Faisal Swarm circuit 2147483658 closed
+[2m2026-02-20T05:34:16.004111Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:16.004152Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:16.004183Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:16.004211Z[0m [32m INFO[0m 🔒 WasifVernam cipher zeroized - all sensitive data cleared
+[2m2026-02-20T05:34:16.004240Z[0m [32m INFO[0m ✅ Successfully tore down Faisal Swarm circuit 2147483658
+[2m2026-02-20T05:34:16.004247Z[0m [32m INFO[0m 
+=== Continuous Test Metrics ===
+[2m2026-02-20T05:34:16.004252Z[0m [32m INFO[0m Circuits Built: 10
+[2m2026-02-20T05:34:16.004259Z[0m [32m INFO[0m Circuits Failed: 0
+[2m2026-02-20T05:34:16.004264Z[0m [32m INFO[0m Messages Sent: 100
+[2m2026-02-20T05:34:16.004269Z[0m [32m INFO[0m Messages Failed: 0
+[2m2026-02-20T05:34:16.004274Z[0m [32m INFO[0m Total Bytes Sent: 51200
+[2m2026-02-20T05:34:16.004279Z[0m [32m INFO[0m 
+Circuit Build Times:
+[2m2026-02-20T05:34:16.004284Z[0m [32m INFO[0m   Min: 831ms
+[2m2026-02-20T05:34:16.004290Z[0m [32m INFO[0m   Max: 842ms
+[2m2026-02-20T05:34:16.004296Z[0m [32m INFO[0m   Avg: 836.80ms
+[2m2026-02-20T05:34:16.004303Z[0m [32m INFO[0m 
+Success Rates:
+[2m2026-02-20T05:34:16.004308Z[0m [32m INFO[0m   Circuit Success: 100.00%
+[2m2026-02-20T05:34:16.004315Z[0m [32m INFO[0m   Message Success: 100.00%
+[2m2026-02-20T05:34:16.004321Z[0m [32m INFO[0m =============================
+
+[2m2026-02-20T05:34:17.016566Z[0m [32m INFO[0m 
+=== Continuous Test Metrics ===
+[2m2026-02-20T05:34:17.016597Z[0m [32m INFO[0m Circuits Built: 10
+[2m2026-02-20T05:34:17.016605Z[0m [32m INFO[0m Circuits Failed: 0
+[2m2026-02-20T05:34:17.016611Z[0m [32m INFO[0m Messages Sent: 100
+[2m2026-02-20T05:34:17.016617Z[0m [32m INFO[0m Messages Failed: 0
+[2m2026-02-20T05:34:17.016624Z[0m [32m INFO[0m Total Bytes Sent: 51200
+[2m2026-02-20T05:34:17.016630Z[0m [32m INFO[0m 
+Circuit Build Times:
+[2m2026-02-20T05:34:17.016635Z[0m [32m INFO[0m   Min: 831ms
+[2m2026-02-20T05:34:17.016641Z[0m [32m INFO[0m   Max: 842ms
+[2m2026-02-20T05:34:17.016646Z[0m [32m INFO[0m   Avg: 836.80ms
+[2m2026-02-20T05:34:17.016653Z[0m [32m INFO[0m 
+Success Rates:
+[2m2026-02-20T05:34:17.016659Z[0m [32m INFO[0m   Circuit Success: 100.00%
+[2m2026-02-20T05:34:17.016667Z[0m [32m INFO[0m   Message Success: 100.00%
+[2m2026-02-20T05:34:17.016674Z[0m [32m INFO[0m =============================
+
+[2m2026-02-20T05:34:17.016681Z[0m [32m INFO[0m Continuous test complete!
+[2m2026-02-20T05:34:17.016702Z[0m [32m INFO[0m Disconnected from swarm
+[2m2026-02-20T05:34:17.016710Z[0m [32m INFO[0m Done.

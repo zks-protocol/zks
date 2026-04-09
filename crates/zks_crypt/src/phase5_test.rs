@@ -66,7 +66,7 @@ mod tests {
         let entropy_provider = Arc::new(DirectDrandProvider::new(drand_client));
 
         // Test fetching a round
-        let round = entropy_provider.fetch_round(1000).await.unwrap();
+        let round = entropy_provider.fetch_round(1000).await.expect("Failed to fetch round 1000 from entropy provider");
         assert_eq!(round.round, 1000);
         assert_eq!(round.randomness.len(), 32);
 

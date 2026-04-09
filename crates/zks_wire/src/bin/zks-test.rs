@@ -7,11 +7,11 @@ use clap::{Parser, Subcommand};
 use std::time::{Duration, Instant};
 use tokio::io::AsyncWriteExt;
 use tokio::time::sleep;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use zks_wire::signaling::{PeerCapabilities, SignalingClient};
-use zks_wire::SwarmController;
+use zks_wire::swarm_controller::{SwarmController, SwarmControllerConfig};
 
 /// Continuous test metrics
 #[derive(Debug, Default)]
@@ -108,6 +108,9 @@ async fn run_continuous_test(
                             "✅ Sent {}/{} messages through circuit {}",
                             messages_per_circuit, messages_per_circuit, circuit_id
                         );
+
+                        // Shutdown stream to ensure all pending writes complete before teardown
+                        stream.shutdown().await;
                     }
                     Err(e) => {
                         metrics.messages_failed += messages_per_circuit as u64;
@@ -206,6 +209,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// List all peers in the network with their capabilities and addresses
+    ListPeers,
+
     /// Build a circuit to a destination
     Build {
         /// Destination Peer ID (optional, will pick random if not provided)
@@ -213,7 +219,7 @@ enum Commands {
         dest: Option<String>,
 
         /// Number of hops
-        #[clap(short, long, default_value = "3")]
+        #[clap(long, default_value = "3")]
         hops: u8,
     },
 
@@ -243,7 +249,7 @@ enum Commands {
     /// This mode continuously builds circuits, streams data, and collects metrics
     Continuous {
         /// Number of hops for each circuit
-        #[clap(short, long, default_value = "3")]
+        #[clap(long, default_value = "3")]
         hops: u8,
 
         /// Number of circuits to build before stopping (0 = infinite)
@@ -281,8 +287,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     info!("Starting ZKS Protocol Test Client");
 
-    // Initialize Swarm Controller
-    let swarm = SwarmController::new().await?;
+    // Determine room ID from CLI
+    let room = cli.room_id.clone().unwrap_or_else(|| cli.network.clone());
+
+    // Initialize Swarm Controller with the correct default room
+    let config = SwarmControllerConfig::new(&room);
+    let swarm = SwarmController::with_config(config).await?;
 
     // Generate local peer ID
     let peer_id = format!("client-{}", uuid::Uuid::new_v4());
@@ -293,26 +303,148 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let signaling = SignalingClient::connect(&cli.signaling_url, peer_id).await?;
     swarm.connect_with_signaling(signaling).await?;
 
-    // Join room (use room_id override if provided)
-    let room = cli.room_id.as_ref().unwrap_or(&cli.network);
-    let capabilities = PeerCapabilities::default();
-    swarm.join_room(room, capabilities).await?;
+    // Join room
+    let capabilities = PeerCapabilities {
+        supports_p2p: true,
+        supports_relay: true,
+        supports_onion_routing: false,
+        max_message_size: 1024 * 1024,
+        supported_protocols: vec!["zks/1.0".to_string()],
+        max_hops: 3,
+    };
+    // Wait briefly for P2P network to initialize
+    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+    swarm.join_room(&room, capabilities).await?;
     info!("Joined room: {}", room);
 
+    // Initial peer discovery
+    info!("🔍 Discovering peers in room '{}'...", room);
+    match swarm.discover_peers(&room).await {
+        Ok(peers) => {
+            info!("✅ Initial discovery: {} peers in room '{}'", peers.len(), room);
+            for peer in &peers {
+                let relay_str = if peer.capabilities.supports_relay { "RELAY" } else { "node" };
+                let onion_str = if peer.capabilities.supports_onion_routing { ", ONION" } else { "" };
+                info!("  - Peer: {} [{}{}] (addresses: {:?})", 
+                    peer.peer_id, relay_str, onion_str, peer.addresses);
+            }
+        }
+        Err(e) => {
+            warn!("⚠️ Initial peer discovery failed (will retry if needed): {:?}", e);
+        }
+    }
+
     match cli.command {
-        Commands::Build { dest, hops } => {
-            // Discover peers
+        Commands::ListPeers => {
+            info!("🔍 Listing all peers in room '{}'...", room);
             let peers = swarm.discover_peers(&room).await?;
-            info!("Discovered {} peers", peers.len());
+            
+            if peers.is_empty() {
+                info!("⚠️ No peers found in room '{}'", room);
+            } else {
+                info!("✅ Found {} peer(s) in room '{}':", peers.len(), room);
+                println!("\n{:?}", "=".repeat(100));
+                println!("{:<60} {:<15} {:<25}", "Peer ID", "Capabilities", "Addresses");
+                println!("{:?}", "=".repeat(100));
+                
+                for peer in &peers {
+                    let mut capabilities = Vec::new();
+                    if peer.capabilities.supports_relay {
+                        capabilities.push("RELAY");
+                    }
+                    if peer.capabilities.supports_onion_routing {
+                        capabilities.push("ONION");
+                    }
+                    if peer.capabilities.supports_p2p {
+                        capabilities.push("P2P");
+                    }
+                    
+                    let caps_str = if capabilities.is_empty() {
+                        "NONE".to_string()
+                    } else {
+                        capabilities.join(", ")
+                    };
+                    
+                    let addr_str = if peer.addresses.is_empty() {
+                        "❌ EMPTY (CULPRIT!)".to_string()
+                    } else {
+                        peer.addresses.iter()
+                            .map(|a| a.to_string())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    };
+                    
+                    println!("{:<60} {:<15} {:<25}", 
+                        peer.peer_id, 
+                        caps_str, 
+                        addr_str
+                    );
+                }
+                println!("{:?}", "=".repeat(100));
+                println!("\nTotal: {} peer(s)", peers.len());
+                
+                let relay_peers: Vec<_> = peers.iter()
+                    .filter(|p| p.capabilities.supports_relay && !p.addresses.is_empty())
+                    .collect();
+                let empty_addr_peers: Vec<_> = peers.iter()
+                    .filter(|p| p.addresses.is_empty())
+                    .collect();
+                
+                println!("\nSummary:");
+                println!("  Relay-capable with addresses: {} (needed for 3-hop circuits)", relay_peers.len());
+                if !empty_addr_peers.is_empty() {
+                    println!("  ⚠️ Peers with empty addresses (CULPRIT!):");
+                    for peer in empty_addr_peers {
+                        println!("    - {} (supports_relay: {})", 
+                            peer.peer_id, 
+                            peer.capabilities.supports_relay);
+                    }
+                }
+            }
+        }
+        Commands::Build { dest, hops } => {
+            // Discover peers with retries
+            let mut peers: Vec<zks_wire::signaling::PeerInfo> = Vec::new();
+            let mut retry_count = 0;
+            let max_retries = 6; // 30 seconds total (6 * 5s)
+
+            info!("🔍 Discovering peers in room '{}'...", room);
+            while retry_count < max_retries {
+                peers = swarm.discover_peers(&room).await?;
+                if !peers.is_empty() {
+                    break;
+                }
+                
+                retry_count += 1;
+                if retry_count < max_retries {
+                    info!("  No peers found yet, waiting 5s (attempt {}/{})...", retry_count, max_retries);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+            }
+
+            let peer_count = peers.len();
+            info!("✅ Discovery complete: {} peers found", peer_count);
+            for peer in &peers {
+                let relay_str = if peer.capabilities.supports_relay { "RELAY" } else { "node" };
+                info!("  - Peer: {} [{}] (addresses: {:?})", 
+                    peer.peer_id, relay_str, peer.addresses);
+            }
 
             let target = if let Some(d) = dest {
                 d
             } else {
-                // Pick a random peer that isn't us (though signaling shouldn't return us normally)
-                if peers.is_empty() {
-                    return Err("No peers found in network to build circuit".into());
+                // Pick a random peer that isn't us
+                let local_pid = swarm.local_peer_id().await.unwrap_or_default();
+                let filtered_peers: Vec<_> = peers
+                    .iter()
+                    .filter(|p| p.peer_id != local_pid)
+                    .collect();
+
+                if filtered_peers.is_empty() {
+                    return Err("No other peers found in network to build circuit".into());
                 }
-                let p = &peers[0]; // Simple pick for now
+                let p = filtered_peers[0]; // Simple pick for now
                 p.peer_id.clone()
             };
 
@@ -358,7 +490,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             run_continuous_test(
                 &swarm,
-                room,
+                &room,
                 hops,
                 num_circuits,
                 messages_per_circuit,
@@ -368,6 +500,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Listen { port: _ } => {
             info!("Client listening for incoming circuit requests...");
+
+            // Spawn periodic peer discovery in background for Listen mode
+            let discovery_swarm = swarm.clone();
+            let discovery_room = room.clone();
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(30));
+                interval.tick().await; // Skip first immediate tick
+                loop {
+                    interval.tick().await;
+                    match discovery_swarm.discover_peers(&discovery_room).await {
+                        Ok(peers) => {
+                            let peer_count = peers.len();
+                            info!("🔄 Listen mode - {} peers in '{}'", peer_count, discovery_room);
+                        }
+                        Err(e) => {
+                            warn!("⚠️ Listen mode discovery failed: {:?}", e);
+                        }
+                    }
+                }
+            });
+
             // Keep running
             tokio::signal::ctrl_c().await?;
         }

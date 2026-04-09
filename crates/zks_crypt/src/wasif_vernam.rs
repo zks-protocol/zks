@@ -88,7 +88,7 @@ impl WasifVernam {
             nonce_counter: AtomicU64::new(0),
             anti_replay: Arc::new(AntiReplayContainer::new()),
             swarm_seed: Zeroizing::new([0u8; 32]),
-            key_offset: AtomicU64::new(0),
+            key_offset: AtomicU64::new(1),
             has_swarm_entropy: false,
             true_vernam_buffer: None,
             synchronized_buffer: None,
@@ -234,8 +234,9 @@ impl WasifVernam {
     /// // Derive base_iv from handshake transcript using HKDF
     /// let hk = Hkdf::<Sha256>::new(Some(b\"zks-base-iv\"), &shared_secret);
     /// let mut base_iv = [0u8; 12];
-    /// hk.expand(b\"initiator-iv\", &mut base_iv).unwrap(); // or \"responder-iv\"
+    /// hk.expand(b\"initiator-iv\", &mut base_iv)?; // or \"responder-iv\"
     /// cipher.set_base_iv(base_iv);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
     /// ```
     pub fn set_base_iv(&mut self, base_iv: [u8; 12]) {
         self.base_iv = base_iv;
@@ -410,6 +411,12 @@ impl WasifVernam {
                 }
                 self.key_offset
                     .fetch_add(data.len() as u64, Ordering::SeqCst)
+            } else if let Some(ref seq_buffer) = self.sequenced_buffer {
+                let keystream = seq_buffer.generate_for_sequence_sync(counter, data.len());
+                for (i, byte) in mixed_data.iter_mut().enumerate() {
+                    *byte ^= keystream[i];
+                }
+                1 // Return dummy > 0 offset so decrypt invokes XOR layer
             } else {
                 // Fallback to static swarm seed (computational security)
                 let offset = self
@@ -500,6 +507,16 @@ impl WasifVernam {
                 let keystream = sync_buffer.consume_sync(plaintext.len());
                 for (i, byte) in plaintext.iter_mut().enumerate() {
                     *byte ^= keystream[i];
+                }
+            } else if let Some(ref seq_buffer) = self.sequenced_buffer {
+                let keystream_opt = seq_buffer.consume_for_sequence_sync(pid, plaintext.len());
+                if let Some(keystream) = keystream_opt {
+                    for (i, byte) in plaintext.iter_mut().enumerate() {
+                        *byte ^= keystream[i];
+                    }
+                } else {
+                    warn!("⚠️ Invalid sequence {} dropped by sequenced buffer", pid);
+                    return Err(AeadError);
                 }
             } else {
                 // Fallback to static swarm seed (computational security)
@@ -628,10 +645,20 @@ impl WasifVernam {
         };
 
         // Parse envelope header
-        let sequence = u64::from_be_bytes(envelope[0..8].try_into().unwrap());
-        let length = u32::from_be_bytes(envelope[8..12].try_into().unwrap()) as usize;
+        let sequence = u64::from_be_bytes(
+            envelope[0..8]
+                .try_into()
+                .map_err(|_| AeadError)?,
+        );
+        let length = u32::from_be_bytes(
+            envelope[8..12]
+                .try_into()
+                .map_err(|_| AeadError)?
+        ) as usize;
         let mode = envelope[12];
-        let nonce_bytes: [u8; 12] = envelope[13..25].try_into().unwrap();
+        let nonce_bytes: [u8; 12] = envelope[13..25]
+            .try_into()
+            .map_err(|_| AeadError)?;
         let ciphertext = &envelope[25..];
 
         // Validate mode
@@ -1317,7 +1344,7 @@ mod unbreakability_tests {
             .map(|b| b ^ 0xFF)
             .collect::<Vec<_>>()
             .try_into()
-            .unwrap();
+            .expect("drand is 32 bytes, so result must be 32 bytes");
         assert_eq!(seed, expected, "XOR must follow Shannon's theorem");
 
         // Verify randomness is preserved - expect at least 16 unique bytes in 32
@@ -1747,7 +1774,7 @@ mod post_quantum_tests {
         cipher.refresh_entropy(&[0u8; 32]); // Zeros
         cipher.refresh_entropy(&[0xFF; 32]); // Ones
         let mut random = [0u8; 32];
-        getrandom::getrandom(&mut random).unwrap();
+        getrandom::getrandom(&mut random).expect("RNG failed in test");
         cipher.refresh_entropy(&random);
 
         // Encrypt after entropy - should still work (though decryption requires sync)

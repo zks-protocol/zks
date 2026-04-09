@@ -35,18 +35,34 @@ use std::io;
 pub enum P2PCommand {
     /// Send a Faisal Swarm response
     SendResponse {
+        /// Response channel for sending the response
         channel: request_response::ResponseChannel<FaisalSwarmResponse>,
+        /// Response message to send
         response: FaisalSwarmResponse,
     },
-    /// Dial a peer
+    /// Dial a peer with single address
     Dial {
+        /// Multiaddress of the peer to dial
         addr: Multiaddr,
+        /// Channel for sending dial result
+        response: oneshot::Sender<Result<(), NativeP2PError>>,
+    },
+    /// Dial a peer with multiple fallback addresses
+    DialPeerOpts {
+        /// Peer identifier to dial
+        peer_id: PeerId,
+        /// List of multiaddresses to try
+        addresses: Vec<Multiaddr>,
+        /// Channel for sending dial result
         response: oneshot::Sender<Result<(), NativeP2PError>>,
     },
     /// Send a Faisal Swarm request
     SendRequest {
+        /// Peer identifier to send request to
         peer_id: PeerId,
+        /// Request message to send
         request: FaisalSwarmRequest,
+        /// Channel for sending response
         response_sender: oneshot::Sender<Result<FaisalSwarmResponse, NativeP2PError>>,
     },
     /// Subscribe to entropy gossip topic
@@ -373,6 +389,7 @@ pub struct NativeP2PDriver {
     /// libp2p swarm instance managing all protocols
     swarm: Swarm<NativeSwarmBehaviour>,
     /// Local peer ID for this transport
+    #[allow(dead_code)]
     local_peer_id: PeerId,
     /// Channel receiver for internal loop commands
     command_receiver: mpsc::UnboundedReceiver<P2PCommand>,
@@ -546,6 +563,15 @@ impl NativeP2PTransport {
             .map_err(|_| NativeP2PError::Network("Response channel closed".into()))?
     }
 
+    /// Dial a peer with multiple fallback addresses
+    pub async fn dial_peer_opts(&self, peer_id: PeerId, addresses: Vec<Multiaddr>) -> Result<(), NativeP2PError> {
+        let (tx, rx) = oneshot::channel();
+        self.send_command(P2PCommand::DialPeerOpts { peer_id, addresses, response: tx })
+            .await?;
+        rx.await
+            .map_err(|_| NativeP2PError::Network("Response channel closed".into()))?
+    }
+
     /// Check if connected to a peer
     pub async fn is_connected(&self, peer_id: &PeerId) -> bool {
         self.connected_peers.lock().await.contains_key(peer_id)
@@ -580,6 +606,11 @@ impl NativeP2PTransport {
     pub async fn connected_peers(&self) -> Vec<PeerId> {
         let peers = self.connected_peers.lock().await;
         peers.keys().cloned().collect()
+    }
+
+    /// Get active listen addresses
+    pub async fn get_listen_addresses(&self) -> Vec<Multiaddr> {
+        self.listen_addresses.lock().await.clone()
     }
 
     // Proxy other methods if needed...
@@ -645,6 +676,17 @@ impl NativeP2PDriver {
                 let result = self
                     .swarm
                     .dial(addr)
+                    .map_err(|e| NativeP2PError::Network(e.to_string()));
+                let _ = response.send(result);
+            }
+            P2PCommand::DialPeerOpts { peer_id, addresses, response } => {
+                let opts = libp2p::swarm::dial_opts::DialOpts::peer_id(peer_id)
+                    .condition(libp2p::swarm::dial_opts::PeerCondition::Always)
+                    .addresses(addresses)
+                    .build();
+                let result = self
+                    .swarm
+                    .dial(opts)
                     .map_err(|e| NativeP2PError::Network(e.to_string()));
                 let _ = response.send(result);
             }
@@ -740,7 +782,8 @@ impl NativeP2PDriver {
                     // We don't return the ListenerId, just success
                     let _ = response.send(Ok(()));
                 } else {
-                    let _ = response.send(Err(result.err().unwrap()));
+                    let error = result.unwrap_err();
+                    let _ = response.send(Err(error));
                 }
             }
             P2PCommand::GetEntropyProviders(block_key, response) => {
@@ -1028,9 +1071,11 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     #[cfg(not(target_arch = "wasm32"))]
     #[ignore = "Requires gossipsub configuration for local testing"]
-    async fn test_native_p2p_creation() {
-        let (transport, _driver) = NativeP2PTransport::new(None, None).unwrap();
+    async fn test_native_p2p_creation() -> Result<()> {
+        let (transport, _driver) = NativeP2PTransport::new(None, None)
+            .map_err(|e| anyhow::anyhow!("Failed to create P2P transport: {}", e))?;
         let peer_id = transport.local_peer_id();
         assert!(!peer_id.to_string().is_empty());
+        Ok(())
     }
 }

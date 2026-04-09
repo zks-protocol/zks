@@ -430,7 +430,10 @@ impl ErasureRatchet {
 
         // Try to reconstruct
         if self.codec.can_reconstruct(shard_count) {
-            let shards = self.pending_shards.get(&epoch).unwrap();
+            let shards = self
+                .pending_shards
+                .get(&epoch)
+                .ok_or_else(|| ErasureError::ReconstructionError(format!("Epoch {} not found in pending shards (this should never happen)", epoch)))?;
             let original_len = self
                 .pending_lengths
                 .get(&epoch)
@@ -532,12 +535,16 @@ mod tests {
         let codec = ErasureCodec::new(config);
 
         let original = vec![0x42u8; 1568]; // ML-KEM ciphertext size
-        let shards = codec.encode(&original, 1).unwrap();
+        let shards = codec
+            .encode(&original, 1)
+            .expect("Failed to encode original data into shards");
 
         assert_eq!(shards.len(), 8); // n = 8 shards (4 original + 4 recovery)
 
         // Decode with all shards
-        let decoded = codec.decode(&shards, original.len()).unwrap();
+        let decoded = codec
+            .decode(&shards, original.len())
+            .expect("Failed to decode shards to original data");
         assert_eq!(decoded, original);
     }
 
@@ -547,14 +554,18 @@ mod tests {
         let codec = ErasureCodec::new(config);
 
         let original = vec![0x42u8; 1568];
-        let shards = codec.encode(&original, 1).unwrap();
+        let shards = codec
+            .encode(&original, 1)
+            .expect("Failed to encode original data into shards");
 
         // Keep only 4 shards (drop half) - use only original shards
         let partial: Vec<_> = shards.into_iter().filter(|s| !s.is_recovery).collect();
 
         assert_eq!(partial.len(), 4);
 
-        let decoded = codec.decode(&partial, original.len()).unwrap();
+        let decoded = codec
+            .decode(&partial, original.len())
+            .expect("Failed to decode partial shards to original data");
         assert_eq!(decoded, original);
     }
 
@@ -564,7 +575,9 @@ mod tests {
         let codec = ErasureCodec::new(config);
 
         let original = vec![0x42u8; 1568];
-        let shards = codec.encode(&original, 1).unwrap();
+        let shards = codec
+            .encode(&original, 1)
+            .expect("Failed to encode original data into shards");
 
         // Keep only 2 original and 2 recovery shards (still 4 = k)
         let partial: Vec<_> = shards
@@ -576,7 +589,9 @@ mod tests {
 
         assert_eq!(partial.len(), 4);
 
-        let decoded = codec.decode(&partial, original.len()).unwrap();
+        let decoded = codec
+            .decode(&partial, original.len())
+            .expect("Failed to decode partial shards to original data");
         assert_eq!(decoded, original);
     }
 
@@ -586,7 +601,9 @@ mod tests {
         let codec = ErasureCodec::new(config);
 
         let original = vec![0x42u8; 1568];
-        let shards = codec.encode(&original, 1).unwrap();
+        let shards = codec
+            .encode(&original, 1)
+            .expect("Failed to encode original data into shards");
 
         // Only keep k-1 shards
         let partial: Vec<_> = shards.into_iter().take(3).collect();
@@ -604,20 +621,24 @@ mod tests {
         let mut ratchet = ErasureRatchet::new(config);
 
         let original = vec![0xABu8; 1568];
-        let shards = ratchet.encode_ciphertext(&original, 1).unwrap();
+        let shards = ratchet
+            .encode_ciphertext(&original, 1)
+            .expect("Failed to encode ciphertext into shards");
 
         ratchet.set_original_length(1, original.len());
 
         // Receive shards one by one
         for (i, shard) in shards.into_iter().enumerate() {
-            let result = ratchet.receive_shard(shard).unwrap();
+            let result = ratchet
+                .receive_shard(shard)
+                .expect("Failed to receive shard in ratchet");
 
             if i < 3 {
                 // Not enough yet
                 assert!(result.is_none());
             } else if result.is_some() {
                 // Should reconstruct after k shards
-                let decoded = result.unwrap();
+                let decoded = result.expect("Failed to unwrap reconstruction result");
                 assert_eq!(decoded, original);
                 return;
             }
@@ -630,12 +651,18 @@ mod tests {
         let mut ratchet = ErasureRatchet::new(config);
 
         let original = vec![0xABu8; 1568];
-        let shards = ratchet.encode_ciphertext(&original, 1).unwrap();
+        let shards = ratchet
+            .encode_ciphertext(&original, 1)
+            .expect("Failed to encode ciphertext into shards");
 
         // Send same shard twice
         let first_shard = shards[0].clone();
-        ratchet.receive_shard(first_shard.clone()).unwrap();
-        let result = ratchet.receive_shard(first_shard).unwrap();
+        ratchet
+            .receive_shard(first_shard.clone())
+            .expect("Failed to receive first shard");
+        let result = ratchet
+            .receive_shard(first_shard)
+            .expect("Failed to receive duplicate shard");
 
         // Should ignore duplicate
         assert!(result.is_none());
@@ -647,7 +674,9 @@ mod tests {
         let codec = ErasureCodec::new(config);
 
         let original = vec![0x55u8; 1568];
-        let shards = codec.encode(&original, 1).unwrap();
+        let shards = codec
+            .encode(&original, 1)
+            .expect("Failed to encode original data into shards");
 
         assert_eq!(shards.len(), 12);
 
@@ -661,7 +690,9 @@ mod tests {
 
         assert_eq!(partial.len(), 4);
 
-        let decoded = codec.decode(&partial, original.len()).unwrap();
+        let decoded = codec
+            .decode(&partial, original.len())
+            .expect("Failed to decode partial shards to original data");
         assert_eq!(decoded, original);
     }
 }

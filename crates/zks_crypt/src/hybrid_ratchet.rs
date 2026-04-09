@@ -517,7 +517,7 @@ mod tests {
     fn test_hybrid_ratchet_creation() {
         let shared_secret = [0x42u8; 32];
         let ratchet =
-            HybridRatchet::new(&shared_secret, true, HybridRatchetConfig::default()).unwrap();
+            HybridRatchet::new(&shared_secret, true, HybridRatchetConfig::default()).expect("Failed to create hybrid ratchet");
 
         assert_eq!(ratchet.ratchet_generation(), 0);
         assert_eq!(ratchet.message_count(), 0);
@@ -531,22 +531,22 @@ mod tests {
         // Use interval of 1 to trigger ratchet immediately
         let config = HybridRatchetConfig::max_security();
 
-        let mut alice = HybridRatchet::new(&shared_secret, true, config.clone()).unwrap();
-        let mut bob = HybridRatchet::new(&shared_secret, false, config).unwrap();
+        let mut alice = HybridRatchet::new(&shared_secret, true, config.clone()).expect("Failed to create alice hybrid ratchet");
+        let mut bob = HybridRatchet::new(&shared_secret, false, config).expect("Failed to create bob hybrid ratchet");
 
         // Exchange initial public keys
         alice
             .set_peer_public_key(bob.our_public_key().to_vec())
-            .unwrap();
+            .expect("Failed to set alice peer public key");
         bob.set_peer_public_key(alice.our_public_key().to_vec())
-            .unwrap();
+            .expect("Failed to set bob peer public key");
 
         // First message triggers asymmetric ratchet (interval = 1)
-        let output = alice.ratchet_encrypt().unwrap();
+        let output = alice.ratchet_encrypt().expect("Failed to encrypt first message");
 
         // Verify ratchet was performed after first message
         // (ratchet happens on message 1, not message 0)
-        let output2 = alice.ratchet_encrypt().unwrap();
+        let output2 = alice.ratchet_encrypt().expect("Failed to encrypt second message");
         assert!(
             output2.ratcheted,
             "Second message should trigger ratchet with interval=1"
@@ -564,10 +564,10 @@ mod tests {
             true,
             HybridRatchetConfig::bandwidth_optimized(), // 50 message interval
         )
-        .unwrap();
+        .expect("Failed to create hybrid ratchet");
 
-        let output1 = ratchet.ratchet_encrypt().unwrap();
-        let output2 = ratchet.ratchet_encrypt().unwrap();
+        let output1 = ratchet.ratchet_encrypt().expect("Failed to encrypt message 1");
+        let output2 = ratchet.ratchet_encrypt().expect("Failed to encrypt message 2");
 
         assert_ne!(*output1.message_key, *output2.message_key);
     }
@@ -577,34 +577,34 @@ mod tests {
         let shared_secret = [0x42u8; 32];
         let config = HybridRatchetConfig::bandwidth_optimized();
 
-        let mut alice = HybridRatchet::new(&shared_secret, true, config.clone()).unwrap();
-        let mut bob = HybridRatchet::new(&shared_secret, false, config).unwrap();
+        let mut alice = HybridRatchet::new(&shared_secret, true, config.clone()).expect("Failed to create alice hybrid ratchet");
+        let mut bob = HybridRatchet::new(&shared_secret, false, config).expect("Failed to create bob hybrid ratchet");
 
         // Exchange public keys
         alice
             .set_peer_public_key(bob.our_public_key().to_vec())
-            .unwrap();
+            .expect("Failed to set alice peer public key");
         bob.set_peer_public_key(alice.our_public_key().to_vec())
-            .unwrap();
+            .expect("Failed to set bob peer public key");
 
         // Alice sends 3 messages
-        let msg0 = alice.ratchet_encrypt().unwrap();
-        let msg1 = alice.ratchet_encrypt().unwrap();
-        let msg2 = alice.ratchet_encrypt().unwrap();
+        let msg0 = alice.ratchet_encrypt().expect("Failed to encrypt message 0");
+        let msg1 = alice.ratchet_encrypt().expect("Failed to encrypt message 1");
+        let msg2 = alice.ratchet_encrypt().expect("Failed to encrypt message 2");
 
         // Bob receives them out of order: 2, 0, 1
-        let key2 = bob.ratchet_decrypt(&msg2.header).unwrap();
+        let key2 = bob.ratchet_decrypt(&msg2.header).expect("Failed to decrypt message 2 header");
         assert_eq!(*key2, *msg2.message_key, "Message 2 key should match");
 
         // Message 0 should be in skipped keys now
-        let key0 = bob.ratchet_decrypt(&msg0.header).unwrap();
+        let key0 = bob.ratchet_decrypt(&msg0.header).expect("Failed to decrypt message 0 header");
         assert_eq!(
             *key0, *msg0.message_key,
             "Message 0 key should match (from cache)"
         );
 
         // Message 1 should also be in skipped keys
-        let key1 = bob.ratchet_decrypt(&msg1.header).unwrap();
+        let key1 = bob.ratchet_decrypt(&msg1.header).expect("Failed to decrypt message 1 header");
         assert_eq!(
             *key1, *msg1.message_key,
             "Message 1 key should match (from cache)"
@@ -617,20 +617,20 @@ mod tests {
         let mut config = HybridRatchetConfig::balanced();
         config.max_skip = 5; // Very low limit for testing
 
-        let mut alice = HybridRatchet::new(&shared_secret, true, config.clone()).unwrap();
-        let mut bob = HybridRatchet::new(&shared_secret, false, config).unwrap();
+        let mut alice = HybridRatchet::new(&shared_secret, true, config.clone()).expect("Failed to create alice hybrid ratchet");
+        let mut bob = HybridRatchet::new(&shared_secret, false, config).expect("Failed to create bob hybrid ratchet");
 
         alice
             .set_peer_public_key(bob.our_public_key().to_vec())
-            .unwrap();
+            .expect("Failed to set alice peer public key");
         bob.set_peer_public_key(alice.our_public_key().to_vec())
-            .unwrap();
+            .expect("Failed to set bob peer public key");
 
         // Alice sends many messages
         for _ in 0..10 {
-            alice.ratchet_encrypt().unwrap();
+            alice.ratchet_encrypt().expect("Failed to encrypt message");
         }
-        let msg10 = alice.ratchet_encrypt().unwrap();
+        let msg10 = alice.ratchet_encrypt().expect("Failed to encrypt message 10");
 
         // Bob tries to decrypt message 10 without receiving 0-9
         // This should fail because it exceeds max_skip

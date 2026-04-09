@@ -4,6 +4,7 @@ use zks_crypt::wasif_vernam::WasifVernam;
 fn debug_size_calculation() {
     let key = [1u8; 32];
     let mut cipher = WasifVernam::new(key).unwrap();
+    cipher.set_base_iv([0u8; 12]);
 
     let plaintext_sizes = vec![64, 128, 256];
 

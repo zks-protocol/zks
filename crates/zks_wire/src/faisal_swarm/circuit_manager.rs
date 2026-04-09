@@ -125,9 +125,13 @@ pub struct BuildStats {
 /// Retry configuration for network operations
 #[derive(Debug, Clone)]
 pub struct RetryConfig {
+    /// Maximum number of retry attempts
     pub max_attempts: u32,
+    /// Initial delay before first retry
     pub initial_delay: Duration,
+    /// Maximum delay between retries
     pub max_delay: Duration,
+    /// Multiplier for exponential backoff
     pub backoff_multiplier: f64,
 }
 
@@ -176,10 +180,66 @@ where
 /// Circuit manager statistics for monitoring and debugging
 #[derive(Debug, Clone)]
 pub struct CircuitStats {
+    /// Total number of circuits managed
     pub total_circuits: usize,
+    /// Number of circuits ready for use
     pub ready_circuits: usize,
+    /// Number of circuits currently being built
     pub building_circuits: usize,
+    /// Number of circuits that failed to build
     pub failed_circuits: usize,
+}
+
+/// Peer health score for circuit building reliability
+#[derive(Debug, Clone)]
+struct PeerHealthScore {
+    #[allow(dead_code)]
+    peer_id: PeerId,
+    success_count: u32,
+    failure_count: u32,
+    last_attempt: Instant,
+    avg_latency_ms: f64,
+}
+
+impl PeerHealthScore {
+    fn new(peer_id: PeerId) -> Self {
+        Self {
+            peer_id,
+            success_count: 0,
+            failure_count: 0,
+            last_attempt: Instant::now(),
+            avg_latency_ms: 0.0,
+        }
+    }
+
+    fn record_success(&mut self, latency_ms: u64) {
+        self.success_count += 1;
+        self.last_attempt = Instant::now();
+        let total = self.success_count + self.failure_count;
+        self.avg_latency_ms = (self.avg_latency_ms * (total - 1) as f64 + latency_ms as f64) / total as f64;
+    }
+
+    fn record_failure(&mut self) {
+        self.failure_count += 1;
+        self.last_attempt = Instant::now();
+    }
+
+    fn reliability_score(&self) -> f64 {
+        let total = self.success_count + self.failure_count;
+        if total == 0 {
+            return 0.5;
+        }
+        self.success_count as f64 / total as f64
+    }
+
+    #[allow(dead_code)]
+    fn is_reliable(&self, min_attempts: u32, threshold: f64) -> bool {
+        let total = self.success_count + self.failure_count;
+        if total < min_attempts {
+            return true;
+        }
+        self.reliability_score() >= threshold
+    }
 }
 
 /// Coordinates circuit building, peer selection, and circuit lifecycle
@@ -205,6 +265,9 @@ pub struct FaisalSwarmManager<S: SignalingClientTrait> {
 
     /// Circuit build metrics collector (H3 fix)
     metrics: MetricsCollector,
+
+    /// Peer health scores for reliable peer selection
+    peer_health_scores: Arc<RwLock<HashMap<PeerId, PeerHealthScore>>>,
 }
 
 impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
@@ -233,12 +296,13 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
     ) -> Self {
         Self {
             circuits: RwLock::new(HashMap::new()),
-            next_id: AtomicU32::new(0x80000001),
+            next_id: AtomicU32::new(0x80000000 | (rand::random::<u32>() & 0x7FFFFFFF)),
             signaling,
             p2p_transport,
             retry_config,
             streams: Arc::new(RwLock::new(HashMap::new())),
             metrics: MetricsCollector::new(),
+            peer_health_scores: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -350,8 +414,36 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
             circuits.insert(circuit_id, circuit);
         }
 
-        // 4. Build circuit via libp2p relay
-        self.build_swarm_circuit(circuit_id).await?;
+        // 4. Build circuit via libp2p relay with retry logic
+        let build_result = retry_with_backoff(
+            || {
+                let circuit_id = circuit_id;
+                async move {
+                    self.build_swarm_circuit(circuit_id).await
+                }
+            },
+            &RetryConfig {
+                max_attempts: 5,
+                initial_delay: Duration::from_millis(200),
+                max_delay: Duration::from_secs(10),
+                backoff_multiplier: 2.0,
+            },
+        ).await;
+
+        if build_result.is_err() {
+            // Record circuit failure for all hops
+            let circuits = self.circuits.read().await;
+            if let Some(circuit) = circuits.get(&circuit_id) {
+                let mut health_scores = self.peer_health_scores.write().await;
+                for hop in &circuit.hops {
+                    health_scores
+                        .entry(hop.peer_id)
+                        .or_insert_with(|| PeerHealthScore::new(hop.peer_id))
+                        .record_failure();
+                }
+            }
+            return Err(build_result.unwrap_err());
+        }
 
         // 5. Mark as ready and record metrics (H3 fix)
         {
@@ -370,6 +462,22 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
                     total_build_time,
                 };
                 self.metrics.record_build(metrics).await;
+
+                // Clone hop peer IDs for health scoring (avoid borrowing after drop)
+                let hop_peer_ids: Vec<_> = circuit.hops.iter().map(|h| h.peer_id).collect();
+                let hops_count = circuit.hops.len();
+                let avg_latency_ms = (total_build_time.as_millis() / hops_count as u128) as u64;
+
+                drop(circuits);
+
+                // Record successful circuit completion for all hops
+                let mut health_scores = self.peer_health_scores.write().await;
+                for peer_id in hop_peer_ids {
+                    health_scores
+                        .entry(peer_id)
+                        .or_insert_with(|| PeerHealthScore::new(peer_id))
+                        .record_success(avg_latency_ms);
+                }
 
                 info!(
                     "✅ Faisal Swarm circuit {} is ready! (built in {:?})",
@@ -395,10 +503,10 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
             .await
             .map_err(|e| SwarmError::Libp2p(e.to_string()))?;
 
-        // Filter for peers with relay capability
+        // Filter for peers with relay capabilities and at least one address
         let swarm_peers: Vec<_> = peers
             .into_iter()
-            .filter(|p| p.capabilities.supports_relay)
+            .filter(|p| p.capabilities.supports_relay && !p.addresses.is_empty())
             .collect();
 
         info!("Found {} relay-capable peers in swarm", swarm_peers.len());
@@ -416,38 +524,178 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
         // SECURITY: Use TrueEntropy for 256-bit post-quantum computational security in path selection
         use zks_crypt::true_entropy::TrueEntropyRng;
         let mut rng = TrueEntropyRng;
-        let mut selected = available_peers.to_vec();
-        selected.shuffle(&mut rng);
+
+        // Filter out local peer ID to avoid self-selection
+        let local_peer_id = {
+            let p2p = self.p2p_transport.read().await;
+            p2p.local_peer_id()
+        };
+
+        let mut available_peers: Vec<PeerInfo> = available_peers
+            .iter()
+            .filter(|p| {
+                if let Ok(pid) = p.peer_id.parse::<PeerId>() {
+                    pid != local_peer_id
+                } else {
+                    false
+                }
+            })
+            .cloned()
+            .collect();
+
+        if available_peers.is_empty() {
+            return Err(SwarmError::Libp2p("No remote peers available for path selection".into()));
+        }
+
+        // Sort peers by reliability score before shuffling
+        // This ensures more reliable peers are selected first
+        {
+            let health_scores = self.peer_health_scores.read().await;
+            available_peers.sort_by(|a, b| {
+                let peer_id_a = a.peer_id.parse::<PeerId>().ok();
+                let peer_id_b = b.peer_id.parse::<PeerId>().ok();
+
+                let score_a = peer_id_a
+                    .and_then(|pid| health_scores.get(&pid))
+                    .map(|h| h.reliability_score())
+                    .unwrap_or(0.5);
+
+                let score_b = peer_id_b
+                    .and_then(|pid| health_scores.get(&pid))
+                    .map(|h| h.reliability_score())
+                    .unwrap_or(0.5);
+
+                score_b.partial_cmp(&score_a).unwrap_or(std::cmp::Ordering::Equal)
+            });
+        }
+
+        available_peers.shuffle(&mut rng);
 
         let mut circuit_hops = Vec::with_capacity(hops);
+        let mut hop_index = 0;
 
-        for (i, peer) in selected.iter().take(hops).enumerate() {
-            let role = match i {
+        for peer in available_peers.iter() {
+            if circuit_hops.len() >= hops {
+                break;
+            }
+
+            let role = match hop_index {
                 0 => HopRole::Guard,
                 n if n == hops - 1 => HopRole::Exit,
                 _ => HopRole::Middle,
             };
 
-            let peer_id = PeerId::from_bytes(&peer.peer_id.as_bytes())
-                .map_err(|e| SwarmError::Libp2p(e.to_string()))?;
-
-            let multiaddr = peer
-                .addresses
-                .first()
-                .ok_or_else(|| SwarmError::Libp2p("No address for peer".into()))?
+            let peer_id: PeerId = peer
+                .peer_id
                 .parse()
-                .map_err(|e| SwarmError::Libp2p(format!("Invalid multiaddr: {}", e)))?;
+                .map_err(|e| SwarmError::Libp2p(format!("Invalid PeerID: {}", e)))?;
+
+            // Skip peers with no addresses
+            if peer.addresses.is_empty() {
+                warn!("Skipping peer {} (no addresses available)", peer_id);
+                continue;
+            }
+
+            // Prioritize public IP addresses over private ones
+            let addr_str = {
+                let mut best_addr = None;
+                for addr in &peer.addresses {
+                    // Very simple heuristic: if it contains a private IP prefix, it's lower priority
+                    if addr.contains("/172.") || addr.contains("/192.168.") || addr.contains("/10.") || addr.contains("/127.") {
+                        if best_addr.is_none() {
+                            // Save the first private IP as fallback
+                            best_addr = Some(addr);
+                        }
+                    } else {
+                        // Looks like a public IP!
+                        best_addr = Some(addr);
+                        break;
+                    }
+                }
+
+                // If we found any address prioritize it, otherwise take the first available
+                best_addr.or_else(|| peer.addresses.first()).ok_or_else(|| SwarmError::Libp2p("No address for peer".into()))?
+            };
+
+            let multiaddr = if addr_str.starts_with('/') {
+                addr_str
+                    .parse()
+                    .map_err(|e| SwarmError::Libp2p(format!("Invalid multiaddr: {}", e)))?
+            } else if addr_str.starts_with("tcp://") {
+                let stripped = &addr_str[6..];
+                if let Some((host, port)) = stripped.rsplit_once(':') {
+                    // Try parsing as IP first
+                    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+                        match ip {
+                            std::net::IpAddr::V4(v4) => format!("/ip4/{}/tcp/{}", v4, port),
+                            std::net::IpAddr::V6(v6) => format!("/ip6/{}/tcp/{}", v6, port),
+                        }
+                        .parse()
+                        .map_err(|e| SwarmError::Libp2p(format!("Invalid multiaddr from IP: {}", e)))?
+                    } else {
+                        // Assume it's a DNS name
+                        format!("/dns4/{}/tcp/{}", host, port)
+                            .parse()
+                            .map_err(|e| SwarmError::Libp2p(format!("Invalid multiaddr from DNS: {}", e)))?
+                    }
+                } else {
+                    return Err(SwarmError::Libp2p(format!(
+                        "Invalid tcp address format: {}",
+                        addr_str
+                    )));
+                }
+            } else {
+                return Err(SwarmError::Libp2p(format!(
+                    "Unsupported address format: {}",
+                    addr_str
+                )));
+            };
+
+            let mut all_multiaddrs = Vec::new();
+            for addr_str in &peer.addresses {
+                let parsed = if addr_str.starts_with('/') {
+                    addr_str.parse().ok()
+                } else if addr_str.starts_with("tcp://") {
+                    let stripped = &addr_str[6..];
+                    if let Some((host, port)) = stripped.rsplit_once(':') {
+                        if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+                            match ip {
+                                std::net::IpAddr::V4(v4) => format!("/ip4/{}/tcp/{}", v4, port),
+                                std::net::IpAddr::V6(v6) => format!("/ip6/{}/tcp/{}", v6, port),
+                            }
+                            .parse().ok()
+                        } else {
+                            format!("/dns4/{}/tcp/{}", host, port).parse().ok()
+                        }
+                    } else { None }
+                } else { None };
+
+                if let Some(ma) = parsed {
+                    all_multiaddrs.push(ma);
+                }
+            }
 
             circuit_hops.push(SwarmHop {
                 peer_id,
                 role,
                 multiaddr,
+                all_multiaddrs,
                 capabilities: SwarmCapabilities {
                     can_relay: peer.capabilities.supports_relay,
                     can_exit: peer.capabilities.supports_onion_routing,
                     bandwidth_tier: 3,
                 },
             });
+
+            hop_index += 1;
+        }
+
+        if circuit_hops.len() < hops {
+            return Err(SwarmError::Libp2p(format!(
+                "Not enough peers with valid addresses (required: {}, available: {})",
+                hops,
+                circuit_hops.len()
+            )));
         }
 
         info!("📍 Faisal Swarm path selected:");
@@ -483,7 +731,7 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
             let guard = &circuit.hops[0];
             info!("  → Connecting to Guard: {}", guard.peer_id);
 
-            (guard.peer_id, guard.multiaddr.clone())
+            (guard.peer_id, guard.all_multiaddrs.clone())
         };
 
         // Connect to first hop (Guard) without holding circuit lock
@@ -603,39 +851,60 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
     async fn connect_to_swarm_peer(
         &self,
         peer_id: &PeerId,
-        multiaddr: &Multiaddr,
+        multiaddrs: &[Multiaddr],
         circuit_id: CircuitId,
     ) -> Result<()> {
         info!(
-            "Connecting to swarm peer {} at {} for circuit {}",
-            peer_id, multiaddr, circuit_id
+            "Connecting to swarm peer {} with {} addresses for circuit {}",
+            peer_id, multiaddrs.len(), circuit_id
         );
 
         let p2p_transport = self.p2p_transport.read().await;
 
-        // Dial the peer
+        // Dial the peer using all available addresses fallback
         p2p_transport
-            .dial(multiaddr.clone())
+            .dial_peer_opts(*peer_id, multiaddrs.to_vec())
             .await
             .map_err(|e| SwarmError::Network(format!("Failed to dial peer: {}", e)))?;
 
         // Wait for connection to be established
-        // In a real implementation, we'd listen for connection events
-        // For now, we'll use a simplified approach with a timeout
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-        // Check if we're connected to the peer
-        if !p2p_transport.is_connected(peer_id).await {
-            return Err(SwarmError::Network(format!(
-                "Failed to establish connection to peer {}",
-                peer_id
-            )));
+        // We use a polling loop to allow time for fallback addresses (up to 30s)
+        let mut connected = false;
+        let mut health_scores = self.peer_health_scores.write().await;
+        
+        for i in 0..60 {
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            if p2p_transport.is_connected(peer_id).await {
+                connected = true;
+                let latency = i * 500;
+                
+                // Record successful connection
+                health_scores
+                    .entry(*peer_id)
+                    .or_insert_with(|| PeerHealthScore::new(*peer_id))
+                    .record_success(latency);
+                
+                info!(
+                    "✅ Successfully connected to peer {} for circuit {} (latency: {}ms)",
+                    peer_id, circuit_id, latency
+                );
+                break;
+            }
         }
 
-        info!(
-            "✅ Successfully connected to peer {} at {} for circuit {}",
-            peer_id, multiaddr, circuit_id
-        );
+        // Check if we're connected to the peer
+        if !connected {
+            // Record failed connection
+            health_scores
+                .entry(*peer_id)
+                .or_insert_with(|| PeerHealthScore::new(*peer_id))
+                .record_failure();
+            
+            return Err(SwarmError::Network(format!(
+                "Failed to establish connection to peer {} within timeout (tried {} addresses)",
+                peer_id, multiaddrs.len()
+            )));
+        }
 
         Ok(())
     }
@@ -735,9 +1004,10 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
         .await?;
 
         if !response.success {
+            let err_msg = String::from_utf8_lossy(&response.data);
             return Err(SwarmError::HandshakeFailed(format!(
-                "Peer {} rejected handshake",
-                peer_id
+                "Peer {} rejected handshake: {}",
+                peer_id, err_msg
             )));
         }
 
@@ -830,10 +1100,13 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
         payload.extend_from_slice(&(peer_id_bytes.len() as u16).to_be_bytes());
         payload.extend_from_slice(&peer_id_bytes);
 
-        // Multiaddr
-        let addr_bytes = next_hop.multiaddr.to_string().into_bytes();
-        payload.extend_from_slice(&(addr_bytes.len() as u16).to_be_bytes());
-        payload.extend_from_slice(&addr_bytes);
+        // Multiaddrs
+        payload.push(next_hop.all_multiaddrs.len() as u8); // number of addrs
+        for addr in &next_hop.all_multiaddrs {
+            let addr_bytes = addr.to_string().into_bytes();
+            payload.extend_from_slice(&(addr_bytes.len() as u16).to_be_bytes());
+            payload.extend_from_slice(&addr_bytes);
+        }
 
         // Public Key
         payload.extend_from_slice(&(client_pk.len() as u16).to_be_bytes());
@@ -871,9 +1144,10 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
         .await?;
 
         if !response.success {
-            return Err(SwarmError::HandshakeFailed(
-                "Extend request rejected by network".into(),
-            ));
+            let err_msg = String::from_utf8_lossy(&response.data);
+            return Err(SwarmError::HandshakeFailed(format!(
+                "Extend request rejected by network: {}", err_msg
+            )));
         }
 
         // 5. Decrypt response (onion decryption)
@@ -929,6 +1203,7 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
         Ok(new_layer)
     }
 
+    #[allow(dead_code)]
     /// Create EXTEND payload for next hop
     fn create_extend_payload(&self, next_hop: &SwarmHop) -> Result<Vec<u8>> {
         use serde_json;
@@ -989,6 +1264,11 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
         );
         let _enter = span.enter();
 
+        // Prepend the 0x02 (Process) CellCommand byte so the exit node knows to process this data
+        let mut process_payload = Vec::with_capacity(1 + data.len());
+        process_payload.push(0x02); // CellCommand::Process
+        process_payload.extend_from_slice(data);
+
         // Get circuit info first with read lock
         let start = Instant::now();
         let (guard_hop_peer_id, encrypted_data) = {
@@ -1022,7 +1302,7 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
 
             // Perform proper onion encryption - encrypt in reverse order (Exit → Guard)
             let encrypted = encryption
-                .encrypt_onion_layers(data, layers_len)
+                .encrypt_onion_layers(&process_payload, layers_len)
                 .map_err(|e| SwarmError::Encryption(format!("Onion encryption failed: {:?}", e)))?;
 
             // Get guard hop info (first hop in the circuit)
@@ -1268,9 +1548,24 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
                 data: chunk.to_vec(),
             };
 
-            // Use send_via_swarm to onion encrypt and send
-            self.send_via_swarm(circuit_id, &relay_payload.to_bytes())
-                .await?;
+            // Use send_via_swarm to onion encrypt and send with retry logic
+            let chunk_data = relay_payload.to_bytes();
+            let retry_config = RetryConfig {
+                max_attempts: 3,
+                initial_delay: Duration::from_millis(100),
+                max_delay: Duration::from_secs(2),
+                backoff_multiplier: 2.0,
+            };
+
+            retry_with_backoff(
+                || async {
+                    self.send_via_swarm(circuit_id, &chunk_data)
+                        .await
+                        .map_err(|e| SwarmError::Network(format!("Stream data send failed: {}", e)))
+                },
+                &retry_config,
+            )
+            .await?;
         }
 
         Ok(())
@@ -1347,6 +1642,7 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
         Ok(circuit.hops.len())
     }
 
+    #[allow(dead_code)]
     /// Encrypt cell for specific hop
     fn encrypt_cell_for_hop(
         &self,
@@ -1382,6 +1678,7 @@ impl<S: SignalingClientTrait> FaisalSwarmManager<S> {
         Ok(cell)
     }
 
+    #[allow(dead_code)]
     /// Encrypt data for specific hop using SwarmLayer Wasif-Vernam cipher
     fn encrypt_data_for_hop(
         &self,

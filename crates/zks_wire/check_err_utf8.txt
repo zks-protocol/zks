@@ -1,0 +1,98 @@
+﻿cargo : warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+At line:1 char:1
++ cargo check > check_err.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warning: profil...workspace root::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+package:   D:\ZKS Protocol_Research\ZKS Protocol\crates\zks_wasm\Cargo.toml
+workspace: D:\ZKS Protocol_Research\ZKS Protocol\Cargo.toml
+    Checking zks_wire v0.1.0 (D:\ZKS Protocol_Research\ZKS Protocol\crates\zks_wire)
+error[E0433]: failed to resolve: could not find `OwnedTrustAnchor` in `rustls`
+   --> crates\zks_wire\src\cloudflare_signaling.rs:171:29
+    |
+171 |                     rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+    |                             ^^^^^^^^^^^^^^^^ could not find `OwnedTrustAnchor` in `rustls`
+
+warning: unused import: `connect_async`
+  --> crates\zks_wire\src\cloudflare_signaling.rs:13:25
+   |
+13 | use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
+   |                         ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0599]: no method named `add_trust_anchors` found for struct `RootCertStore` in the current scope
+   --> crates\zks_wire\src\cloudflare_signaling.rs:167:20
+    |
+167 |         root_store.add_trust_anchors(
+    |         -----------^^^^^^^^^^^^^^^^^ method not found in `RootCertStore`
+
+error[E0609]: no field `spki` on type `&TrustAnchor<'_>`
+   --> crates\zks_wire\src\cloudflare_signaling.rs:173:28
+    |
+173 |                         ta.spki,
+    |                            ^^^^ unknown field
+    |
+    = note: available fields are: `subject`, `subject_public_key_info`, `name_constraints`
+
+error[E0599]: no method named `with_safe_defaults` found for struct `rustls::ConfigBuilder<Side, State>` in the current scope
+   --> crates\zks_wire\src\cloudflare_signaling.rs:179:14
+    |
+178 |           let config_tls = rustls::ClientConfig::builder()
+    |  __________________________-
+179 | |             .with_safe_defaults()
+    | |             -^^^^^^^^^^^^^^^^^^ method not found in `rustls::ConfigBuilder<ClientConfig, WantsVerifier>`
+    | |_____________|
+    |
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\faisal_swarm\circuit_manager.rs:443:13
+    |
+443 |         let mut selected = available_peers;
+    |             ----^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\faisal_swarm\onion_stream.rs:161:9
+    |
+161 |         mut self: Pin<&mut Self>,
+    |         ----^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> crates\zks_wire\src\faisal_swarm\onion_stream.rs:170:25
+    |
+170 |         let (result_tx, mut result_rx) = tokio::sync::oneshot::channel();
+    |                         ----^^^^^^^^^
+    |                         |
+    |                         help: remove this `mut`
+
+warning: unused variable: `result_rx`
+   --> crates\zks_wire\src\faisal_swarm\onion_stream.rs:170:25
+    |
+170 |         let (result_tx, mut result_rx) = tokio::sync::oneshot::channel();
+    |                         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_result_rx`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `dropped_for_task`
+   --> crates\zks_wire\src\faisal_swarm\relay.rs:630:13
+    |
+630 |         let dropped_for_task = dropped_cells.clone();
+    |             ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dropped_for_task`
+
+warning: unused variable: `connections_ref`
+   --> crates\zks_wire\src\faisal_swarm\relay.rs:632:13
+    |
+632 |         let connections_ref = self.connections.clone();
+    |             ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_connections_ref`
+
+Some errors have detailed explanations: E0433, E0599, E0609.
+For more information about an error, try `rustc --explain E0433`.
+warning: `zks_wire` (lib) generated 7 warnings
+error: could not compile `zks_wire` (lib) due to 4 previous errors; 7 warnings emitted

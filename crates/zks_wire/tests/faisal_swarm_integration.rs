@@ -51,8 +51,7 @@ fn create_test_peer_info(peer_id: &str, _role: HopRole) -> PeerInfo {
 
 /// Test helper to create a mock P2P transport
 async fn create_mock_p2p_transport() -> Arc<RwLock<NativeP2PTransport>> {
-    let transport = NativeP2PTransport::new(None, None)
-        .await
+    let (transport, _driver) = NativeP2PTransport::new(None, None)
         .expect("Failed to create P2P transport");
     Arc::new(RwLock::new(transport))
 }

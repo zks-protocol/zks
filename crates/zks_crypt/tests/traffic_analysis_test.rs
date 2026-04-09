@@ -30,6 +30,7 @@ impl MockCircuit {
             let key = self.layer_keys[i];
             let mut cipher =
                 WasifVernam::new(key).map_err(|e| format!("Failed to create cipher: {:?}", e))?;
+            cipher.set_base_iv([0u8; 12]);
             encrypted = cipher
                 .encrypt(&encrypted)
                 .map_err(|e| format!("Encryption failed: {:?}", e))?;
@@ -51,6 +52,7 @@ impl MockCircuit {
             let key = self.layer_keys[i];
             let mut cipher =
                 WasifVernam::new(key).map_err(|e| format!("Failed to create cipher: {:?}", e))?;
+            cipher.set_base_iv([0u8; 12]);
             decrypted = cipher
                 .decrypt(&decrypted)
                 .map_err(|e| format!("Decryption failed: {:?}", e))?;

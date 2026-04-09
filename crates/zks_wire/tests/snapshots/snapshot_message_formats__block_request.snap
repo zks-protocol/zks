@@ -1,0 +1,10 @@
+---
+source: crates/zks_wire/tests/snapshot_message_formats.rs
+expression: "serde_json::to_value(&message).unwrap()"
+---
+{
+  "BlockRequest": {
+    "requester": "QmRequester1234567890",
+    "start_round": 1000
+  }
+}

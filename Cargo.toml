@@ -11,7 +11,3 @@ repository = "https://github.com/zks-protocol/zks"
 homepage = "https://zks-protocol.org"
 keywords = ["zero-knowledge", "post-quantum", "cryptography", "privacy"]
 categories = ["cryptography", "network-programming"]
-
-[workspace.dependencies]
-# Force vendored OpenSSL for all dependencies
-openssl = { version = "0.10", features = ["vendored"] }

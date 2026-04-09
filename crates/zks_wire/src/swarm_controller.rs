@@ -37,12 +37,15 @@ pub enum Platform {
 pub struct SwarmControllerConfig {
     /// Default room ID for swarm operations
     pub default_room_id: String,
+    /// Optional listen address for the P2P transport (e.g. "/ip4/0.0.0.0/tcp/4001")
+    pub listen_addr: Option<String>,
 }
 
 impl Default for SwarmControllerConfig {
     fn default() -> Self {
         Self {
             default_room_id: "default".to_string(),
+            listen_addr: None,
         }
     }
 }
@@ -52,7 +55,14 @@ impl SwarmControllerConfig {
     pub fn new(default_room_id: impl Into<String>) -> Self {
         Self {
             default_room_id: default_room_id.into(),
+            listen_addr: None,
         }
+    }
+
+    /// Set a fixed listen address for the P2P transport
+    pub fn with_listen_addr(mut self, addr: impl Into<String>) -> Self {
+        self.listen_addr = Some(addr.into());
+        self
     }
 
     /// Create configuration from environment variable
@@ -61,6 +71,7 @@ impl SwarmControllerConfig {
         Self {
             default_room_id: std::env::var("ZKS_ROOM_ID")
                 .unwrap_or_else(|_| "default".to_string()),
+            listen_addr: std::env::var("ZKS_LISTEN_ADDR").ok(),
         }
     }
 }
@@ -80,6 +91,7 @@ impl Platform {
 }
 
 /// Unified swarm controller that automatically selects the appropriate transport
+#[derive(Clone)]
 pub struct SwarmController<S: SignalingClientTrait> {
     platform: Platform,
     signaling_client: Arc<RwLock<Option<S>>>,
@@ -98,6 +110,9 @@ pub struct SwarmController<S: SignalingClientTrait> {
 
     is_connected: Arc<RwLock<bool>>,
     local_peer_id: Arc<RwLock<Option<String>>>,
+
+    /// P2P transport for accessing listen addresses
+    p2p_transport: Arc<RwLock<Option<Arc<NativeP2PTransport>>>>,
 }
 
 impl<S: SignalingClientTrait + 'static> SwarmController<S> {
@@ -125,6 +140,7 @@ impl<S: SignalingClientTrait + 'static> SwarmController<S> {
             config,
             is_connected: Arc::new(RwLock::new(false)),
             local_peer_id: Arc::new(RwLock::new(None)),
+            p2p_transport: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -153,21 +169,29 @@ impl<S: SignalingClientTrait + 'static> SwarmController<S> {
             SwarmControllerError::TransportError(format!("Failed to create P2P transport: {}", e))
         })?;
 
-        // Start listening on a random port
-        let listen_addr = "/ip4/0.0.0.0/tcp/0".parse().map_err(|e| {
-            SwarmControllerError::TransportError(format!("Invalid listen address: {}", e))
-        })?;
-        p2p_transport.listen_on(listen_addr).await.map_err(|e| {
-            SwarmControllerError::TransportError(format!("Failed to listen on address: {}", e))
-        })?;
-
         // Wrap P2P transport in Arc/RwLock so it can be shared with manager and relay
         let p2p_transport_arc = Arc::new(RwLock::new(p2p_transport));
         let local_libp2p_peer_id = p2p_transport_arc.read().await.local_peer_id();
+        let local_libp2p_peer_id_str = local_libp2p_peer_id.to_string();
+
+        // Update the signaling client to use the P2P transport's libp2p peer ID
+        if let Some(client) = self.signaling_client.write().await.as_mut() {
+            client.set_peer_id(local_libp2p_peer_id_str.clone());
+        }
+
+        // Store the local peer ID
+        *self.local_peer_id.write().await = Some(local_libp2p_peer_id_str);
 
         // Create Faisal Swarm manager with the P2P transport
+        // Note: We use the ARC from self.signaling_client to ensure it has the updated Peer ID
+        let signaling_arc = if let Some(client) = self.signaling_client.read().await.as_ref() {
+            Arc::new(client.clone())
+        } else {
+            Arc::new(signaling_client)
+        };
+
         let faisal_swarm_manager = Arc::new(FaisalSwarmManager::new(
-            Arc::new(signaling_client),
+            signaling_arc,
             p2p_transport_arc.clone(),
         ));
 
@@ -236,14 +260,30 @@ impl<S: SignalingClientTrait + 'static> SwarmController<S> {
             })
         });
 
-        // Spawn the P2P driver loop (now with handler set)
+        // CRITICAL: Spawn the P2P driver loop BEFORE calling listen_on.
+        // listen_on() sends a command via channel and awaits a response.
+        // If the driver isn't running, nobody processes the command → deadlock.
         tokio::spawn(async move {
             if let Err(e) = driver.run().await {
                 error!("P2P Driver failed: {:?}", e);
             }
         });
 
+        // Now that the driver is running, we can safely listen on the configured (or random) port
+        let listen_addr_str = self.config.listen_addr.as_deref().unwrap_or("/ip4/0.0.0.0/tcp/0");
+        let listen_addr = listen_addr_str.parse().map_err(|e| {
+            SwarmControllerError::TransportError(format!("Invalid listen address '{}': {}", listen_addr_str, e))
+        })?;
+        p2p_transport_arc.read().await.listen_on(listen_addr).await.map_err(|e| {
+            SwarmControllerError::TransportError(format!("Failed to listen on address {}: {}", listen_addr_str, e))
+        })?;
+
         *self.is_connected.write().await = true;
+
+        // Store P2P transport reference for accessing listen addresses later
+        let p2p_transport_ref = p2p_transport_arc.read().await;
+        let p2p_transport = Arc::new((*p2p_transport_ref).clone());
+        *self.p2p_transport.write().await = Some(p2p_transport);
 
         info!("Successfully connected to swarm via signaling server");
         Ok(())
@@ -334,6 +374,20 @@ impl<S: SignalingClientTrait + 'static> SwarmController<S> {
         self.local_peer_id.read().await.clone()
     }
 
+    /// Get the P2P transport's listening addresses
+    pub async fn get_listen_addresses(&self) -> Vec<String> {
+        if let Some(transport) = self.p2p_transport.read().await.as_ref() {
+            transport
+                .listen_addresses()
+                .await
+                .iter()
+                .map(|addr| addr.to_string())
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
     /// Check if connected to the swarm
     pub async fn is_connected(&self) -> bool {
         *self.is_connected.read().await
@@ -358,7 +412,7 @@ impl<S: SignalingClientTrait + 'static> SwarmController<S> {
                 supports_nat_traversal: true,
                 supports_relay: true,
                 max_hops: 8,
-                min_hops: 2,
+                min_hops: 1,
             },
             Platform::WebAssembly => TransportCapabilities {
                 supports_direct_p2p: false,

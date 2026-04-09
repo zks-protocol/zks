@@ -157,6 +157,7 @@ impl FaisalSwarmEncryption {
     }
 
     /// Generate a unique Wasif-Vernam key for each hop
+    #[allow(dead_code)]
     #[must_use]
     fn generate_vernam_key(hop_index: usize) -> Result<[u8; 32]> {
         let mut hasher = Sha256::new();
@@ -259,7 +260,20 @@ impl FaisalSwarmEncryption {
         let mut result = data.to_vec();
 
         // Encrypt in reverse order (Exit → Guard)
+        // For the innermost layer (the target node), we just encrypt the data as-is 
+        // (which already contains 0x04 Extend or 0x02 Process at result[0]).
+        // For all intermediate layers, we must prepend 0x01 (Forward) before encrypting, 
+        // so that the intermediate node knows to forward the decrypted payload.
         for i in (0..num_layers).rev() {
+            // If this is an intermediate layer (not the innermost one we started with),
+            // prepend the 'Forward' command (0x01) so this hop forwards it.
+            if i < num_layers - 1 {
+                let mut forward_payload = Vec::with_capacity(1 + result.len());
+                forward_payload.push(0x01); // CellCommand::Forward
+                forward_payload.extend_from_slice(&result);
+                result = forward_payload;
+            }
+
             result = self.encrypt_layer(&result, i).map_err(|e| {
                 super::SwarmError::Encryption(format!("Layer encryption failed: {:?}", e))
             })?;

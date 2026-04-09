@@ -78,8 +78,11 @@ pub struct SwarmHop {
     /// Peer's role in swarm circuit
     pub role: HopRole,
 
-    /// Multiaddr to reach this peer
+    /// Multiaddr to reach this peer (Primary, used for Extend cells)
     pub multiaddr: libp2p::Multiaddr,
+
+    /// All known multiaddrs for this peer (used for initial connection)
+    pub all_multiaddrs: Vec<libp2p::Multiaddr>,
 
     /// Peer capabilities
     pub capabilities: SwarmCapabilities,
@@ -267,7 +270,7 @@ pub struct FaisalSwarmCircuit {
     pub created_at: Instant,
 
     /// Encryption manager for this circuit (client-side only)
-    /// Wrapped in Arc<Mutex> to allow interior mutability while holding read lock on circuit map
+    /// Wrapped in `Arc<Mutex>` to allow interior mutability while holding read lock on circuit map
     pub encryption: Option<Arc<tokio::sync::Mutex<encryption::FaisalSwarmEncryption>>>,
 }
 

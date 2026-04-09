@@ -44,7 +44,9 @@ struct MockSwarmLayer {
 
 impl MockSwarmLayer {
     fn new(node_key: [u8; 32]) -> Self {
-        let forward_cipher = Arc::new(RwLock::new(WasifVernam::new(node_key).unwrap()));
+        let mut cipher = WasifVernam::new(node_key).unwrap();
+        cipher.set_base_iv([0u8; 12]);
+        let forward_cipher = Arc::new(RwLock::new(cipher));
         Self {
             node_key,
             forward_cipher,

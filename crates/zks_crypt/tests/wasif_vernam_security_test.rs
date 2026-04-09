@@ -8,6 +8,7 @@ use zks_crypt::wasif_vernam::WasifVernam;
 fn test_keystream_uniqueness() {
     let key = [0xAB; 32];
     let mut cipher = WasifVernam::new(key).unwrap();
+    cipher.set_base_iv([0u8; 12]);
 
     let data1 = vec![0x42; 100];
     let data2 = vec![0x42; 100];
@@ -25,6 +26,7 @@ fn test_keystream_uniqueness() {
 fn test_ciphertext_uniformity() {
     let key = [0xAB; 32];
     let mut cipher = WasifVernam::new(key).unwrap();
+    cipher.set_base_iv([0u8; 12]);
 
     let plaintext = vec![0x00; 10000]; // All zeros - worst case for randomness
     let ciphertext = cipher.encrypt(&plaintext).unwrap();
@@ -55,11 +57,13 @@ fn test_computational_security_property() {
     let _message_b = b"Another Message!";
 
     let mut cipher1 = WasifVernam::new(key1).unwrap();
+    cipher1.set_base_iv([0u8; 12]);
     let ciphertext = cipher1.encrypt(message_a).unwrap();
 
     // The same ciphertext could have come from message_b with a different key
     // This demonstrates computational indistinguishability (IND-CPA property)
     let mut cipher2 = WasifVernam::new(key2).unwrap();
+    cipher2.set_base_iv([0u8; 12]);
     let possible_plaintext = cipher2.decrypt(&ciphertext);
 
     // The decryption with wrong key should either fail or produce garbage (not message_a)
@@ -77,6 +81,7 @@ fn test_computational_security_property() {
     // Verify we can decrypt with correct key
     // Create a fresh cipher for decryption to avoid state advancement issues
     let mut cipher1_decrypt = WasifVernam::new(key1).unwrap();
+    cipher1_decrypt.set_base_iv([0u8; 12]);
     let correct_decryption = cipher1_decrypt.decrypt(&ciphertext).unwrap();
     assert_eq!(correct_decryption, message_a.to_vec());
 }
@@ -87,6 +92,7 @@ fn test_computational_security_property() {
 fn test_key_length_equals_message() {
     let key = [0xAB; 32];
     let mut cipher = WasifVernam::new(key).unwrap();
+    cipher.set_base_iv([0u8; 12]);
 
     // Test with different message lengths
     for length in [10, 100, 1000, 10000] {
@@ -110,6 +116,7 @@ fn test_key_length_equals_message() {
 fn test_nonce_uniqueness() {
     let key = [0x42; 32];
     let mut cipher = WasifVernam::new(key).unwrap();
+    cipher.set_base_iv([0u8; 12]);
 
     let mut seen_nonces: HashSet<Vec<u8>> = HashSet::new();
     let message = b"test message";
@@ -142,10 +149,12 @@ fn test_forward_secrecy() {
 
     // Encrypt with first key
     let mut cipher1 = WasifVernam::new(key1).unwrap();
+    cipher1.set_base_iv([0u8; 12]);
     let ciphertext1 = cipher1.encrypt(message).unwrap();
 
     // Encrypt with second key (simulating key rotation)
     let mut cipher2 = WasifVernam::new(key2).unwrap();
+    cipher2.set_base_iv([0u8; 12]);
     let ciphertext2 = cipher2.encrypt(message).unwrap();
 
     // Different keys should produce different ciphertexts for same plaintext
@@ -168,6 +177,7 @@ fn test_forward_secrecy() {
 fn test_statistical_independence() {
     let key = [0xAB; 32];
     let mut cipher = WasifVernam::new(key).unwrap();
+    cipher.set_base_iv([0u8; 12]);
 
     // Create highly patterned plaintext
     let plaintext: Vec<u8> = (0..1000).map(|i| (i % 256) as u8).collect();
@@ -199,6 +209,7 @@ fn test_statistical_independence() {
 fn test_message_size_handling() {
     let key = [0xAB; 32];
     let mut cipher = WasifVernam::new(key).unwrap();
+    cipher.set_base_iv([0u8; 12]);
 
     // Test various message sizes
     let sizes = vec![0, 1, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192];
@@ -227,7 +238,9 @@ fn test_key_sensitivity() {
     let message = b"Key sensitivity test";
 
     let mut cipher1 = WasifVernam::new(key1).unwrap();
+    cipher1.set_base_iv([0u8; 12]);
     let mut cipher2 = WasifVernam::new(key2).unwrap();
+    cipher2.set_base_iv([0u8; 12]);
 
     let ciphertext1 = cipher1.encrypt(message).unwrap();
     let ciphertext2 = cipher2.encrypt(message).unwrap();
@@ -255,6 +268,7 @@ fn test_key_sensitivity() {
 fn test_true_vernam_perfect_secrecy() {
     let key = [0xAB; 32];
     let mut cipher = WasifVernam::new(key).unwrap();
+    cipher.set_base_iv([0u8; 12]);
 
     // Enable TRUE Vernam mode with sequenced buffer (desync-resistant)
     let shared_seed = [0xCD; 32]; // This would come from ML-KEM handshake in real usage
@@ -262,7 +276,13 @@ fn test_true_vernam_perfect_secrecy() {
 
     let message = b"This message has 256-bit post-quantum computational security!";
     let ciphertext = cipher.encrypt(message).unwrap();
-    let decrypted = cipher.decrypt(&ciphertext).unwrap();
+
+    // In TRUE Vernam mode with sequences, the buffer is consumed on encrypt.
+    // For decryption in tests, we must use a fresh cipher initialized exactly the same way
+    let mut decrypt_cipher = WasifVernam::new(key).unwrap();
+    decrypt_cipher.set_base_iv([0u8; 12]);
+    decrypt_cipher.enable_sequenced_vernam(shared_seed);
+    let decrypted = decrypt_cipher.decrypt(&ciphertext).unwrap();
 
     assert_eq!(decrypted, message.to_vec(), "TRUE Vernam round-trip failed");
 
@@ -289,6 +309,7 @@ fn test_forward_secrecy_with_key_chain() {
     let initial_seed = [1u8; 32];
 
     let mut cipher = WasifVernam::new(initial_key).expect("Failed to create cipher");
+    cipher.set_base_iv([0u8; 12]);
     cipher.enable_key_chain(initial_seed, true);
     cipher.refresh_entropy(&[99u8; 32]);
 

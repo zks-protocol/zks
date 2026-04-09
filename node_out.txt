@@ -1,0 +1,285 @@
+[2m2026-02-20T05:33:26.324508Z[0m [32m INFO[0m Starting ZKS Protocol Relay Node
+[2m2026-02-20T05:33:26.325587Z[0m [32m INFO[0m Relay Configuration:
+[2m2026-02-20T05:33:26.326412Z[0m [32m INFO[0m   Bind address: 0.0.0.0:3478
+[2m2026-02-20T05:33:26.327234Z[0m [32m INFO[0m   Max allocations: 1000
+[2m2026-02-20T05:33:26.328069Z[0m [32m INFO[0m Starting relay server on 0.0.0.0:3478
+[2m2026-02-20T05:33:26.329800Z[0m [32m INFO[0m Relay server started successfully
+[2m2026-02-20T05:33:26.330700Z[0m [32m INFO[0m ✅ Relay server started on 0.0.0.0:3478
+[2m2026-02-20T05:33:26.331550Z[0m [32m INFO[0m Initializing Swarm Controller...
+[2m2026-02-20T05:33:26.332396Z[0m [32m INFO[0m Setting fixed libp2p listen address: /ip4/0.0.0.0/tcp/4001
+[2m2026-02-20T05:33:26.332592Z[0m [32m INFO[0m Initializing SwarmController for platform: Native, room: zks-test-v1
+[2m2026-02-20T05:33:26.332676Z[0m [32m INFO[0m Local Peer ID: relay-befa93aa-6cdc-410e-b8db-c54dd2282d41
+[2m2026-02-20T05:33:26.332735Z[0m [32m INFO[0m Connecting to signaling server: wss://zks-protocol-signaling.md-wasif-faisal.workers.dev
+[2m2026-02-20T05:33:26.332790Z[0m [32m INFO[0m Connecting to signaling server at wss://zks-protocol-signaling.md-wasif-faisal.workers.dev
+[2m2026-02-20T05:33:26.957366Z[0m [32m INFO[0m Connected to signaling server
+[2m2026-02-20T05:33:26.957989Z[0m [32m INFO[0m Creating native P2P transport with peer ID: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:26.962739Z[0m [32m INFO[0m [3mlocal_peer_id[0m[2m=[0m12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o
+[2m2026-02-20T05:33:26.963709Z[0m [32m INFO[0m 🌐 Global HTTP client initialized for drand connection pooling
+[2m2026-02-20T05:33:26.964065Z[0m [32m INFO[0m Starting native P2P transport event loop
+[2m2026-02-20T05:33:26.965623Z[0m [32m INFO[0m Successfully connected to swarm via signaling server
+[2m2026-02-20T05:33:26.966735Z[0m [32m INFO[0m Listening on /ip4/192.168.56.1/tcp/4001
+[2m2026-02-20T05:33:26.966831Z[0m [32m INFO[0m Listening on /ip4/192.168.0.107/tcp/4001
+[2m2026-02-20T05:33:26.966875Z[0m [32m INFO[0m Listening on /ip4/127.0.0.1/tcp/4001
+[2m2026-02-20T05:33:28.975557Z[0m [32m INFO[0m Swarm is listening on: ["/ip4/192.168.56.1/tcp/4001", "/ip4/192.168.0.107/tcp/4001", "/ip4/127.0.0.1/tcp/4001"]
+[2m2026-02-20T05:33:28.978845Z[0m [32m INFO[0m Advertising libp2p addresses to signaling server...
+[2m2026-02-20T05:33:28.979473Z[0m [32m INFO[0m Joined swarm room: zks-test-v1
+[2m2026-02-20T05:33:28.979712Z[0m [32m INFO[0m ✅ Joined swarm network 'zks-test-v1' as relay
+[2m2026-02-20T05:33:28.979896Z[0m [32m INFO[0m 🔍 Discovering peers in room 'zks-test-v1'...
+[2m2026-02-20T05:33:29.299257Z[0m [32m INFO[0m ✅ Discovered 1 peers in room 'zks-test-v1'
+[2m2026-02-20T05:33:29.300290Z[0m [32m INFO[0m   Peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o (addresses: ["/ip4/192.168.56.1/tcp/4001", "/ip4/192.168.0.107/tcp/4001", "/ip4/127.0.0.1/tcp/4001"])
+[2m2026-02-20T05:33:29.300677Z[0m [32m INFO[0m Relay node running. Press Ctrl+C to stop.
+[2m2026-02-20T05:33:46.719452Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:46.722948Z[0m [32m INFO[0m 🛡️  Processing new circuit 2147483649 as guard node
+[2m2026-02-20T05:33:46.723251Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:46.723316Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:46.723364Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:46.723449Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:46.723488Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:46.723575Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:46.723623Z[0m [32m INFO[0m 🔑 Established stateful circuit 2147483649 at position 0
+[2m2026-02-20T05:33:46.723662Z[0m [32m INFO[0m ✅ Established new circuit 2147483649 as Guard
+[2m2026-02-20T05:33:46.724773Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:46.724955Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:46.725250Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:46.725312Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:46.827311Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:46.827931Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:46.828626Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:46.828812Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:46.936272Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:46.936820Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:46.937326Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:46.937432Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.045217Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.049991Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.050506Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.050650Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.155048Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.155455Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.155927Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.156019Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.264310Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.264898Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.265863Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.266379Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.371955Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.372330Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.372807Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.372989Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.481263Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.481853Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.482598Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.482715Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.589579Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.590003Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.590502Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.590630Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:47.699659Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483649
+[2m2026-02-20T05:33:47.700137Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483649
+[2m2026-02-20T05:33:49.857389Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:49.860859Z[0m [32m INFO[0m 🛡️  Processing new circuit 2147483650 as guard node
+[2m2026-02-20T05:33:49.861356Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:49.861490Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:49.861576Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:49.861718Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:49.861797Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:49.861870Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:49.861948Z[0m [32m INFO[0m 🔑 Established stateful circuit 2147483650 at position 0
+[2m2026-02-20T05:33:49.862024Z[0m [32m INFO[0m ✅ Established new circuit 2147483650 as Guard
+[2m2026-02-20T05:33:49.864020Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:49.864201Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:49.864753Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:49.864904Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:49.979071Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:49.979273Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:49.979615Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:49.979768Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.087714Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.088011Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.088625Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.088717Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.196450Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.197037Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.197554Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.197724Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.304090Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.304536Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.304952Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.305035Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.412601Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.413311Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.413745Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.413827Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.521446Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.521933Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.522490Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.522581Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.629525Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.630235Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.630943Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.631107Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.737026Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.737609Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.738257Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.738381Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:50.844530Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483650
+[2m2026-02-20T05:33:50.845051Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483650
+[2m2026-02-20T05:33:53.004158Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.004544Z[0m [32m INFO[0m 🛡️  Processing new circuit 2147483651 as guard node
+[2m2026-02-20T05:33:53.005140Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:53.005254Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:53.005346Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:53.005479Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:53.005556Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:53.005707Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:53.005790Z[0m [32m INFO[0m 🔑 Established stateful circuit 2147483651 at position 0
+[2m2026-02-20T05:33:53.005913Z[0m [32m INFO[0m ✅ Established new circuit 2147483651 as Guard
+[2m2026-02-20T05:33:53.007327Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.007490Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.007988Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.008142Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.112902Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.113705Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.114470Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.114629Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.222769Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.223418Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.224151Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.224302Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.330724Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.331268Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.332127Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.332264Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.438797Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.439391Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.440016Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.440162Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.546663Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.547236Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.547800Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.547932Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.671802Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.672459Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.673351Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.673608Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.781136Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.781835Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.782733Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.783013Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.889181Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.889799Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.890669Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:53.890922Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:53.999938Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483651
+[2m2026-02-20T05:33:54.000596Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483651
+[2m2026-02-20T05:33:56.161327Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483652
+[2m2026-02-20T05:33:56.164470Z[0m [32m INFO[0m 🛡️  Processing new circuit 2147483652 as guard node
+[2m2026-02-20T05:33:56.164812Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:56.164908Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:56.164989Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:56.165104Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:56.165177Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:56.165246Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:56.165332Z[0m [32m INFO[0m 🔑 Established stateful circuit 2147483652 at position 0
+[2m2026-02-20T05:33:56.165408Z[0m [32m INFO[0m ✅ Established new circuit 2147483652 as Guard
+[2m2026-02-20T05:33:56.166815Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483652
+[2m2026-02-20T05:33:56.166985Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483652
+[2m2026-02-20T05:33:56.167542Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483652
+[2m2026-02-20T05:33:56.167703Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483652
+[2m2026-02-20T05:33:59.309811Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483653
+[2m2026-02-20T05:33:59.313177Z[0m [32m INFO[0m 🛡️  Processing new circuit 2147483653 as guard node
+[2m2026-02-20T05:33:59.313583Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:33:59.313765Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:59.313940Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:59.314114Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:33:59.314216Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:33:59.314293Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:33:59.314385Z[0m [32m INFO[0m 🔑 Established stateful circuit 2147483653 at position 0
+[2m2026-02-20T05:33:59.314468Z[0m [32m INFO[0m ✅ Established new circuit 2147483653 as Guard
+[2m2026-02-20T05:33:59.316271Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483653
+[2m2026-02-20T05:33:59.316460Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483653
+[2m2026-02-20T05:33:59.317085Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483653
+[2m2026-02-20T05:33:59.317239Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483653
+[2m2026-02-20T05:33:59.627305Z[0m [32m INFO[0m 🔄 Periodic discovery: 2 peers in 'zks-test-v1'
+[2m2026-02-20T05:34:02.460004Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483654
+[2m2026-02-20T05:34:02.463424Z[0m [32m INFO[0m 🛡️  Processing new circuit 2147483654 as guard node
+[2m2026-02-20T05:34:02.463814Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:02.463911Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:02.463994Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:02.464122Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:02.464197Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:02.464268Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:02.464345Z[0m [32m INFO[0m 🔑 Established stateful circuit 2147483654 at position 0
+[2m2026-02-20T05:34:02.464422Z[0m [32m INFO[0m ✅ Established new circuit 2147483654 as Guard
+[2m2026-02-20T05:34:02.466134Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483654
+[2m2026-02-20T05:34:02.466326Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483654
+[2m2026-02-20T05:34:02.466897Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483654
+[2m2026-02-20T05:34:02.467030Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483654
+[2m2026-02-20T05:34:05.604834Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483655
+[2m2026-02-20T05:34:05.608313Z[0m [32m INFO[0m 🛡️  Processing new circuit 2147483655 as guard node
+[2m2026-02-20T05:34:05.608691Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:05.608834Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:05.608952Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:05.609096Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:05.609176Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:05.609250Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:05.609329Z[0m [32m INFO[0m 🔑 Established stateful circuit 2147483655 at position 0
+[2m2026-02-20T05:34:05.609401Z[0m [32m INFO[0m ✅ Established new circuit 2147483655 as Guard
+[2m2026-02-20T05:34:05.611205Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483655
+[2m2026-02-20T05:34:05.611475Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483655
+[2m2026-02-20T05:34:05.612131Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483655
+[2m2026-02-20T05:34:05.612338Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483655
+[2m2026-02-20T05:34:08.726325Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483656
+[2m2026-02-20T05:34:08.729579Z[0m [32m INFO[0m 🛡️  Processing new circuit 2147483656 as guard node
+[2m2026-02-20T05:34:08.730038Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:08.730175Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:08.730334Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:08.730518Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:08.730609Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:08.730685Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:08.730776Z[0m [32m INFO[0m 🔑 Established stateful circuit 2147483656 at position 0
+[2m2026-02-20T05:34:08.730858Z[0m [32m INFO[0m ✅ Established new circuit 2147483656 as Guard
+[2m2026-02-20T05:34:08.733105Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483656
+[2m2026-02-20T05:34:08.733334Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483656
+[2m2026-02-20T05:34:08.733893Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483656
+[2m2026-02-20T05:34:08.734060Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483656
+[2m2026-02-20T05:34:11.869427Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483657
+[2m2026-02-20T05:34:11.872868Z[0m [32m INFO[0m 🛡️  Processing new circuit 2147483657 as guard node
+[2m2026-02-20T05:34:11.873214Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:11.873306Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:11.873390Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:11.873571Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:11.873693Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:11.873829Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:11.873959Z[0m [32m INFO[0m 🔑 Established stateful circuit 2147483657 at position 0
+[2m2026-02-20T05:34:11.874062Z[0m [32m INFO[0m ✅ Established new circuit 2147483657 as Guard
+[2m2026-02-20T05:34:11.875708Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483657
+[2m2026-02-20T05:34:11.875887Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483657
+[2m2026-02-20T05:34:11.876399Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483657
+[2m2026-02-20T05:34:11.876555Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483657
+[2m2026-02-20T05:34:15.008030Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483658
+[2m2026-02-20T05:34:15.011667Z[0m [32m INFO[0m 🛡️  Processing new circuit 2147483658 as guard node
+[2m2026-02-20T05:34:15.012049Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: true)
+[2m2026-02-20T05:34:15.012216Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:15.012334Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:15.012491Z[0m [32m INFO[0m 🔑 Base IV derived with role separation (is_initiator: false)
+[2m2026-02-20T05:34:15.012585Z[0m [32m INFO[0m 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+[2m2026-02-20T05:34:15.012681Z[0m [32m INFO[0m ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+[2m2026-02-20T05:34:15.012938Z[0m [32m INFO[0m 🔑 Established stateful circuit 2147483658 at position 0
+[2m2026-02-20T05:34:15.013071Z[0m [32m INFO[0m ✅ Established new circuit 2147483658 as Guard
+[2m2026-02-20T05:34:15.014834Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483658
+[2m2026-02-20T05:34:15.014987Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483658
+[2m2026-02-20T05:34:15.015497Z[0m [32m INFO[0m 🔄 Relay 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o processing request for circuit 2147483658
+[2m2026-02-20T05:34:15.015650Z[0m [32m INFO[0m 🚪 Processing exit data for circuit 2147483658
+[2m2026-02-20T05:34:29.632573Z[0m [32m INFO[0m 🔄 Periodic discovery: 1 peers in 'zks-test-v1'
+[2m2026-02-20T05:34:59.626120Z[0m [32m INFO[0m 🔄 Periodic discovery: 1 peers in 'zks-test-v1'
+[2m2026-02-20T05:35:29.634620Z[0m [32m INFO[0m 🔄 Periodic discovery: 1 peers in 'zks-test-v1'
+[2m2026-02-20T05:35:59.641076Z[0m [32m INFO[0m 🔄 Periodic discovery: 1 peers in 'zks-test-v1'
+[2m2026-02-20T05:36:29.624569Z[0m [32m INFO[0m 🔄 Periodic discovery: 1 peers in 'zks-test-v1'
+[2m2026-02-20T05:36:59.632325Z[0m [32m INFO[0m 🔄 Periodic discovery: 1 peers in 'zks-test-v1'
+[2m2026-02-20T05:37:29.624946Z[0m [32m INFO[0m 🔄 Periodic discovery: 1 peers in 'zks-test-v1'
+[2m2026-02-20T05:37:59.639163Z[0m [32m INFO[0m 🔄 Periodic discovery: 1 peers in 'zks-test-v1'
+[2m2026-02-20T05:38:29.626084Z[0m [32m INFO[0m 🔄 Periodic discovery: 1 peers in 'zks-test-v1'
+[2m2026-02-20T05:38:59.635123Z[0m [32m INFO[0m 🔄 Periodic discovery: 1 peers in 'zks-test-v1'
+[2m2026-02-20T05:39:29.626742Z[0m [32m INFO[0m 🔄 Periodic discovery: 1 peers in 'zks-test-v1'
+[2m2026-02-20T05:39:59.624276Z[0m [32m INFO[0m 🔄 Periodic discovery: 1 peers in 'zks-test-v1'

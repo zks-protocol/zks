@@ -37,11 +37,11 @@ fn test_entropy_block_announcement_snapshot() {
     block.add_round(round1).unwrap();
     block.add_round(round2).unwrap();
 
-    let message = EntropyGossipMessage::BlockAnnouncement {
+    let message = EntropyGossipMessage::BlockAvailable {
         block_hash: block.block_hash,
         start_round: block.start_round,
         end_round: block.end_round,
-        provider: "QmPeer1234567890abcdef".to_string(),
+        peer_id: "QmPeer1234567890abcdef".to_string(),
     };
 
     assert_json_snapshot!(
@@ -54,7 +54,6 @@ fn test_entropy_block_announcement_snapshot() {
 fn test_block_request_snapshot() {
     let message = EntropyGossipMessage::BlockRequest {
         start_round: 1000,
-        end_round: 1099,
         requester: "QmRequester1234567890".to_string(),
     };
 
@@ -81,45 +80,22 @@ fn test_block_response_snapshot() {
     ));
 
     let message = EntropyGossipMessage::BlockResponse {
-        block: block.clone(),
-        provider: "QmProvider1234567890".to_string(),
+        start_round: block.start_round,
+        block: Some(block.clone()),
     };
 
     assert_json_snapshot!("block_response", serde_json::to_value(&message).unwrap());
 }
 
-#[test]
-fn test_peer_announcement_snapshot() {
-    let message = EntropyGossipMessage::PeerAnnouncement {
-        peer_id: "QmNewPeer1234567890abcdef".to_string(),
-        listen_addresses: vec![
-            "/ip4/192.168.1.100/tcp/4001".to_string(),
-            "/ip4/10.0.0.1/tcp/4001".to_string(),
-        ],
-        supported_protocols: vec!["/entropy-grid/1.0.0".to_string()],
-    };
-
-    assert_json_snapshot!("peer_announcement", serde_json::to_value(&message).unwrap());
-}
-
-#[test]
-fn test_error_message_snapshot() {
-    let message = EntropyGossipMessage::Error {
-        error_code: "BLOCK_NOT_FOUND".to_string(),
-        error_message: "Requested block range 1000-1099 not available".to_string(),
-        request_id: "req_1234567890".to_string(),
-    };
-
-    assert_json_snapshot!("error_message", serde_json::to_value(&message).unwrap());
-}
+// Obsolete tests removed (PeerAnnouncement and Error variants do not exist)
 
 #[test]
 fn test_empty_block_announcement_snapshot() {
-    let message = EntropyGossipMessage::BlockAnnouncement {
+    let message = EntropyGossipMessage::BlockAvailable {
         block_hash: [0u8; 32],
         start_round: 0,
         end_round: 0,
-        provider: "QmEmptyPeer".to_string(),
+        peer_id: "QmEmptyPeer".to_string(),
     };
 
     assert_json_snapshot!(

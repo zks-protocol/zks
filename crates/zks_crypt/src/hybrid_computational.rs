@@ -192,6 +192,9 @@ pub enum HybridOtpError {
     /// Entropy reuse detected - this would break 256-bit post-quantum security
     #[error("Entropy reuse detected - this would break 256-bit post-quantum security")]
     OtpReuse,
+    /// Mutex lock poisoned
+    #[error("Mutex lock poisoned")]
+    LockPoisoned,
 }
 
 /// Hybrid TRUE OTP with synchronized entropy support
@@ -223,7 +226,10 @@ impl HybridOtp {
         // Check for entropy reuse (CRITICAL for 256-bit post-quantum security)
         // SECURITY: Use constant-time comparison to prevent timing attacks
         {
-            let mut used_otps = self.used_otps.lock().unwrap();
+            let mut used_otps = self
+                .used_otps
+                .lock()
+                .map_err(|_| HybridOtpError::LockPoisoned)?;
             let mut found_reuse = false;
 
             // Constant-time search through HashSet to prevent timing leaks
@@ -336,7 +342,7 @@ mod tests {
         let result = encrypt_hybrid_otp(plaintext, &provider);
         assert!(result.is_ok());
 
-        let (envelope, otp) = result.unwrap();
+        let (envelope, otp) = result.expect("Failed to unwrap encryption result");
         assert!(envelope.len() > 46); // Minimum envelope size (1+1+32+12+ciphertext)
         assert_eq!(envelope[0], 0x01); // Version
         assert_eq!(envelope[1], 0x04); // Mode: Hybrid OTP (OTP external)
@@ -347,7 +353,10 @@ mod tests {
         // Test that we can decrypt what we encrypted (requires the OTP)
         let decrypted = decrypt_hybrid_otp(&envelope, &otp, &provider);
         assert!(decrypted.is_ok());
-        assert_eq!(decrypted.unwrap(), plaintext);
+        assert_eq!(
+            decrypted.expect("Failed to unwrap decryption result"),
+            plaintext
+        );
     }
 
     #[test]
@@ -358,17 +367,21 @@ mod tests {
         let sync_entropy = [0x37; 32];
 
         // Test encryption
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new()
+            .expect("Failed to create tokio runtime");
         let encrypted =
             rt.block_on(async { hybrid_otp.encrypt_with_sync(plaintext, &sync_entropy).await });
         assert!(encrypted.is_ok());
 
-        let envelope = encrypted.unwrap();
+        let envelope = encrypted.expect("Failed to unwrap encrypted envelope");
 
         // Test decryption
         let decrypted = hybrid_otp.decrypt_with_sync(&envelope, &sync_entropy);
         assert!(decrypted.is_ok());
-        assert_eq!(decrypted.unwrap(), plaintext);
+        assert_eq!(
+            decrypted.expect("Failed to unwrap decrypted result"),
+            plaintext
+        );
     }
 
     #[test]
@@ -399,10 +412,11 @@ mod tests {
         let plaintext = b"Test envelope integrity";
         let sync_entropy = [0x99; 32];
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new()
+            .expect("Failed to create tokio runtime");
         let envelope = rt
             .block_on(async { hybrid_otp.encrypt_with_sync(plaintext, &sync_entropy).await })
-            .unwrap();
+            .expect("Failed to encrypt plaintext");
 
         // Test envelope structure
         assert_eq!(envelope[0], 0x01); // Version
@@ -425,17 +439,18 @@ mod tests {
         // Test with a larger payload (1KB)
         let plaintext = vec![0xAB; 1024];
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new()
+            .expect("Failed to create tokio runtime");
         let envelope = rt
             .block_on(async {
                 hybrid_otp
                     .encrypt_with_sync(&plaintext, &sync_entropy)
                     .await
             })
-            .unwrap();
+            .expect("Failed to encrypt plaintext");
         let decrypted = hybrid_otp
             .decrypt_with_sync(&envelope, &sync_entropy)
-            .unwrap();
+            .expect("Failed to decrypt envelope");
 
         assert_eq!(decrypted, plaintext);
     }
@@ -447,13 +462,14 @@ mod tests {
         let plaintext = b"";
         let sync_entropy = [0xBB; 32];
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new()
+            .expect("Failed to create tokio runtime");
         let envelope = rt
             .block_on(async { hybrid_otp.encrypt_with_sync(plaintext, &sync_entropy).await })
-            .unwrap();
+            .expect("Failed to encrypt empty plaintext");
         let decrypted = hybrid_otp
             .decrypt_with_sync(&envelope, &sync_entropy)
-            .unwrap();
+            .expect("Failed to decrypt envelope");
 
         assert_eq!(decrypted, plaintext);
     }
@@ -466,7 +482,7 @@ mod tests {
         let sync_entropy1 = [0xCC; 32];
         let sync_entropy2 = [0xDD; 32];
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
 
         // Encrypt the same plaintext with different entropies
         let envelope1 = rt
@@ -475,14 +491,14 @@ mod tests {
                     .encrypt_with_sync(plaintext, &sync_entropy1)
                     .await
             })
-            .unwrap();
+            .expect("Failed to encrypt plaintext with sync_entropy1");
         let envelope2 = rt
             .block_on(async {
                 hybrid_otp
                     .encrypt_with_sync(plaintext, &sync_entropy2)
                     .await
             })
-            .unwrap();
+            .expect("Failed to encrypt plaintext with sync_entropy2");
 
         // Should produce different ciphertexts due to different OTPs
         assert_ne!(envelope1, envelope2);
@@ -490,10 +506,10 @@ mod tests {
         // Both should decrypt to the same plaintext with correct entropy
         let decrypted1 = hybrid_otp
             .decrypt_with_sync(&envelope1, &sync_entropy1)
-            .unwrap();
+            .expect("Failed to decrypt envelope1 with sync_entropy1");
         let decrypted2 = hybrid_otp
             .decrypt_with_sync(&envelope2, &sync_entropy2)
-            .unwrap();
+            .expect("Failed to decrypt envelope2 with sync_entropy2");
 
         assert_eq!(decrypted1, plaintext);
         assert_eq!(decrypted2, plaintext);
@@ -507,14 +523,14 @@ mod tests {
         let sync_entropy1 = [0xEE; 32];
         let sync_entropy2 = [0xFF; 32]; // Different entropy
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
         let envelope = rt
             .block_on(async {
                 hybrid_otp
                     .encrypt_with_sync(plaintext, &sync_entropy1)
                     .await
             })
-            .unwrap();
+            .expect("Failed to encrypt plaintext with sync_entropy1");
 
         // Try to decrypt with different entropy
         let result = hybrid_otp.decrypt_with_sync(&envelope, &sync_entropy2);
@@ -760,15 +776,15 @@ mod tests {
         // Use TRUE random entropy (not fixed values!)
         let sync_entropy = entropy.get_entropy_32_sync();
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
         let envelope = rt
             .block_on(async { hybrid_otp.encrypt_with_sync(plaintext, &sync_entropy).await })
-            .unwrap();
+            .expect("Failed to encrypt plaintext with TRUE entropy");
 
         // Decrypt
         let decrypted = hybrid_otp
             .decrypt_with_sync(&envelope, &sync_entropy)
-            .unwrap();
+            .expect("Failed to decrypt envelope with TRUE entropy");
         assert_eq!(decrypted, plaintext);
 
         // Verify: Using wrong entropy fails
@@ -792,18 +808,18 @@ mod tests {
         // 10 MB file
         let plaintext = vec![0xAB; 10 * 1024 * 1024];
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
         let envelope = rt
             .block_on(async {
                 hybrid_otp
                     .encrypt_with_sync(&plaintext, &sync_entropy)
                     .await
             })
-            .unwrap();
+            .expect("Failed to encrypt 10MB plaintext");
 
         let decrypted = hybrid_otp
             .decrypt_with_sync(&envelope, &sync_entropy)
-            .unwrap();
+            .expect("Failed to decrypt 10MB envelope");
         assert_eq!(decrypted.len(), plaintext.len());
         assert_eq!(decrypted, plaintext);
     }
@@ -816,14 +832,14 @@ mod tests {
         let plaintext = &[0x42u8];
         let sync_entropy = [0x99; 32];
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
         let envelope = rt
             .block_on(async { hybrid_otp.encrypt_with_sync(plaintext, &sync_entropy).await })
-            .unwrap();
+            .expect("Failed to encrypt single byte plaintext");
 
         let decrypted = hybrid_otp
             .decrypt_with_sync(&envelope, &sync_entropy)
-            .unwrap();
+            .expect("Failed to decrypt single byte envelope");
         assert_eq!(decrypted, plaintext);
     }
 
@@ -835,14 +851,14 @@ mod tests {
         let plaintext = vec![0x00; 1024];
         let sync_entropy = [0xAA; 32];
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
         let envelope = rt
             .block_on(async {
                 hybrid_otp
                     .encrypt_with_sync(&plaintext, &sync_entropy)
                     .await
             })
-            .unwrap();
+            .expect("Failed to encrypt all zeros plaintext");
 
         // Verify ciphertext is NOT all zeros (ChaCha20 should randomize)
         let ciphertext = &envelope[46..];
@@ -854,7 +870,7 @@ mod tests {
 
         let decrypted = hybrid_otp
             .decrypt_with_sync(&envelope, &sync_entropy)
-            .unwrap();
+            .expect("Failed to decrypt all zeros plaintext");
         assert_eq!(decrypted, plaintext);
     }
 
@@ -866,18 +882,18 @@ mod tests {
         let plaintext = vec![0xFF; 1024];
         let sync_entropy = [0x55; 32];
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
         let envelope = rt
             .block_on(async {
                 hybrid_otp
                     .encrypt_with_sync(&plaintext, &sync_entropy)
                     .await
             })
-            .unwrap();
+            .expect("Failed to encrypt all ones plaintext");
 
         let decrypted = hybrid_otp
             .decrypt_with_sync(&envelope, &sync_entropy)
-            .unwrap();
+            .expect("Failed to decrypt all ones plaintext");
         assert_eq!(decrypted, plaintext);
     }
 
@@ -889,10 +905,10 @@ mod tests {
         let plaintext = b"Test truncation";
         let sync_entropy = [0x77; 32];
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
         let envelope = rt
             .block_on(async { hybrid_otp.encrypt_with_sync(plaintext, &sync_entropy).await })
-            .unwrap();
+            .expect("Failed to encrypt plaintext for truncation test");
 
         // Try various truncations
         for truncate_len in [1, 10, 30, 45, 46] {
@@ -922,16 +938,16 @@ mod tests {
                 let plaintext = format!("Thread {} message", i);
                 let sync_entropy = [i as u8; 32];
 
-                let rt = tokio::runtime::Runtime::new().unwrap();
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
                 let envelope = rt
                     .block_on(async {
                         hybrid
                             .encrypt_with_sync(plaintext.as_bytes(), &sync_entropy)
                             .await
                     })
-                    .unwrap();
+                    .expect("Failed to encrypt plaintext concurrently");
 
-                let decrypted = hybrid.decrypt_with_sync(&envelope, &sync_entropy).unwrap();
+                let decrypted = hybrid.decrypt_with_sync(&envelope, &sync_entropy).expect("Failed to decrypt envelope concurrently");
                 assert_eq!(decrypted, plaintext.as_bytes());
                 true
             });
@@ -939,7 +955,7 @@ mod tests {
         }
 
         for handle in handles {
-            assert!(handle.join().unwrap());
+            assert!(handle.join().expect("Thread panicked"));
         }
     }
 
@@ -965,13 +981,13 @@ mod tests {
         let plaintext = b"Same data encrypted 100 times";
 
         let mut envelopes: Vec<Vec<u8>> = vec![];
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
 
         for i in 0..100 {
             let sync_entropy = [i as u8; 32]; // Different entropy each time
             let envelope = rt
                 .block_on(async { hybrid_otp.encrypt_with_sync(plaintext, &sync_entropy).await })
-                .unwrap();
+                .expect("Failed to encrypt plaintext in repeated data test");
 
             // Each envelope should be unique
             assert!(
@@ -1025,12 +1041,12 @@ mod tests {
         let plaintext = b"Test message for constant-time OTP reuse detection";
         let sync_entropy = [0x42; 32];
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
 
         // First encryption should succeed
         let envelope1 = rt
             .block_on(async { hybrid_otp.encrypt_with_sync(plaintext, &sync_entropy).await })
-            .unwrap();
+            .expect("Failed to encrypt plaintext first time");
 
         // Second encryption with same OTP should fail (constant-time detection)
         let result2 =
@@ -1046,7 +1062,7 @@ mod tests {
         // Verify first decryption still works
         let decrypted1 = hybrid_otp
             .decrypt_with_sync(&envelope1, &sync_entropy)
-            .unwrap();
+            .expect("Failed to decrypt envelope1");
         assert_eq!(decrypted1, plaintext);
 
         // Test with different OTP - should succeed
@@ -1057,11 +1073,11 @@ mod tests {
                     .encrypt_with_sync(plaintext, &sync_entropy2)
                     .await
             })
-            .unwrap();
+            .expect("Failed to encrypt plaintext with different OTP");
 
         let decrypted2 = hybrid_otp
             .decrypt_with_sync(&envelope2, &sync_entropy2)
-            .unwrap();
+            .expect("Failed to decrypt envelope2 with different OTP");
         assert_eq!(decrypted2, plaintext);
     }
 }

@@ -65,6 +65,22 @@ export class SignalingRoom {
     this.sessions = new Map(); // WebSocket sessions: peerId -> { socket, info }
     this.peers = new Map();    // Peer info: peerId -> info
 
+    // Prune ghost nodes that haven't sent a message in 90 seconds
+    setInterval(() => {
+      const now = Date.now();
+      for (const [peerId, peer] of this.peers.entries()) {
+        if (now - peer.last_seen > 90000) {
+          console.log(`Pruning ghost peer: ${peerId}`);
+          this.removePeer(peerId);
+        }
+      }
+    }, 30000);
+
+    // Heartbeat: send ping to all active sessions every 20s to prevent DO hibernation/eviction
+    setInterval(() => {
+      this.broadcast({ type: 'ping' });
+    }, 20000);
+
     // Resume previous state if needed (for now we start fresh on reload to avoid stale connections)
     // In a full production app, we might restore peers from storage.
     this.state.blockConcurrencyWhile(async () => {
@@ -111,6 +127,11 @@ export class SignalingRoom {
     let peerId = null;
 
     webSocket.addEventListener('message', async (event) => {
+      // Update last_seen to keep peer alive
+      if (peerId && this.peers.has(peerId)) {
+        this.peers.get(peerId).last_seen = Date.now();
+      }
+
       try {
         const message = JSON.parse(event.data);
         await this.handleMessage(webSocket, message, sessionId, (pid) => { peerId = pid; });
@@ -198,6 +219,7 @@ export class SignalingRoom {
         }
         break;
 
+      case 'discover':
         const peerList = Array.from(this.peers.values());
         socket.send(JSON.stringify({
           type: 'Peers', // MUST BE 'Peers' for Rust

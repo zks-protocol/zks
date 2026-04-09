@@ -167,7 +167,7 @@ impl EntropyCache {
         let start_round = block.start_round;
         let timestamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .map_err(|e| WireError::Other(format!("System clock error: {}", e)))?
             .as_secs();
 
         let cached_block = CachedBlock {
@@ -209,7 +209,7 @@ impl EntropyCache {
             // Check if block is expired
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .map_err(|e| WireError::Other(format!("System clock error: {}", e)))?
                 .as_secs();
 
             if now - cached_block.timestamp > self.config.cache_ttl_seconds {
@@ -241,7 +241,7 @@ impl EntropyCache {
                 // Check expiration
                 let now = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
+                    .map_err(|e| WireError::Other(format!("System clock error: {}", e)))?
                     .as_secs();
 
                 if now - cached_block.timestamp <= self.config.cache_ttl_seconds {
@@ -266,7 +266,7 @@ impl EntropyCache {
             self.blocks.read().await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or(std::time::Duration::from_secs(0))
             .as_secs();
 
         let mut total_accesses = 0;
@@ -292,12 +292,12 @@ impl EntropyCache {
     }
 
     /// Clean up expired blocks
-    pub async fn cleanup_expired(&self) -> usize {
+    pub async fn cleanup_expired(&self) -> Result<usize> {
         let mut blocks: tokio::sync::RwLockWriteGuard<'_, HashMap<u64, CachedBlock>> =
             self.blocks.write().await;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or(std::time::Duration::from_secs(0))
             .as_secs();
 
         let expired_keys: Vec<u64> = blocks
@@ -315,7 +315,7 @@ impl EntropyCache {
             debug!("Cleaned up {} expired blocks from cache", removed_count);
         }
 
-        removed_count
+        Ok(removed_count)
     }
 
     /// Clear all blocks from cache
@@ -742,7 +742,7 @@ impl EntropySwarm {
 
     /// Cleanup old entries from cache
     pub async fn cleanup_cache(&self) -> Result<usize> {
-        Ok(self.cache.cleanup_expired().await)
+        Ok(self.cache.cleanup_expired().await?)
     }
 
     /// Get the number of entropy peers
@@ -974,7 +974,7 @@ mod tests {
                 vec![i as u8; 96],
                 vec![(i + 1) as u8; 96],
             );
-            block.add_round(round).unwrap();
+            block.add_round(round)?;
         }
 
         block
@@ -989,12 +989,12 @@ mod tests {
         let start_round = block.start_round;
 
         // Store block
-        cache.store_block(block.clone()).await.unwrap();
+        cache.store_block(block.clone()).await?;
 
         // Retrieve block
-        let retrieved = cache.get_block(start_round).await.unwrap();
+        let retrieved = cache.get_block(start_round).await?;
         assert!(retrieved.is_some());
-        assert_eq!(retrieved.unwrap().start_round, start_round);
+        assert_eq!(retrieved.ok_or_else(|| WireError::Other("Retrieved block is None".into()))?.start_round, start_round);
 
         // Check stats
         let stats = cache.get_stats().await;
@@ -1021,11 +1021,11 @@ mod tests {
         let peer_id = PeerId::new();
 
         // Add peer
-        swarm.add_entropy_peer(peer_id).await.unwrap();
+        swarm.add_entropy_peer(peer_id).await?;
         assert_eq!(swarm.get_entropy_peers().await.len(), 1);
 
         // Remove peer
-        swarm.remove_entropy_peer(peer_id).await.unwrap();
+        swarm.remove_entropy_peer(peer_id).await?;
         assert!(swarm.get_entropy_peers().await.is_empty());
     }
 
@@ -1047,8 +1047,7 @@ mod tests {
 
         swarm
             .handle_gossip_message(gossip_msg, peer_id)
-            .await
-            .unwrap();
+            .await?;
 
         // Peer should be added to entropy peers
         assert_eq!(swarm.get_entropy_peers().await.len(), 1);
@@ -1064,19 +1063,17 @@ mod tests {
         let start_round = block.start_round;
 
         // Store block in cache
-        swarm.cache.store_block(block.clone()).await.unwrap();
+        swarm.cache.store_block(block.clone()).await?;
 
         // Announce block to DHT
         swarm
             .announce_entropy_block_to_dht(start_round)
-            .await
-            .unwrap();
+            .await?;
 
         // Query DHT for providers
         let providers = swarm
             .query_entropy_block_providers(start_round)
-            .await
-            .unwrap();
+            .await?;
 
         // Should find at least one provider (ourselves)
         assert!(!providers.is_empty());

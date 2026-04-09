@@ -10,7 +10,7 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
-use tokio_tungstenite::{connect_async, tungstenite::Message, WebSocketStream};
+use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 use tracing::{debug, error, info, warn};
 
 use crate::signaling::{PeerCapabilities, PeerInfo};
@@ -87,6 +87,8 @@ pub struct CloudflareSignalingClient {
     config: CloudflareSignalingConfig,
     is_connected: Arc<Mutex<bool>>,
     connection_attempts: Arc<Mutex<u32>>,
+    advertised_addresses: Arc<Mutex<Vec<String>>>,
+    shutdown: Arc<Mutex<bool>>,
 }
 
 impl CloudflareSignalingClient {
@@ -121,6 +123,8 @@ impl CloudflareSignalingClient {
                         config,
                         is_connected: Arc::new(Mutex::new(true)),
                         connection_attempts: Arc::new(Mutex::new(0)),
+                        advertised_addresses: Arc::new(Mutex::new(vec![])),
+                        shutdown: Arc::new(Mutex::new(false)),
                     });
                 }
                 Err(e) => {
@@ -148,19 +152,39 @@ impl CloudflareSignalingClient {
         if let Some(token) = &config.auth_token {
             request.headers_mut().insert(
                 "Authorization",
-                format!("Bearer {}", token).parse().unwrap(),
+                format!("Bearer {}", token)
+                    .parse()
+                    .map_err(|e| CloudflareSignalingError::InvalidHeader(format!("Authorization header parse error: {}", e)))?,
             );
         }
 
         // Add custom headers for ZKS Protocol
         request
             .headers_mut()
-            .insert("X-ZKS-Protocol-Version", "1.0".parse().unwrap());
+            .insert("X-ZKS-Protocol-Version", "1.0"
+                .parse()
+                .map_err(|e| CloudflareSignalingError::InvalidHeader(format!("Protocol version header parse error: {}", e)))?);
         request
             .headers_mut()
-            .insert("X-ZKS-Peer-ID", peer_id.parse().unwrap());
+            .insert("X-ZKS-Peer-ID", peer_id.parse()
+                .map_err(|e| CloudflareSignalingError::InvalidHeader(format!("Peer ID header parse error: {}", e)))?);
 
-        let connect_future = connect_async(request);
+        // Create a custom rustls configuration that uses webpki-roots directly
+        let mut root_store = rustls::RootCertStore::empty();
+        root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+        
+        let config_tls = rustls::ClientConfig::builder()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+
+        let connector = tokio_tungstenite::Connector::Rustls(std::sync::Arc::new(config_tls));
+
+        let connect_future = tokio_tungstenite::connect_async_tls_with_config(
+            request,
+            None,
+            false,
+            Some(connector)
+        );
         let (ws_stream, _response) = timeout(config.connection_timeout, connect_future)
             .await
             .map_err(|_| CloudflareSignalingError::ConnectionTimeout)?
@@ -186,7 +210,7 @@ impl CloudflareSignalingClient {
             capabilities,
             last_seen: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .map_err(|e| CloudflareSignalingError::Internal(format!("System clock error: {}", e)))?
                 .as_secs(),
             addresses: vec![],
         };
@@ -306,6 +330,16 @@ impl CloudflareSignalingClient {
         let max_attempts = self.config.max_reconnect_attempts;
 
         loop {
+            // Check if connection is marked as disconnected and try to reconnect
+            if !*self.is_connected.lock().await {
+                warn!("Connection marked as disconnected, attempting to reconnect");
+                if let Err(e) = self.reconnect().await {
+                    warn!("Reconnection failed: {}", e);
+                } else {
+                    info!("Successfully reconnected to signaling server");
+                }
+            }
+
             match self.send_message(message.clone()).await {
                 Ok(()) => return Ok(()),
                 Err(e) => {
@@ -318,6 +352,16 @@ impl CloudflareSignalingClient {
                         "Message send failed (attempt {}/{}): {}",
                         attempts, max_attempts, e
                     );
+
+                    // Try to reconnect if connection issue detected
+                    if e.to_string().contains("closed") || e.to_string().contains("ConnectionReset") {
+                        warn!("Connection issue detected, attempting to reconnect");
+                        if let Err(reconnect_err) = self.reconnect().await {
+                            warn!("Reconnection attempt failed: {}", reconnect_err);
+                        } else {
+                            info!("Successfully reconnected after send failure");
+                        }
+                    }
 
                     // Wait before retry with exponential backoff
                     let wait_time = Duration::from_millis(100 * 2_u64.pow(attempts - 1));
@@ -344,14 +388,22 @@ impl CloudflareSignalingClient {
         let ws_message = Message::Text(json);
 
         let mut stream = self.ws_stream.lock().await;
-        timeout(self.config.message_timeout, stream.send(ws_message))
+        
+        let send_result = timeout(self.config.message_timeout, stream.send(ws_message))
             .await
-            .map_err(|_| CloudflareSignalingError::SendTimeout)?
-            .map_err(|e| {
-                CloudflareSignalingError::SendFailed(format!("Failed to send message: {}", e))
-            })?;
+            .map_err(|_| CloudflareSignalingError::SendTimeout);
 
-        Ok(())
+        match send_result {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(e)) => {
+                if e.to_string().contains("closed") || e.to_string().contains("ConnectionReset") {
+                    warn!("WebSocket connection closed, marking for reconnection");
+                    *self.is_connected.lock().await = false;
+                }
+                return Err(CloudflareSignalingError::SendFailed(format!("Failed to send message: {}", e)))
+            }
+            Err(_) => return Err(CloudflareSignalingError::SendTimeout),
+        }
     }
 
     /// Receive a signaling message with timeout
@@ -394,6 +446,62 @@ impl CloudflareSignalingClient {
         }
     }
 
+    /// Reconnect to the signaling server
+    async fn reconnect(&self) -> Result<(), CloudflareSignalingError> {
+        // Check if shutdown is in progress
+        if *self.shutdown.lock().await {
+            return Err(CloudflareSignalingError::Internal("Shutdown in progress".into()));
+        }
+
+        let mut attempts = 0;
+        let max_attempts = self.config.max_reconnect_attempts;
+
+        loop {
+            attempts += 1;
+
+            if attempts > max_attempts {
+                return Err(CloudflareSignalingError::ConnectionFailed(format!(
+                    "Failed to reconnect after {} attempts",
+                    max_attempts
+                )));
+            }
+
+            warn!("Reconnection attempt {}/{}", attempts, max_attempts);
+
+            // Try to reconnect using existing config
+            let endpoints = std::iter::once(&self.config.primary_endpoint)
+                .chain(self.config.fallback_endpoints.iter())
+                .collect::<Vec<_>>();
+
+            for (attempt, endpoint) in endpoints.iter().enumerate() {
+                if attempt > 0 {
+                    debug!("Trying fallback endpoint: {}", endpoint);
+                }
+
+                match Self::try_connect_endpoint(endpoint, &self.config, &self.peer_id).await {
+                    Ok(ws_stream) => {
+                        info!("Successfully reconnected to signaling server: {}", endpoint);
+
+                        // Replace the WebSocket stream
+                        let mut stream = self.ws_stream.lock().await;
+                        *stream = ws_stream;
+                        *self.is_connected.lock().await = true;
+
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        debug!("Failed to reconnect to {}: {}", endpoint, e);
+                        continue;
+                    }
+                }
+            }
+
+            // Wait before next attempt with exponential backoff
+            let wait_time = Duration::from_millis(500 * 2_u64.pow(attempts - 1));
+            tokio::time::sleep(wait_time).await;
+        }
+    }
+
     /// Check if connected
     pub async fn is_connected(&self) -> bool {
         *self.is_connected.lock().await
@@ -411,6 +519,9 @@ impl CloudflareSignalingClient {
 
     /// Close the connection gracefully
     pub async fn close(&mut self) -> Result<(), CloudflareSignalingError> {
+        // Set shutdown flag to prevent reconnection attempts
+        *self.shutdown.lock().await = true;
+
         let message = Message::Close(None);
         let mut stream = self.ws_stream.lock().await;
 
@@ -454,84 +565,129 @@ pub struct ConnectionStats {
 pub enum CloudflareSignalingMessage {
     /// Join a swarm room
     Join {
+        /// Room identifier to join
         room_id: String,
+        /// Information about the joining peer
         peer_info: PeerInfo,
     },
     /// Leave a swarm room
-    Leave { room_id: String },
+    Leave {
+        /// Room identifier to leave
+        room_id: String,
+    },
     /// Discover peers in a room
-    Discover { room_id: String },
+    Discover {
+        /// Room identifier to discover peers in
+        room_id: String,
+    },
     /// Response with peer list
-    Peers { peers: Vec<PeerInfo> },
+    Peers {
+        /// List of peers discovered in the room
+        peers: Vec<PeerInfo>,
+    },
     /// Request entropy from swarm
-    EntropyRequest { room_id: String, request_id: String },
+    EntropyRequest {
+        /// Room identifier for the entropy request
+        room_id: String,
+        /// Unique request identifier for tracking
+        request_id: String,
+    },
     /// Response with entropy
     EntropyResponse {
+        /// Unique request identifier matching the request
         request_id: String,
+        /// Cryptographic entropy data from swarm
         entropy: Vec<u8>,
+        /// Signature verifying the entropy source
         signature: Vec<u8>,
     },
     /// Error message
     #[serde(rename = "error")]
-    Error { code: String, message: String },
+    Error {
+        /// Error code for classification
+        code: String,
+        /// Human-readable error message
+        message: String,
+    },
     /// Join success response
-    JoinSuccess { room_id: String, peer_count: usize },
+    JoinSuccess {
+        /// Room identifier that was joined
+        room_id: String,
+        /// Number of peers in the room
+        peer_count: usize,
+    },
     /// Leave success response
-    LeaveSuccess { room_id: String },
+    LeaveSuccess {
+        /// Room identifier that was left
+        room_id: String,
+    },
     /// Peer joined notification
-    PeerJoined { peer_info: PeerInfo },
+    PeerJoined {
+        /// Information about the peer that joined
+        peer_info: PeerInfo,
+    },
     /// Peer left notification
-    PeerLeft { peer_id: String },
+    PeerLeft {
+        /// Identifier of the peer that left
+        peer_id: String,
+    },
 }
 
 /// Production errors for Cloudflare Workers signaling
 #[derive(Debug, thiserror::Error)]
 pub enum CloudflareSignalingError {
+    /// WebSocket connection establishment failed
     #[error("Connection failed: {0}")]
     ConnectionFailed(String),
-
+    /// WebSocket connection establishment timed out
     #[error("Connection timeout")]
     ConnectionTimeout,
-
+    /// WebSocket connection was closed
     #[error("Connection closed")]
     ConnectionClosed,
-
+    /// Sending message through WebSocket failed
     #[error("Send failed: {0}")]
     SendFailed(String),
-
+    /// Sending message through WebSocket timed out
     #[error("Send timeout")]
     SendTimeout,
-
+    /// Generic WebSocket connection error occurred
     #[error("Connection error: {0}")]
     ConnectionError(String),
-
+    /// Receiving message from WebSocket failed
     #[error("Receive failed: {0}")]
     ReceiveFailed(String),
-
+    /// Receiving message from WebSocket timed out
     #[error("Receive timeout")]
     ReceiveTimeout,
-
+    /// Waiting for server response timed out
     #[error("Response timeout")]
     ResponseTimeout,
-
+    /// Serializing message to JSON failed
     #[error("Serialization failed: {0}")]
     SerializationFailed(String),
-
+    /// Deserializing message from JSON failed
     #[error("Deserialization failed: {0}")]
     DeserializationFailed(String),
-
+    /// Server returned an error response
     #[error("Server error: {0}")]
     ServerError(String),
-
+    /// Received unexpected message type from server
     #[error("Unexpected message: {0}")]
     UnexpectedMessage(&'static str),
-
+    /// Received invalid entropy data
     #[error("Invalid entropy: {0}")]
     InvalidEntropy(&'static str),
-
+    /// Received invalid protocol header
+    #[error("Invalid header: {0}")]
+    InvalidHeader(String),
+    /// Internal signaling error occurred
+    #[error("Internal error: {0}")]
+    Internal(String),
+    /// No available Cloudflare endpoints to connect to
     #[error("No available endpoints")]
     NoAvailableEndpoints,
-
+    /// HTTP request to Cloudflare failed
     #[error("HTTP request error: {0}")]
     HttpRequestError(String),
 }
@@ -585,6 +741,18 @@ impl crate::signaling::SignalingClientTrait for CloudflareSignalingClient {
         CloudflareSignalingClient::close(self)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+    }
+
+    fn set_peer_id(&mut self, peer_id: String) {
+        self.peer_id = peer_id;
+    }
+
+    async fn set_advertised_addresses(&self, addresses: Vec<String>) {
+        *self.advertised_addresses.lock().await = addresses;
+    }
+
+    async fn get_advertised_addresses(&self) -> Vec<String> {
+        self.advertised_addresses.lock().await.clone()
     }
 }
 

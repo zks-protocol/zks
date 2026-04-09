@@ -77,7 +77,7 @@ mod debug_tests {
     #[test]
     fn test_wasif_encrypt_decrypt() {
         let key = [0x42; 32]; // Use a non-zero key
-        let mut cipher = WasifVernam::new(key).unwrap();
+        let mut cipher = WasifVernam::new(key).expect("Failed to create WasifVernam cipher");
 
         // Must set base_iv before encryption (required for bidirectional safety)
         cipher.derive_base_iv(&key, true);

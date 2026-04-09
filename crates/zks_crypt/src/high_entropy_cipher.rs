@@ -611,12 +611,12 @@ mod tests {
         assert_eq!(buffer.available(), entropy.len());
 
         // Consume some
-        let consumed = buffer.consume(3).unwrap();
+        let consumed = buffer.consume(3).expect("Failed to consume 3 bytes");
         assert_eq!(consumed, vec![0xDE, 0xAD, 0xBE]);
         assert_eq!(buffer.available(), entropy.len() - 3);
 
         // Consume more - should get remaining
-        let consumed = buffer.consume(2).unwrap();
+        let consumed = buffer.consume(2).expect("Failed to consume 2 bytes");
         assert_eq!(consumed, vec![0xEF, 0x55]);
         assert_eq!(buffer.available(), entropy.len() - 5);
 
@@ -645,14 +645,14 @@ mod tests {
             .expect("Valid entropy should be accepted");
 
         // Consume in chunks
-        let _chunk1 = buffer.consume(50).unwrap();
-        let _chunk2 = buffer.consume(50).unwrap();
+        let _chunk1 = buffer.consume(50).expect("Failed to consume 50 bytes");
+        let _chunk2 = buffer.consume(50).expect("Failed to consume 50 bytes");
 
         // Each consumption reduces the buffer
         assert_eq!(buffer.available(), 100);
 
         // Consume all remaining bytes
-        let _chunk3 = buffer.consume(100).unwrap();
+        let _chunk3 = buffer.consume(100).expect("Failed to consume 100 bytes");
         assert_eq!(buffer.available(), 0);
 
         // The bytes are gone forever - TRUE one-time!
@@ -1015,7 +1015,7 @@ mod synchronized_tests {
     #[test]
     fn test_consume_synchronization() {
         let _seed = [0xDE, 0xAD, 0xBE, 0xEF]; // Repeat to make 32 bytes
-        let full_seed = [0xDE, 0xAD, 0xBE, 0xEF].repeat(8).try_into().unwrap();
+        let full_seed: [u8; 32] = [0xDE, 0xAD, 0xBE, 0xEF].repeat(8).try_into().expect("Failed to convert Vec<u8> to [u8; 32]");
 
         let alice_buffer = SynchronizedVernamBuffer::new(full_seed);
         let bob_buffer = SynchronizedVernamBuffer::new(full_seed);
@@ -1783,8 +1783,8 @@ mod sequenced_tests {
         let ks0 = alice.generate_for_sequence_sync(seq0, 16); // Short message
         let ks1 = alice.generate_for_sequence_sync(seq1, 1024); // Long message
 
-        let bob_ks0 = bob.consume_for_sequence_sync(seq0, 16).unwrap();
-        let bob_ks1 = bob.consume_for_sequence_sync(seq1, 1024).unwrap();
+        let bob_ks0 = bob.consume_for_sequence_sync(seq0, 16).expect("Failed to consume keystream for seq0");
+        let bob_ks1 = bob.consume_for_sequence_sync(seq1, 1024).expect("Failed to consume keystream for seq1");
 
         assert_eq!(ks0, bob_ks0);
         assert_eq!(ks1, bob_ks1);
@@ -1814,8 +1814,8 @@ mod sequenced_tests {
         envelope.extend_from_slice(&ciphertext);
 
         // Bob decrypts
-        let recv_seq = u64::from_be_bytes(envelope[0..8].try_into().unwrap());
-        let recv_len = u32::from_be_bytes(envelope[8..12].try_into().unwrap()) as usize;
+        let recv_seq = u64::from_be_bytes(envelope[0..8].try_into().expect("Failed to parse sequence number from envelope"));
+        let recv_len = u32::from_be_bytes(envelope[8..12].try_into().expect("Failed to parse message length from envelope")) as usize;
         let recv_ciphertext = &envelope[12..];
 
         let keystream = bob

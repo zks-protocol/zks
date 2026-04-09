@@ -21,11 +21,15 @@ pub struct OnionStream<S: SignalingClientTrait + 'static> {
     read_buf: Vec<u8>,
     is_closed: bool,
     /// Channel for write operations with bounded capacity (backpressure)
-    write_sender: mpsc::Sender<WriteOp>,
-    /// Pending write result for poll_write to check
-    pending_result: Arc<TokioMutex<Option<std::io::Result<()>>>>,
-    /// Flag indicating if a write is in progress
-    write_in_progress: Arc<TokioMutex<bool>>,
+    write_sender: Option<mpsc::Sender<WriteOp>>,
+    /// Pending write result for poll_write to check (reserved for future use)
+    #[allow(dead_code)]
+    _pending_result: Arc<TokioMutex<Option<std::io::Result<()>>>>,
+    /// Flag indicating if a write is in progress (reserved for future use)
+    #[allow(dead_code)]
+    _write_in_progress: Arc<TokioMutex<bool>>,
+    /// Handle to wait for all pending writes to complete
+    write_complete_rx: Option<tokio::sync::oneshot::Receiver<()>>,
 }
 
 /// Write operation data
@@ -56,9 +60,10 @@ impl<S: SignalingClientTrait> OnionStream<S> {
 
         // Spawn a task to handle write operations
         let manager_clone = manager.clone();
-        let pending_result: Arc<TokioMutex<Option<std::io::Result<()>>>> = Arc::new(TokioMutex::new(None));
-        let write_in_progress: Arc<TokioMutex<bool>> = Arc::new(TokioMutex::new(false));
-        let pending_result_for_task = pending_result.clone();
+        let _pending_result: Arc<TokioMutex<Option<std::io::Result<()>>>> = Arc::new(TokioMutex::new(None));
+        let _write_in_progress: Arc<TokioMutex<bool>> = Arc::new(TokioMutex::new(false));
+        let pending_result_for_task = _pending_result.clone();
+        let (write_complete_tx, write_complete_rx) = tokio::sync::oneshot::channel();
 
         tokio::spawn(async move {
             while let Some(WriteOp { data, result_tx }) = write_receiver.recv().await {
@@ -80,6 +85,7 @@ impl<S: SignalingClientTrait> OnionStream<S> {
                     }
                 }
             }
+            let _ = write_complete_tx.send(());
         });
 
         Self {
@@ -89,9 +95,10 @@ impl<S: SignalingClientTrait> OnionStream<S> {
             receiver,
             read_buf: Vec::new(),
             is_closed: false,
-            write_sender,
-            pending_result,
-            write_in_progress,
+            write_sender: Some(write_sender),
+            _pending_result,
+            _write_in_progress,
+            write_complete_rx: Some(write_complete_rx),
         }
     }
 
@@ -103,6 +110,18 @@ impl<S: SignalingClientTrait> OnionStream<S> {
     /// Get the stream ID
     pub fn stream_id(&self) -> u16 {
         self.stream_id
+    }
+
+    /// Shutdown the stream and wait for all pending writes to complete
+    pub async fn shutdown(mut self) {
+        self.is_closed = true;
+        if let Some(write_sender) = self.write_sender.take() {
+            drop(write_sender);
+        }
+        if let Some(write_complete_rx) = self.write_complete_rx.take() {
+            let _ = write_complete_rx.await;
+        }
+        self.manager.unregister_stream(self.circuit_id, self.stream_id).await;
     }
 }
 
@@ -158,7 +177,7 @@ impl<S: SignalingClientTrait> AsyncRead for OnionStream<S> {
 
 impl<S: SignalingClientTrait + 'static> AsyncWrite for OnionStream<S> {
     fn poll_write(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<std::io::Result<usize>> {
@@ -166,12 +185,11 @@ impl<S: SignalingClientTrait + 'static> AsyncWrite for OnionStream<S> {
             return Poll::Ready(Err(std::io::ErrorKind::BrokenPipe.into()));
         }
 
-        // Check if we need to wait for space in the channel
-        let (result_tx, mut result_rx) = tokio::sync::oneshot::channel();
+        let (result_tx, _result_rx) = tokio::sync::oneshot::channel();
         let data = buf.to_vec();
 
         // Try to send write request with bounded channel (backpressure)
-        match self.write_sender.try_send(WriteOp {
+        match self.write_sender.as_ref().unwrap().try_send(WriteOp {
             data,
             result_tx,
         }) {
@@ -205,9 +223,8 @@ impl<S: SignalingClientTrait + 'static> AsyncWrite for OnionStream<S> {
 
     fn poll_shutdown(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
         self.is_closed = true;
-        // Dropping the sender closes the channel, signaling the write task to stop
-        // We can't drop self.write_sender here since we only have &mut self,
-        // but marking is_closed ensures no new writes are accepted
+        // Drop the sender to close the channel and signal the write task to stop
+        self.write_sender = None;
         Poll::Ready(Ok(()))
     }
 }

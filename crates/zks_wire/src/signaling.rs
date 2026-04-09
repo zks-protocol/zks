@@ -105,6 +105,9 @@ pub enum SignalingMessage {
         /// Human-readable error message
         message: String,
     },
+    /// Server-side heartbeat ping
+    #[serde(rename = "ping")]
+    Ping,
 }
 
 /// WebSocket-based signaling client
@@ -147,6 +150,11 @@ impl SignalingClient {
         *self.advertised_addresses.lock().await = addresses;
     }
 
+    /// Get the list of currently advertised addresses
+    pub async fn get_advertised_addresses(&self) -> Vec<String> {
+        self.advertised_addresses.lock().await.clone()
+    }
+
     /// Join a swarm room for peer discovery
     pub async fn join_room(
         &self,
@@ -159,7 +167,7 @@ impl SignalingClient {
             capabilities,
             last_seen: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .map_err(|e| SignalingError::SerializationFailed(format!("System clock error: {}", e)))?
                 .as_secs(),
             addresses: self.advertised_addresses.lock().await.clone(),
         };
@@ -273,13 +281,17 @@ impl SignalingClient {
         loop {
             match stream.try_next().await {
                 Ok(Some(Message::Text(text))) => {
-                    let message: SignalingMessage = serde_json::from_str(&text).map_err(|e| {
-                        SignalingError::DeserializationFailed(format!(
-                            "Failed to deserialize message: {}",
-                            e
-                        ))
-                    })?;
-                    return Ok(message);
+                    match serde_json::from_str::<SignalingMessage>(&text) {
+                        Ok(SignalingMessage::Ping) => {
+                            debug!("Received signaling heartbeat ping");
+                            continue;
+                        }
+                        Ok(message) => return Ok(message),
+                        Err(e) => {
+                            debug!("Skipping unknown or malformed signaling message: {} (Error: {})", text, e);
+                            continue;
+                        }
+                    }
                 }
                 Ok(Some(Message::Binary(_))) => {
                     // Ignore binary messages for now
@@ -401,6 +413,15 @@ pub trait SignalingClientTrait: Send + Sync + Clone {
 
     /// Close the signaling connection
     async fn close(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+
+    /// Set the peer ID for this signaling client
+    fn set_peer_id(&mut self, peer_id: String);
+
+    /// Set the list of addresses to advertise to peers
+    async fn set_advertised_addresses(&self, addresses: Vec<String>);
+
+    /// Get the list of currently advertised addresses
+    async fn get_advertised_addresses(&self) -> Vec<String>;
 }
 
 #[async_trait::async_trait]
@@ -447,6 +468,18 @@ impl SignalingClientTrait for SignalingClient {
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
     }
+
+    fn set_peer_id(&mut self, peer_id: String) {
+        self.peer_id = peer_id;
+    }
+
+    async fn set_advertised_addresses(&self, addresses: Vec<String>) {
+        SignalingClient::set_advertised_addresses(self, addresses).await;
+    }
+
+    async fn get_advertised_addresses(&self) -> Vec<String> {
+        SignalingClient::get_advertised_addresses(self).await
+    }
 }
 
 #[cfg(test)]
@@ -455,10 +488,9 @@ mod tests {
 
     #[tokio::test]
     #[ignore] // Requires running signaling server
-    async fn test_signaling_client() {
+    async fn test_signaling_client() -> Result<()> {
         let mut client = SignalingClient::connect("localhost:8080", "test-peer".to_string())
-            .await
-            .unwrap();
+            .await?;
 
         let capabilities = PeerCapabilities {
             supports_p2p: true,
@@ -469,12 +501,13 @@ mod tests {
             max_hops: 3,
         };
 
-        client.join_room("test-room", capabilities).await.unwrap();
+        client.join_room("test-room", capabilities).await?;
 
-        let peers = client.discover_peers("test-room").await.unwrap();
+        let peers = client.discover_peers("test-room").await?;
         println!("Discovered {} peers", peers.len());
 
-        client.leave_room("test-room").await.unwrap();
-        client.close().await.unwrap();
+        client.leave_room("test-room").await?;
+        client.close().await?;
+        Ok(())
     }
 }

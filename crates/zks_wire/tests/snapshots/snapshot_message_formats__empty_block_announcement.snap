@@ -1,0 +1,45 @@
+---
+source: crates/zks_wire/tests/snapshot_message_formats.rs
+expression: "serde_json::to_value(&message).unwrap()"
+---
+{
+  "BlockAvailable": {
+    "block_hash": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "end_round": 0,
+    "peer_id": "QmEmptyPeer",
+    "start_round": 0
+  }
+}

@@ -254,7 +254,8 @@ mod tests {
         let entropy = [0x42u8; 32];
         let original = b"Hello, World! This is a test message for scrambling.";
 
-        let scrambler = CiphertextScrambler::from_entropy(&entropy, original.len()).unwrap();
+        let scrambler = CiphertextScrambler::from_entropy(&entropy, original.len())
+            .expect("Failed to create scrambler from entropy");
 
         let mut data = original.to_vec();
         scrambler.scramble(&mut data);
@@ -273,8 +274,10 @@ mod tests {
         let entropy = [0xABu8; 32];
         let data = b"Test data for deterministic scrambling";
 
-        let scrambler1 = CiphertextScrambler::from_entropy(&entropy, data.len()).unwrap();
-        let scrambler2 = CiphertextScrambler::from_entropy(&entropy, data.len()).unwrap();
+        let scrambler1 = CiphertextScrambler::from_entropy(&entropy, data.len())
+            .expect("Failed to create scrambler1 from entropy");
+        let scrambler2 = CiphertextScrambler::from_entropy(&entropy, data.len())
+            .expect("Failed to create scrambler2 from entropy");
 
         let result1 = scrambler1.scramble_copy(data);
         let result2 = scrambler2.scramble_copy(data);
@@ -289,8 +292,10 @@ mod tests {
         let entropy2 = [0x22u8; 32];
         let data = b"Test data for different entropy scrambling test";
 
-        let scrambler1 = CiphertextScrambler::from_entropy(&entropy1, data.len()).unwrap();
-        let scrambler2 = CiphertextScrambler::from_entropy(&entropy2, data.len()).unwrap();
+        let scrambler1 = CiphertextScrambler::from_entropy(&entropy1, data.len())
+            .expect("Failed to create scrambler1 from entropy1");
+        let scrambler2 = CiphertextScrambler::from_entropy(&entropy2, data.len())
+            .expect("Failed to create scrambler2 from entropy2");
 
         let result1 = scrambler1.scramble_copy(data);
         let result2 = scrambler2.scramble_copy(data);
@@ -305,10 +310,12 @@ mod tests {
         let original = b"Convenience test";
 
         let mut data = original.to_vec();
-        scramble_with_entropy(&mut data, &entropy).unwrap();
+        scramble_with_entropy(&mut data, &entropy)
+            .expect("Failed to scramble data with entropy");
         assert_ne!(&data[..], &original[..]);
 
-        unscramble_with_entropy(&mut data, &entropy).unwrap();
+        unscramble_with_entropy(&mut data, &entropy)
+            .expect("Failed to unscramble data with entropy");
         assert_eq!(&data[..], &original[..]);
     }
 
@@ -317,7 +324,8 @@ mod tests {
         let entropy = [0xFFu8; 32];
         let mut data = vec![0x42u8];
 
-        scramble_with_entropy(&mut data, &entropy).unwrap();
+        scramble_with_entropy(&mut data, &entropy)
+            .expect("Failed to scramble single byte with entropy");
         assert_eq!(data, vec![0x42u8]); // Single byte can't be scrambled
     }
 

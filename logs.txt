@@ -1,0 +1,345 @@
+2026-02-22T18:29:39.973615Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:40.976797Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:40.977329Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:41.859845Z DEBUG Swarm::poll: Incoming connection from remote at local remote_address=/ip4/100.31.160.82/tcp/51207 local_address=/ip4/172.31.22.70/tcp/4001
+2026-02-22T18:29:41.879129Z DEBUG new_incoming_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1}: Listener: confirming protocol: /noise
+2026-02-22T18:29:41.879481Z DEBUG new_incoming_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1}: Listener: sent confirmed protocol: /noise
+2026-02-22T18:29:41.980663Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:41.981399Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:42.810288Z DEBUG new_incoming_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1}: Listener: confirming protocol: /yamux/1.0.0
+2026-02-22T18:29:42.810540Z DEBUG new_incoming_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1}: Listener: sent confirmed protocol: /yamux/1.0.0
+2026-02-22T18:29:42.813210Z DEBUG new_incoming_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1}: new connection: 871fb99a (Server)
+2026-02-22T18:29:42.829214Z DEBUG Swarm::poll: New inbound connection peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW mode=client
+2026-02-22T18:29:42.840784Z DEBUG Swarm::poll: Connection established peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW endpoint=Listener { local_addr: /ip4/172.31.22.70/tcp/4001, send_back_addr: /ip4/100.31.160.82/tcp/51207 } total_peers=1
+2026-02-22T18:29:42.843183Z DEBUG Swarm::poll: New peer connected peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW
+2026-02-22T18:29:42.849194Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: sending ping 3399694409
+2026-02-22T18:29:42.851829Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: 871fb99a: new outbound (Stream 871fb99a/2) of (Connection 871fb99a Server (streams 1))
+2026-02-22T18:29:42.853528Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: Dialer: Proposed protocol: /ipfs/ping/1.0.0
+2026-02-22T18:29:42.856118Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: Listener: confirming protocol: /ipfs/ping/1.0.0
+2026-02-22T18:29:42.856967Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: Listener: sent confirmed protocol: /ipfs/ping/1.0.0
+2026-02-22T18:29:42.858074Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: Listener: confirming protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:42.858481Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: Listener: sent confirmed protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:42.984539Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:42.984779Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:43.265177Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: received pong 3399694409, estimated round-trip-time 415.986ms
+2026-02-22T18:29:43.266351Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: Dialer: Received confirmation for protocol: /ipfs/ping/1.0.0
+2026-02-22T18:29:43.473256Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: 871fb99a/3: eof
+2026-02-22T18:29:43.480145Z  INFO 🔄 Relay 12D3KooWMju7EhJuMGYvEoTFP5kgfd4DTsBZeZ5VsJ6BpVwx5gFB processing request for circuit 3182827498
+2026-02-22T18:29:43.481166Z  INFO 🛡️  Processing new circuit 3182827498 as guard node
+2026-02-22T18:29:43.482716Z DEBUG ✅ All 1024 polynomial coefficients validated (< q=3329)
+2026-02-22T18:29:43.482877Z DEBUG ✅ Public key passed comprehensive FIPS 203 Section 7.2 validation
+2026-02-22T18:29:43.484714Z DEBUG 🔑 ML-KEM encapsulation complete (ct: 1568 bytes, ss: 32 bytes)
+2026-02-22T18:29:43.487965Z  INFO 🔑 Base IV derived with role separation (is_initiator: true)
+2026-02-22T18:29:43.489661Z  INFO 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+2026-02-22T18:29:43.491597Z  INFO ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+2026-02-22T18:29:43.491905Z  INFO 🔑 Base IV derived with role separation (is_initiator: false)
+2026-02-22T18:29:43.492650Z  INFO 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+2026-02-22T18:29:43.492750Z  INFO ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+2026-02-22T18:29:43.492970Z  INFO 🔑 Established stateful circuit 3182827498 at position 0
+2026-02-22T18:29:43.493801Z  INFO ✅ Established new circuit 3182827498 as Guard
+2026-02-22T18:29:43.680567Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: ping succeeded rtt=413.9478ms
+2026-02-22T18:29:43.970448Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:43.970657Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:44.969943Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:44.970257Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:45.012815Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: Listener: confirming protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:45.013117Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: Listener: sent confirmed protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:45.687528Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: 871fb99a/5: eof
+2026-02-22T18:29:45.687835Z  INFO 🔄 Relay 12D3KooWMju7EhJuMGYvEoTFP5kgfd4DTsBZeZ5VsJ6BpVwx5gFB processing request for circuit 3182827498
+2026-02-22T18:29:45.688164Z DEBUG Processing existing circuit 3182827498 at position 0
+2026-02-22T18:29:45.689167Z DEBUG 🔐 Generated ChaCha20 keystream: 1641 bytes at position 0 (256-bit computational)
+2026-02-22T18:29:45.690146Z DEBUG 🔓 Decrypted 1641 bytes from seq 0 (sequenced mode)
+2026-02-22T18:29:45.692831Z  INFO 🔑 Generated ML-KEM-1024 keypair (pk: 1568 bytes, sk: 3168 bytes) - NIST Level 5 (256-bit)
+2026-02-22T18:29:45.694259Z ERROR ML-KEM secret key has wrong length: 3168
+2026-02-22T18:29:45.694348Z  INFO 🔗 Extending circuit 3182827498 to next hop 12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY
+2026-02-22T18:29:45.694477Z DEBUG Dialing next hop 12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY at [/ip4/108.129.70.74/tcp/4001]
+2026-02-22T18:29:45.698374Z DEBUG dialing address address=108.129.70.74:4001
+2026-02-22T18:29:45.878122Z DEBUG Transport::dial{address=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}: Dialer: Proposed protocol: /noise
+2026-02-22T18:29:45.878359Z DEBUG Transport::dial{address=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}: Dialer: Expecting proposed protocol: /noise
+2026-02-22T18:29:45.981042Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:45.981404Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:46.230481Z DEBUG Transport::dial{address=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}: Negotiated: Received confirmation for protocol: /noise
+2026-02-22T18:29:46.447171Z DEBUG Transport::dial{address=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}: Dialer: Proposed protocol: /yamux/1.0.0
+2026-02-22T18:29:46.447510Z DEBUG Transport::dial{address=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}: Dialer: Expecting proposed protocol: /yamux/1.0.0
+2026-02-22T18:29:46.447648Z DEBUG Transport::dial{address=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}: new connection: 97f861d5 (Client)
+2026-02-22T18:29:46.447820Z DEBUG Swarm::poll: New outbound connection peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY mode=client
+2026-02-22T18:29:46.448162Z DEBUG Swarm::poll: Connection established peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY endpoint=Dialer { address: /ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY, role_override: Dialer } total_peers=1
+2026-02-22T18:29:46.448335Z DEBUG Swarm::poll: New peer connected peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY
+2026-02-22T18:29:46.448471Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: sending ping 631785556
+2026-02-22T18:29:46.448649Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: 97f861d5: new outbound (Stream 97f861d5/1) of (Connection 97f861d5 Client (streams 0))
+2026-02-22T18:29:46.448906Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: Dialer: Proposed protocol: /ipfs/ping/1.0.0
+2026-02-22T18:29:46.705229Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: 97f861d5: new outbound (Stream 97f861d5/3) of (Connection 97f861d5 Client (streams 1))
+2026-02-22T18:29:46.705567Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: Dialer: Proposed protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:46.971140Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:46.971391Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:47.022532Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: Negotiated: Received confirmation for protocol: /yamux/1.0.0
+2026-02-22T18:29:47.022936Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: received pong 631785556, estimated round-trip-time 574.4617ms
+2026-02-22T18:29:47.023173Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: Listener: confirming protocol: /ipfs/ping/1.0.0
+2026-02-22T18:29:47.023312Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: Listener: sent confirmed protocol: /ipfs/ping/1.0.0
+2026-02-22T18:29:47.023544Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: Dialer: Received confirmation for protocol: /ipfs/ping/1.0.0
+2026-02-22T18:29:47.198652Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: Dialer: Received confirmation for protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:47.374608Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: ping succeeded rtt=350.8486ms
+2026-02-22T18:29:47.589796Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: 97f861d5/3: eof
+2026-02-22T18:29:47.590151Z DEBUG 🔐 Generated ChaCha20 keystream: 1568 bytes at position 0 (256-bit computational)
+2026-02-22T18:29:47.590333Z DEBUG 🔐 Encrypted 1568 bytes with seq 0 (sequenced mode)
+2026-02-22T18:29:47.970488Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:47.970708Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:48.971487Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:48.971693Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:49.330044Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: Listener: confirming protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:49.330281Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: Listener: sent confirmed protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:49.978426Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:49.978737Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:50.041248Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: 871fb99a/7: eof
+2026-02-22T18:29:50.041526Z  INFO 🔄 Relay 12D3KooWMju7EhJuMGYvEoTFP5kgfd4DTsBZeZ5VsJ6BpVwx5gFB processing request for circuit 3182827498
+2026-02-22T18:29:50.041709Z DEBUG Processing existing circuit 3182827498 at position 0
+2026-02-22T18:29:50.041797Z DEBUG 🔐 Generated ChaCha20 keystream: 545 bytes at position 65536 (256-bit computational)
+2026-02-22T18:29:50.041952Z DEBUG 🔓 Decrypted 545 bytes from seq 1 (sequenced mode)
+2026-02-22T18:29:50.042038Z DEBUG Forwarding circuit 3182827498 to next hop 12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY
+2026-02-22T18:29:50.042189Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: 97f861d5: new outbound (Stream 97f861d5/5) of (Connection 97f861d5 Client (streams 2))
+2026-02-22T18:29:50.042357Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: Dialer: Proposed protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:50.434491Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: Dialer: Received confirmation for protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:50.971529Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:50.971741Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:51.049301Z DEBUG new_established_connection{remote_addr=/ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY id=2 peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY}:Connection::poll: 97f861d5/5: eof
+2026-02-22T18:29:51.049626Z DEBUG 🔐 Generated ChaCha20 keystream: 543 bytes at position 65536 (256-bit computational)
+2026-02-22T18:29:51.049805Z DEBUG 🔐 Encrypted 543 bytes with seq 1 (sequenced mode)
+2026-02-22T18:29:51.273306Z DEBUG Swarm::poll: Incoming connection from remote at local remote_address=/ip4/103.72.212.75/tcp/57588 local_address=/ip4/172.31.22.70/tcp/4001
+2026-02-22T18:29:51.273648Z DEBUG new_incoming_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3}: Listener: confirming protocol: /noise
+2026-02-22T18:29:51.273880Z DEBUG new_incoming_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3}: Listener: sent confirmed protocol: /noise
+2026-02-22T18:29:51.541890Z DEBUG new_incoming_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3}: Listener: confirming protocol: /yamux/1.0.0
+2026-02-22T18:29:51.542296Z DEBUG new_incoming_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3}: Listener: sent confirmed protocol: /yamux/1.0.0
+2026-02-22T18:29:51.542486Z DEBUG new_incoming_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3}: new connection: 85e1a6d7 (Server)
+2026-02-22T18:29:51.542631Z DEBUG Swarm::poll: New inbound connection peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h mode=client
+2026-02-22T18:29:51.542793Z DEBUG Swarm::poll: Connection established peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h endpoint=Listener { local_addr: /ip4/172.31.22.70/tcp/4001, send_back_addr: /ip4/103.72.212.75/tcp/57588 } total_peers=1
+2026-02-22T18:29:51.542929Z DEBUG Swarm::poll: New peer connected peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h
+2026-02-22T18:29:51.543040Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: sending ping 2010921924
+2026-02-22T18:29:51.543257Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: 85e1a6d7: new outbound (Stream 85e1a6d7/2) of (Connection 85e1a6d7 Server (streams 1))
+2026-02-22T18:29:51.543408Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: Dialer: Proposed protocol: /ipfs/ping/1.0.0
+2026-02-22T18:29:51.543557Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: Listener: confirming protocol: /ipfs/ping/1.0.0
+2026-02-22T18:29:51.543652Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: Listener: sent confirmed protocol: /ipfs/ping/1.0.0
+2026-02-22T18:29:51.688401Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: received pong 2010921924, estimated round-trip-time 145.3552ms
+2026-02-22T18:29:51.778263Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: Dialer: Received confirmation for protocol: /ipfs/ping/1.0.0
+2026-02-22T18:29:51.778530Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: Listener: confirming protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:51.778674Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: Listener: sent confirmed protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:51.918729Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: ping succeeded rtt=140.2123ms
+2026-02-22T18:29:51.963795Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: 85e1a6d7/3: eof
+2026-02-22T18:29:51.964305Z  INFO 🔄 Relay 12D3KooWMju7EhJuMGYvEoTFP5kgfd4DTsBZeZ5VsJ6BpVwx5gFB processing request for circuit 3182827499
+2026-02-22T18:29:51.964465Z  INFO 🛡️  Processing new circuit 3182827499 as guard node
+2026-02-22T18:29:51.964563Z DEBUG ✅ All 1024 polynomial coefficients validated (< q=3329)
+2026-02-22T18:29:51.964634Z DEBUG ✅ Public key passed comprehensive FIPS 203 Section 7.2 validation
+2026-02-22T18:29:51.964856Z DEBUG 🔑 ML-KEM encapsulation complete (ct: 1568 bytes, ss: 32 bytes)
+2026-02-22T18:29:51.965050Z  INFO 🔑 Base IV derived with role separation (is_initiator: true)
+2026-02-22T18:29:51.965124Z  INFO 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+2026-02-22T18:29:51.965191Z  INFO ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+2026-02-22T18:29:51.965365Z  INFO 🔑 Base IV derived with role separation (is_initiator: false)
+2026-02-22T18:29:51.965431Z  INFO 🔐 Created SequencedVernamBuffer (desync-resistant, window: 4096 msgs, max: 65536 bytes/msg)
+2026-02-22T18:29:51.965509Z  INFO ✅ Enabled SEQUENCED Vernam mode (desync-resistant, 256-bit post-quantum computational security)
+2026-02-22T18:29:51.965580Z  INFO 🔑 Established stateful circuit 3182827499 at position 0
+2026-02-22T18:29:51.965640Z  INFO ✅ Established new circuit 3182827499 as Guard
+2026-02-22T18:29:51.970182Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:51.970447Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:52.066334Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: Listener: confirming protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:52.066596Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: Listener: sent confirmed protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:52.251646Z DEBUG new_established_connection{remote_addr=/ip4/103.72.212.75/tcp/57588 id=3 peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h}:Connection::poll: 85e1a6d7/5: eof
+2026-02-22T18:29:52.251996Z  INFO 🔄 Relay 12D3KooWMju7EhJuMGYvEoTFP5kgfd4DTsBZeZ5VsJ6BpVwx5gFB processing request for circuit 3182827499
+2026-02-22T18:29:52.252196Z DEBUG Processing existing circuit 3182827499 at position 0
+2026-02-22T18:29:52.252287Z DEBUG 🔐 Generated ChaCha20 keystream: 1641 bytes at position 0 (256-bit computational)
+2026-02-22T18:29:52.252377Z DEBUG 🔓 Decrypted 1641 bytes from seq 0 (sequenced mode)
+2026-02-22T18:29:52.252667Z  INFO 🔑 Generated ML-KEM-1024 keypair (pk: 1568 bytes, sk: 3168 bytes) - NIST Level 5 (256-bit)
+2026-02-22T18:29:52.252753Z ERROR ML-KEM secret key has wrong length: 3168
+2026-02-22T18:29:52.252822Z  INFO 🔗 Extending circuit 3182827499 to next hop 12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW
+2026-02-22T18:29:52.768270Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: 871fb99a: new outbound (Stream 871fb99a/4) of (Connection 871fb99a Server (streams 2))
+2026-02-22T18:29:52.768603Z DEBUG new_established_connection{remote_addr=/ip4/100.31.160.82/tcp/51207 id=1 peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW}:Connection::poll: Dialer: Proposed protocol: /faisal-swarm/1.0.0
+2026-02-22T18:29:52.969357Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:52.969635Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:52.979824Z DEBUG Swarm::poll: Connection closed with error IO(Custom { kind: Other, error: Error(Right(Decode(Io(Os { code: 10054, kind: ConnectionReset, message: "An existing connection was forcibly closed by the remote host." })))) }): Connected { endpoint: Listener { local_addr: /ip4/172.31.22.70/tcp/4001, send_back_addr: /ip4/100.31.160.82/tcp/51207 }, peer_id: PeerId("12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW") } total_peers=0
+2026-02-22T18:29:52.994268Z DEBUG Swarm::poll: Peer disconnected peer=12D3KooWC5SpEZTjK9Dzpf8AcXs12jJ9oR7nrSLYxQoxC4PcGEfW
+2026-02-22T18:29:53.970429Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:53.970675Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:54.971051Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:54.971460Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:55.970528Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:55.970772Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:56.977456Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:56.983669Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:57.981428Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:57.981691Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:58.970612Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:58.970819Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:29:59.970810Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:29:59.971149Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:00.971725Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:00.976253Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:02.001922Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:02.004144Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:02.075183Z DEBUG Swarm::poll: Connection closed with error KeepAliveTimeout: Connected { endpoint: Listener { local_addr: /ip4/172.31.22.70/tcp/4001, send_back_addr: /ip4/103.72.212.75/tcp/57588 }, peer_id: PeerId("12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h") } total_peers=0
+2026-02-22T18:30:02.089734Z DEBUG Swarm::poll: Peer disconnected peer=12D3KooWR3JXkSjGmaxRydES2hkTXimghkidGJhv1U3cx5Hs1t4h
+2026-02-22T18:30:02.394256Z DEBUG Swarm::poll: Connection closed with error KeepAliveTimeout: Connected { endpoint: Dialer { address: /ip4/108.129.70.74/tcp/4001/p2p/12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY, role_override: Dialer }, peer_id: PeerId("12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY") } total_peers=0
+2026-02-22T18:30:02.420219Z DEBUG Swarm::poll: Peer disconnected peer=12D3KooWQsnB8Q3ULYnbFjiyfTgEZYk6G7ix3Yyatom3V8HjxdSY
+2026-02-22T18:30:02.969989Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:02.976646Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:03.970937Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:03.971262Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:04.971023Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:04.971235Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:05.970251Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:05.970655Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:06.970456Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:06.970670Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:07.970365Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:07.970579Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:08.969786Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:08.970079Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:09.521201Z DEBUG Discovered 4 peers in room zks-test-v1
+2026-02-22T18:30:09.522752Z DEBUG Discovered 4 peers in room zks-test-v1
+2026-02-22T18:30:09.522871Z  INFO 🔄 Periodic discovery: 4 peers in 'zks-test-v1'
+2026-02-22T18:30:09.969829Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:09.970065Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:10.971423Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:10.971895Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:11.970172Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:11.970382Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:12.970731Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:12.970997Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:13.970702Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:13.971055Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:14.970361Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:14.970593Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:15.970355Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:15.970574Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:16.969407Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:16.969614Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:17.970380Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:17.970632Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:18.969982Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:18.970298Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:19.970671Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:19.970884Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:20.970152Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:20.970352Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:21.971214Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:21.971468Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:22.770108Z DEBUG Relay failed for circuit 3182827499: Network("Extend request to next hop failed: Request timeout: Timeout")
+2026-02-22T18:30:22.969994Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:22.970287Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:23.975904Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:23.976291Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:24.980270Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:24.981196Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:25.969965Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:25.970261Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:26.971297Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:26.971850Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:27.970999Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:27.971177Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:28.970006Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:28.970357Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:29.970424Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:29.971129Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:30.970060Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:30.970354Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:31.971175Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:31.971435Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:32.971748Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:32.971953Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:33.970315Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:33.970607Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:34.970377Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:34.970775Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:35.969905Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:35.970108Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:36.975722Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:36.976363Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:37.971385Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:37.972029Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:38.970626Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:38.970830Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:39.516146Z DEBUG Discovered 4 peers in room zks-test-v1
+2026-02-22T18:30:39.516364Z DEBUG Discovered 4 peers in room zks-test-v1
+2026-02-22T18:30:39.516516Z  INFO 🔄 Periodic discovery: 4 peers in 'zks-test-v1'
+2026-02-22T18:30:39.985498Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:39.985762Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:40.970243Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:40.970518Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:41.970873Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:41.971078Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:42.970346Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:42.970670Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:43.970026Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:43.970346Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:44.971721Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:44.972773Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:45.971206Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:45.971743Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:46.970432Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:46.970683Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:47.970404Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:47.970770Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:48.976076Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:48.976296Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:49.971826Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:49.972058Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:50.971210Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:50.971594Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:51.969393Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:51.969622Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:53.004100Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:53.007483Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:53.981586Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:53.981803Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:54.974018Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:54.975403Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:55.971086Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:55.971419Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:56.971454Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:56.971682Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:57.969690Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:57.970023Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:58.973596Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:58.974066Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:30:59.969707Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:30:59.970038Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:00.984931Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:00.987054Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:02.043161Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:02.255061Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:02.974413Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:02.982648Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:03.981816Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:03.982020Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:04.974240Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:04.974490Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:05.969801Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:05.970129Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:06.975380Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:06.976374Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:07.981550Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:07.981895Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:08.972106Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:08.972403Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:09.525331Z DEBUG Discovered 4 peers in room zks-test-v1
+2026-02-22T18:31:09.525562Z DEBUG Discovered 4 peers in room zks-test-v1
+2026-02-22T18:31:09.525718Z  INFO 🔄 Periodic discovery: 4 peers in 'zks-test-v1'
+2026-02-22T18:31:09.985289Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:09.985526Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:10.981741Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:10.981953Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:11.970371Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:11.970607Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:12.969954Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:12.970163Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:13.983002Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:13.983325Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:14.976943Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:14.977211Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:15.971431Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:15.971695Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:16.975293Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:16.975683Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:17.969572Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:17.969782Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:18.983236Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:18.983427Z DEBUG Swarm::poll: Completed Heartbeat
+2026-02-22T18:31:19.971472Z DEBUG Swarm::poll: Starting heartbeat
+2026-02-22T18:31:19.971779Z DEBUG Swarm::poll: C

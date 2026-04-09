@@ -1447,7 +1447,7 @@ mod tests {
         let entropy = drand.get_entropy().await;
         assert!(entropy.is_ok(), "Should fetch entropy from drand");
 
-        let entropy = entropy.unwrap();
+        let entropy = entropy.expect("Failed to fetch entropy from drand");
         assert!(
             entropy.iter().any(|&b| b != 0),
             "Entropy should not be all zeros"
@@ -1460,11 +1460,11 @@ mod tests {
         let drand = DrandEntropy::new();
 
         // First fetch
-        let _ = drand.get_entropy().await.unwrap();
+        let _ = drand.get_entropy().await.expect("Failed to fetch entropy from drand (first call)");
         let first_round = drand.cached_round().await;
 
         // Second fetch should use cache
-        let _ = drand.get_entropy().await.unwrap();
+        let _ = drand.get_entropy().await.expect("Failed to fetch entropy from drand (second call)");
         let second_round = drand.cached_round().await;
 
         assert_eq!(first_round, second_round, "Should use cached value");
@@ -1476,8 +1476,8 @@ mod tests {
     async fn test_mixed_entropy_uniqueness() {
         let drand = DrandEntropy::new();
 
-        let entropy1 = drand.get_mixed_entropy(b"user1").await.unwrap();
-        let entropy2 = drand.get_mixed_entropy(b"user2").await.unwrap();
+        let entropy1 = drand.get_mixed_entropy(b"user1").await.expect("Failed to get mixed entropy for user1");
+        let entropy2 = drand.get_mixed_entropy(b"user2").await.expect("Failed to get mixed entropy for user2");
 
         assert_ne!(
             entropy1, entropy2,

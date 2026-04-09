@@ -16,6 +16,7 @@ impl MockCircuitLayer {
         // Create fresh cipher for deterministic encryption (same plaintext = same ciphertext)
         let mut cipher =
             WasifVernam::new(self.key).map_err(|e| format!("Failed to create cipher: {:?}", e))?;
+        cipher.set_base_iv([0u8; 12]);
         cipher
             .encrypt(data)
             .map_err(|e| format!("Encryption failed: {:?}", e))
@@ -25,6 +26,7 @@ impl MockCircuitLayer {
         // Create fresh cipher for deterministic decryption
         let mut cipher =
             WasifVernam::new(self.key).map_err(|e| format!("Failed to create cipher: {:?}", e))?;
+        cipher.set_base_iv([0u8; 12]);
         cipher
             .decrypt(data)
             .map_err(|e| format!("Decryption failed: {:?}", e))
@@ -235,6 +237,7 @@ fn test_layer_independence() {
     // Try to decrypt with only the middle layer key (simulating partial compromise)
     let middle_key = [20u8; 32];
     let mut middle_cipher = WasifVernam::new(middle_key).unwrap();
+    middle_cipher.set_base_iv([0u8; 12]);
 
     // This should fail or produce garbage
     let partial_decrypt = middle_cipher.decrypt(&encrypted);

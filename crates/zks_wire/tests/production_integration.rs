@@ -78,9 +78,15 @@ async fn create_real_p2p_transport() -> Arc<RwLock<NativeP2PTransport>> {
     info!("Creating real P2P transport with libp2p");
 
     // Use real libp2p configuration for production testing
-    let transport = NativeP2PTransport::new(None, None)
-        .await
+    let (transport, driver) = NativeP2PTransport::new(None, None)
         .expect("Failed to create real P2P transport");
+
+    // Spawn the driver
+    tokio::spawn(async move {
+        if let Err(e) = driver.run().await {
+            warn!("P2P driver error: {}", e);
+        }
+    });
 
     Arc::new(RwLock::new(transport))
 }
@@ -145,8 +151,8 @@ async fn test_production_circuit_creation_with_cloudflare() {
 
     // Create real swarm managers
     let manager1 = create_production_swarm_manager(&peer1_id, room_id).await;
-    let manager2 = create_production_swarm_manager(&peer2_id, room_id).await;
-    let manager3 = create_production_swarm_manager(&peer3_id, room_id).await;
+    let _manager2 = create_production_swarm_manager(&peer2_id, room_id).await;
+    let _manager3 = create_production_swarm_manager(&peer3_id, room_id).await;
 
     // Wait for peers to discover each other
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;

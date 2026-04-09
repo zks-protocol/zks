@@ -33,6 +33,7 @@
 #![warn(missing_docs)]
 #![deny(unsafe_code)]
 
+pub mod anonymity;
 pub mod circuit;
 pub mod cloudflare_signaling;
 pub mod dht_lookup;
@@ -78,6 +79,13 @@ pub use entropy_swarm::{
 };
 pub use error::{Result, WireError};
 pub use faisal_swarm::{CircuitState, FaisalSwarmCircuit, FaisalSwarmManager, HopRole, SwarmHop};
+pub use anonymity::{
+    AggregateAnonymityMetrics, AnonymitySet, CircuitAnonymityMetrics, TrafficPattern,
+    aggregate_anonymity_metrics, analyze_size_correlation, analyze_timing_correlation,
+    calculate_byte_entropy, calculate_effective_anonymity_set, calculate_min_entropy,
+    calculate_path_diversity, calculate_scaled_anonymity_set, calculate_shannon_entropy,
+    calculate_size_correlation_risk, calculate_timing_resistance, compute_circuit_anonymity_metrics,
+};
 pub use nat::{NatTraversal, NatType};
 pub use p2p::{NativeP2PError, NativeP2PTransport};
 pub use relay::{RelayClient, RelayConfig, RelayCredentials, RelayId, RelayServer};
@@ -86,7 +94,8 @@ pub use signaling::{PeerCapabilities, PeerInfo, SignalingClient, SignalingMessag
 pub use stun::{IceCandidate, StunClient, StunServer};
 pub use swarm::{Peer, PeerId, Swarm, SwarmEvent};
 pub use swarm_controller::{
-    OnionStream, Platform, SwarmController, SwarmControllerError, TransportCapabilities,
+    OnionStream, Platform, SwarmController, SwarmControllerConfig, SwarmControllerError,
+    TransportCapabilities,
 };
 pub use wire::{MessageType, WireMessage, WireProtocol};
 

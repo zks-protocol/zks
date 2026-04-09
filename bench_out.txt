@@ -1,0 +1,24 @@
+[2m2026-02-20T05:34:50.306988Z[0m [32m INFO[0m Starting ZKS Protocol Test Client
+[2m2026-02-20T05:34:50.307162Z[0m [32m INFO[0m Initializing SwarmController for platform: Native, room: zks-test-v1
+[2m2026-02-20T05:34:50.307193Z[0m [32m INFO[0m Local Peer ID: client-1f32b7a6-e6a9-49d7-b210-5df604469bfc
+[2m2026-02-20T05:34:50.307200Z[0m [32m INFO[0m Connecting to signaling server: wss://zks-protocol-signaling.md-wasif-faisal.workers.dev
+[2m2026-02-20T05:34:50.307211Z[0m [32m INFO[0m Connecting to signaling server at wss://zks-protocol-signaling.md-wasif-faisal.workers.dev
+[2m2026-02-20T05:34:50.769965Z[0m [32m INFO[0m Connected to signaling server
+[2m2026-02-20T05:34:50.770111Z[0m [32m INFO[0m Creating native P2P transport with peer ID: 12D3KooWKFQX7XvrJZPy8Z6xebbuGPVXVFd22UKZRGV9PwYhiUGH
+[2m2026-02-20T05:34:50.778297Z[0m [32m INFO[0m [3mlocal_peer_id[0m[2m=[0m12D3KooWKFQX7XvrJZPy8Z6xebbuGPVXVFd22UKZRGV9PwYhiUGH
+[2m2026-02-20T05:34:50.778636Z[0m [32m INFO[0m 🌐 Global HTTP client initialized for drand connection pooling
+[2m2026-02-20T05:34:50.778754Z[0m [32m INFO[0m Starting native P2P transport event loop
+[2m2026-02-20T05:34:50.780364Z[0m [32m INFO[0m Successfully connected to swarm via signaling server
+[2m2026-02-20T05:34:50.781712Z[0m [32m INFO[0m Listening on /ip4/192.168.56.1/tcp/64755
+[2m2026-02-20T05:34:50.781754Z[0m [32m INFO[0m Listening on /ip4/192.168.0.107/tcp/64755
+[2m2026-02-20T05:34:50.781759Z[0m [32m INFO[0m Listening on /ip4/127.0.0.1/tcp/64755
+[2m2026-02-20T05:34:51.789009Z[0m [32m INFO[0m Joined swarm room: zks-test-v1
+[2m2026-02-20T05:34:51.789045Z[0m [32m INFO[0m Joined room: zks-test-v1
+[2m2026-02-20T05:34:51.789048Z[0m [32m INFO[0m 🔍 Discovering peers in room 'zks-test-v1'...
+[2m2026-02-20T05:34:52.132638Z[0m [32m INFO[0m ✅ Initial discovery: 2 peers in room 'zks-test-v1'
+[2m2026-02-20T05:34:52.132677Z[0m [32m INFO[0m   - Peer: 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o [RELAY, ONION] (addresses: ["/ip4/192.168.56.1/tcp/4001", "/ip4/192.168.0.107/tcp/4001", "/ip4/127.0.0.1/tcp/4001"])
+[2m2026-02-20T05:34:52.132685Z[0m [32m INFO[0m   - Peer: 12D3KooWKFQX7XvrJZPy8Z6xebbuGPVXVFd22UKZRGV9PwYhiUGH [RELAY] (addresses: [])
+[2m2026-02-20T05:34:52.132692Z[0m [32m INFO[0m Running benchmark to 12D3KooWDLAnjHNAq9f5URPgCPEMfHRLLTtGzGgZqZMEYBRyqb7o (10s, 1024 bytes)
+[2m2026-02-20T05:34:52.132696Z[0m [32m INFO[0m Benchmark requires active stream; use Build first.
+[2m2026-02-20T05:34:52.132702Z[0m [32m INFO[0m Disconnected from swarm
+[2m2026-02-20T05:34:52.132706Z[0m [32m INFO[0m Done.

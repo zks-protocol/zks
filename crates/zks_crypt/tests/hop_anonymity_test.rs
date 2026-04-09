@@ -26,7 +26,8 @@ fn debug_layered_payload() {
         println!("Receives {} bytes", current_data.len());
 
         let node = &circuit.nodes[i];
-        let cipher = WasifVernam::new(node.key).unwrap();
+        let mut cipher = WasifVernam::new(node.key).unwrap();
+        cipher.set_base_iv([0u8; 12]);
 
         match cipher.decrypt(&current_data) {
             Ok(decrypted) => {
@@ -156,6 +157,7 @@ impl MockOnionCircuit {
 
             // Encrypt this layer with the current node's key
             let mut cipher = WasifVernam::new(self.nodes[i].key).unwrap();
+            cipher.set_base_iv([0u8; 12]);
             current_payload = cipher.encrypt(&layer_data).unwrap();
         }
 
@@ -174,7 +176,8 @@ impl MockOnionCircuit {
         // Simulate the peeling process: each hop decrypts its layer and forwards the rest
         for i in 0..=hop_index {
             let node = &self.nodes[i];
-            let cipher = WasifVernam::new(node.key).unwrap();
+            let mut cipher = WasifVernam::new(node.key).unwrap();
+            cipher.set_base_iv([0u8; 12]);
 
             // Try to decrypt this layer
             match cipher.decrypt(&peeled_data) {
@@ -494,12 +497,14 @@ fn test_hop_isolation() {
 
     // Only decrypt with first hop (skip middle hop)
     let first_node = &circuit.nodes[0];
-    let first_cipher = WasifVernam::new(first_node.key).unwrap();
+    let mut first_cipher = WasifVernam::new(first_node.key).unwrap();
+    first_cipher.set_base_iv([0u8; 12]);
     partial_data = first_cipher.decrypt(&partial_data).unwrap();
 
     // Try to decrypt with last hop (should fail due to missing middle hop)
     let last_node = &circuit.nodes[2];
-    let last_cipher = WasifVernam::new(last_node.key).unwrap();
+    let mut last_cipher = WasifVernam::new(last_node.key).unwrap();
+    last_cipher.set_base_iv([0u8; 12]);
     let result = last_cipher.decrypt(&partial_data);
 
     // Should fail to decrypt properly without middle hop

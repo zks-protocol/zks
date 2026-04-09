@@ -236,14 +236,20 @@ impl AntiReplayContainer {
     /// Check if any packets have been tracked
     pub fn has_tracked_packets(&self) -> bool {
         let counter = self.counter_out.load(Ordering::Relaxed);
-        let queue = self.history.lock().unwrap();
+        let queue = self
+            .history
+            .lock()
+            .expect("Failed to lock history in is_empty()");
         counter > 0 || queue.0 > 0 || !queue.1.is_empty()
     }
 
     /// Reset all counters (call on re-keying)
     pub fn reset(&self) {
         self.counter_out.store(0, Ordering::Relaxed);
-        let mut lock = self.history.lock().unwrap();
+        let mut lock = self
+            .history
+            .lock()
+            .expect("Failed to lock history in reset()");
         lock.0 = 0;
         lock.1 =
             HashSet::with_capacity_and_hasher(self.window_size as usize, NoHashHasher::default());
@@ -257,7 +263,11 @@ impl AntiReplayContainer {
 
     /// Get number of tracked PIDs in history
     pub fn history_size(&self) -> usize {
-        self.history.lock().unwrap().1.len()
+        self.history
+            .lock()
+            .expect("Failed to lock history in history_size()")
+            .1
+            .len()
     }
 }
 
@@ -305,6 +315,8 @@ pub enum ReplayError {
     TooOld,
     /// Counter was already seen (duplicate)
     Duplicate,
+    /// Mutex lock poisoned
+    LockPoisoned,
 }
 
 /// Internal bitmap validator
@@ -433,7 +445,7 @@ impl BitmapAntiReplay {
     /// Reset the anti-replay state (call on re-keying)
     pub fn reset(&self) {
         self.counter_out.store(0, Ordering::Relaxed);
-        let mut validator = self.validator.lock().unwrap();
+        let mut validator = self.validator.lock().expect("Failed to lock validator in reset()");
         *validator = BitmapValidator::default();
         tracing::debug!("🔄 Bitmap anti-replay reset");
     }
@@ -642,7 +654,7 @@ mod tests {
 
         ar.get_next_counter();
         ar.get_next_counter();
-        ar.validate(100).unwrap();
+        ar.validate(100).expect("Failed to validate counter 100");
 
         ar.reset();
 

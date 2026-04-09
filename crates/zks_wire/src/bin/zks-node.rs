@@ -6,7 +6,8 @@
 
 use clap::Parser;
 use std::net::SocketAddr;
-use tracing::info;
+use std::time::Duration;
+use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use zks_wire::relay::{RelayConfig, RelayServer};
@@ -26,6 +27,10 @@ struct Cli {
     /// Public address to advertise (e.g. wss://relay.example.com)
     #[clap(long)]
     advertise_addr: Option<String>,
+
+    /// Libp2p listen address (e.g. /ip4/0.0.0.0/tcp/4001)
+    #[clap(long)]
+    libp2p_addr: Option<String>,
 
     /// Signaling server URL
     #[clap(
@@ -91,7 +96,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2. Initialize Swarm Controller for Signaling
     info!("Initializing Swarm Controller...");
-    let swarm = SwarmController::new().await?;
+    let mut swarm_config = zks_wire::SwarmControllerConfig::new(&cli.network);
+    if let Some(ref addr) = cli.libp2p_addr {
+        info!("Setting fixed libp2p listen address: {}", addr);
+        swarm_config = swarm_config.with_listen_addr(addr.clone());
+    }
+    let swarm = SwarmController::with_config(swarm_config).await?;
 
     // Generate a local peer ID (in a real app, this should be consistent/persisted)
     let peer_id = format!("relay-{}", uuid::Uuid::new_v4());
@@ -101,24 +111,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Connecting to signaling server: {}", cli.signaling_url);
     let signaling = SignalingClient::connect(&cli.signaling_url, peer_id.clone()).await?;
 
-    // Set advertised addresses if provided
-    if let Some(addr) = cli.advertise_addr {
-        info!("Advertising address: {}", addr);
-        signaling.set_advertised_addresses(vec![addr]).await;
-    } else {
-        // Default to bind address if no explicit advertise addr
-        // Note: binding to 0.0.0.0 is not useful to advertise, so we warn
-        if bind_addr.ip().is_unspecified() {
-            tracing::warn!("No advertise address specified and bind address is unspecified. Peers may not be able to connect.");
-        } else {
-            let addr = format!("tcp://{}", bind_addr);
-            info!("Advertising bind address: {}", addr);
-            signaling.set_advertised_addresses(vec![addr]).await;
-        }
+    // Set advertised addresses if provided manually
+    if let Some(addr) = cli.advertise_addr.as_ref() {
+        info!("Advertising manual address: {}", addr);
+        signaling.set_advertised_addresses(vec![addr.clone()]).await;
     }
 
     // Connect swarm with this signaling client
-    swarm.connect_with_signaling(signaling).await?;
+    swarm.connect_with_signaling(signaling.clone()).await?;
 
     // Join the network room
     let capabilities = PeerCapabilities {
@@ -130,8 +130,96 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         max_hops: 8,
     };
 
+    // Wait briefly for P2P network to initialize and get listen addresses
+    // This ensures we have addresses to advertise when joining the room
+    tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
+
+    // Retrieve actual libp2p listen addresses
+    let libp2p_addrs = swarm.get_listen_addresses().await;
+    
+    // Auto-detect public IP if not explicitly provided
+    let final_advertise_addrs = if let Some(addr) = cli.advertise_addr.as_ref() {
+        vec![addr.clone()]
+    } else {
+        let mut addrs_to_adv = libp2p_addrs.clone();
+        
+        info!("Trying to detect public IP...");
+        
+        // Try getting public IP
+        match reqwest::get("https://api.ipify.org").await {
+            Ok(resp) => {
+                if let Ok(ip) = resp.text().await {
+                    let ip = ip.trim();
+                    info!("Got public IP: {}", ip);
+                    
+                    // Replace 0.0.0.0 or internal IPs with the public IP
+                    addrs_to_adv = addrs_to_adv.into_iter().map(|a| {
+                        a.replace("0.0.0.0", ip).replace("127.0.0.1", ip)
+                    }).collect();
+                    
+                    // Further handling for VPC internal IPs (172.x.x.x, 10.x.x.x, 192.168.x.x)
+                    // We'll add the public IP with the ports we are actually listening on
+                    for addr in &libp2p_addrs {
+                        if let Some(port) = addr.split('/').last() {
+                            let public_addr = format!("/ip4/{}/tcp/{}", ip, port);
+                            if !addrs_to_adv.contains(&public_addr) {
+                                addrs_to_adv.push(public_addr);
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => warn!("Failed to auto-detect public IP: {}", e),
+        }
+        addrs_to_adv
+    };
+
+    if !final_advertise_addrs.is_empty() {
+        info!("Advertising addresses to signaling server: {:?}", final_advertise_addrs);
+        signaling.set_advertised_addresses(final_advertise_addrs).await;
+    } else {
+        warn!("⚠️ Swarm has no listen addresses and auto-IP failed! Peer discovery may fail.");
+    }
+
     swarm.join_room(&cli.network, capabilities).await?;
     info!("✅ Joined swarm network '{}' as relay", cli.network);
+
+    // Initial peer discovery
+    info!("🔍 Discovering peers in room '{}'...", cli.network);
+    match swarm.discover_peers(&cli.network).await {
+        Ok(peers) => {
+            let actual_peers: Vec<zks_wire::signaling::PeerInfo> = peers;
+            let peer_count = actual_peers.len();
+            info!("✅ Discovered {} peers in room '{}'", peer_count, cli.network);
+            for peer in &actual_peers {
+                info!("  Peer: {} (addresses: {:?})", peer.peer_id, peer.addresses);
+            }
+        }
+        Err(e) => {
+            warn!("⚠️ Initial peer discovery failed (will retry): {:?}", e);
+        }
+    }
+
+    // Spawn periodic peer discovery in background
+    let discovery_swarm = swarm.clone();
+    let discovery_room = cli.network.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(30));
+        interval.tick().await; // Skip first immediate tick
+        loop {
+            interval.tick().await;
+            match discovery_swarm.discover_peers(&discovery_room).await {
+                Ok(peers) => {
+                    let actual_peers: Vec<zks_wire::signaling::PeerInfo> = peers;
+                    let peer_count = actual_peers.len();
+                    info!("🔄 Periodic discovery: {} peers in '{}'", peer_count, discovery_room);
+                }
+                Err(e) => {
+                    warn!("⚠️ Periodic discovery failed: {:?}", e);
+                }
+            }
+        }
+    });
 
     info!("Relay node running. Press Ctrl+C to stop.");
 
